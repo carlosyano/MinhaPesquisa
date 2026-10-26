@@ -1,0 +1,15 @@
+{
+  "name": "minhapesquisa",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "lint:spec": "spectral lint contracts/openapi.yaml"
+  },
+  "devDependencies": {
+    "@stoplight/spectral-cli": "^6.14.0"
+  }
+}

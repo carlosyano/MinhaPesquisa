@@ -1,0 +1,4 @@
+err_id,codigo,http_status,quando_ocorre,mensagem_ao_usuario,log_gerado,estado_resultante,requisitos
+ERR-001,VALIDATION_FAILED,400,Campo obrigatório ausente ou inválido,Revise os campos destacados e tente novamente.,warn: validation_failed (sem dados pessoais),Nada é gravado,RF-004; RF-005
+ERR-002,TENANT_NOT_FOUND,404,Recurso de outro tenant acessado indevidamente,O recurso solicitado não existe ou você não tem acesso.,warn: tenant_isolation_violation (auditoria acionada),Nada é gravado,RNF-001; CA-012
+ERR-003,AI_QUOTA_EXCEEDED,429,Teto de custo de IA do tenant foi atingido,O processamento deste tenant está pausado. Contate o administrador.,info: ai_quota_exceeded,Registro na fila de espera,RF-007; CA-030

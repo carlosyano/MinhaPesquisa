@@ -1,0 +1,14 @@
+id,data,tipo,problema,alternativas,decisao,premissa_justificativa,status,substituido_por,impacto,relacionados
+DEC-001,2026-10-24,negocio,Nível de rigor do projeto,Leve; Padrão; Completo,Completo,Dado sensível de saúde, SaaS multi-tenant e LGPD,definitivo,,Alto,RF-001 a RF-010
+DEC-002,2026-10-23,negocio,Adoção de MFA,Sim; Não,Sim,Obrigatório para todos os perfis,definitivo,,Alto,RF-002
+DEC-003,2026-10-24,negocio,Teto de custo de IA na v1,Sem teto; R$ 500/mês; R$ 1000/mês,R$ 500,00/mês por tenant,Valor provisório para viabilizar a fila de espera (CA-030) na v1,provisório,,Médio,RF-007; CA-030
+DEC-004,2026-10-24,tecnica,Definição do ambiente de nuvem,AWS sa-east-1; Azure Brazil South,A definir na Fase 3 (ADR),Garantir soberania de dados no Brasil, mas adiar decisão para análise técnica detalhada,provisório,,Médio,RNF-011
+DEC-037,2026-10-24,tecnica,Estrutura do monorepo,Repo único; múltiplos repos,"apps/web, apps/api, apps/worker, packages/motor-leitura, packages/db, packages/contratos, infra",Simplicidade e contract-first compartilhado,definitivo,,Baixo,PLANO 2
+DEC-038,2026-10-24,tecnica,Nuvem do projeto,AWS sa-east-1; Azure Brazil South,AWS sa-east-1,Paridade com a stack validada no MeuRemedio; região Brasil; resolve DEC-036,definitivo,DEC-036,Alto,"RNF-011, ADR-001"
+DEC-039,2026-10-24,tecnica,RPO e RTO da v1,Valores menores; valores maiores,RPO 24h / RTO 4h,Compatível com volume de 500 formulários/mês,definitivo,,Médio,Bloco P P.13
+DEC-040,2026-10-24,tecnica,Isolamento por tenant,RLS puro; schema por tenant; FK composta + RLS com SET LOCAL,SET LOCAL app.tenant_id por transação + RLS com FORCE,Defesa em camadas exigida pela RN-001,definitivo,,Alto,"RN-001, RN-023, TS-001"
+DEC-041,2026-10-24,tecnica,Cifragem do CPF,Ciframento no app; envelope KMS,AES-256-GCM envelope (KMS) + HMAC dedicado,RNF-003 e RN-013 com rotação possível,definitivo,,Alto,"RNF-003, RN-013"
+DEC-042,2026-10-24,tecnica,Segurança de arquivos no ingresso,Só tipo/tamanho; pipeline completo,Tipo/tamanho + antimalware (ClamAV) + remoção de metadados (sharp) antes do storage,CA-029 e RN-040 sem ambiguidade,definitivo,,Alto,"CA-029, RN-040, TS-002"
+DEC-043,2026-10-24,tecnica,Interface do motor de IA,Acoplado ao provedor; interface ReadEngine,Interface ReadEngine com adaptador por provedor,DEC-007: troca sem retrabalho,definitivo,,Alto,"DEC-007, RF-007"
+DEC-044,2026-10-24,tecnica,Sessão e proteção de mutações,JWT stateless; sessão em banco,Sessão em banco + cookie httpOnly + CSRF double-submit,Bloco P P.2,definitivo,,Alto,"RF-002, CA-026"
+DEC-045,2026-10-24,tecnica,Camada do k-anonimato,Supressão no front; supressão na consulta,Supressão por célula na camada de consulta agregada,CA-010/CA-034 valem para tela e exportação,definitivo,,Alto,"CA-010, CA-034, TS-004"

@@ -1,0 +1,6 @@
+entidade,campo_tecnico,significado,tipo,obrigatorio,tamanho_precisao,formato_regex,valores_permitidos,padrao,unico,chave_estrangeira,sensibilidade_lgpd
+ENT-001 Respondente,cpf,CPF do respondente,char,sim,11,^[0-9]{11}$,dígitos verificadores válidos,,sim (por tenant),,pessoal
+ENT-001 Respondente,nome,Nome completo do respondente,varchar,sim,200,,sem acentos ou caracteres especiais,,não,,pessoal
+ENT-001 Respondente,data_nascimento,Data de nascimento,date,sim,,YYYY-MM-DD,data não futura,,não,,pessoal
+ENT-002 Aplicacao,id,Identificador único da aplicação,uuid,sim,36,,formato UUID v4,sim,não,,não
+ENT-002 Aplicacao,tenant_id,Identificador do tenant proprietário,uuid,sim,36,,formato UUID v4,,não,Tenant.id,pessoal (indireto)

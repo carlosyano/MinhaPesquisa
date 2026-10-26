@@ -1,0 +1,9 @@
+id,data,artefato,versao,revisor,achados_bloqueantes,achados_altos,achados_medios,achados_baixos,status,resolucao
+REV-REQ-001,2026-10-24,REQ.md,1.0,IA Revisora (Simulada),0,0,6,3,Resolvido,"CAs incompletos; ERRs sem catálogo; entidades de apoio sem dicionário; US insuficientes; matriz como amostra; TS-008 ausente. Todos resolvidos."
+REV-REQ-002,2026-10-24,REQ.md,1.1,IA Revisora (Simulada),0,0,0,0,Resolvido,"Verificação cruzada: 44 CAs, 15 ERRs, 21 entidades, 10 US, matriz completa, TS-001 a TS-008. Gate 1 confirmado."
+REV-REQ-003,2026-10-24,REQ.md,1.2,Carlos Yano (CHG-001),0,0,0,0,Resolvido,"CHG-001 aplicada: CA-032 de ERR-036 para ERR-006. CAs perdidos reinseridos. CA-014b e CA-037b adicionados. Matriz corrigida. 46 CAs, 46 RNs. Convergente."
+REV-PLANO-001,2026-10-24,PLANO.md,1.0,IA Revisora (Simulada),0,2,3,2,Resolvido,"Falta de §4.4 e §4.5; RPO/RTO não declarados; namespace colidia com REV-REQ. Resolvidos na v2.0."
+REV-PLANO-002,2026-10-27,PLANO.md,2.0,IA Revisora (Simulada),0,0,3,1,Resolvido,"Errata desatualizada; RPO/RTO sem referência em §4.3; fronteira de confiança; namespace. Resolvidos na v2.1."
+REV-PLANO-003,2026-10-27,PLANO.md,2.1,IA Revisora (Simulada),0,1,2,1,Resolvido,"§13 declarava PRONTO antes de revisão registrada; exceção campo_respondente além da REQ; CA-018/CA-019 duplicados; dicionário parcial. Resolvidos na v2.2."
+REV-PLANO-004,2026-10-27,PLANO.md,2.2,IA Revisora (Simulada),0,1,0,0,Resolvido,"CA-017, CA-021 e CA-034 divergiam da matriz canônica. Corrigido na v2.3 com inclusão no IMP-004 e justificativa de cobertura múltipla."
+REV-PLANO-005,2026-10-27,PLANO.md,2.3,IA Revisora (Simulada),0,0,0,0,Convergente,"46 CAs cobertos; tabela de incrementos alinhada à matriz da REQ v1.2; sem exceções além da REQ; §4.4/§4.5 presentes; RPO/RTO declarados; timeouts tabulados. Plano aprovado para implementação."

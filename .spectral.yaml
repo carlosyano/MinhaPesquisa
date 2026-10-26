@@ -1,0 +1,57 @@
+# .spectral.yaml — Regras de lint do contrato MinhaPesquisa
+# Baseado no PLANO.md v2.3 (§6, §9.4) e BLOCO_P (P.6)
+# Executar da raiz: npx @stoplight/spectral-cli lint contracts/openapi.yaml
+
+extends:
+  - - "spectral:oas"
+    - recommended
+
+rules:
+  # ─── Regras built-in: sobrescrever severidade ───
+  operation-operationId: error
+  operation-tag-defined: error
+  operation-success-response: error
+  oas3-valid-schema-example: error
+  oas3-api-servers: error
+  info-contact: off
+  info-description: off
+
+  # ─── Rastreabilidade (PLANO §10, BLOCO_P P.14) ───
+  operation-x-trace:
+    severity: warn
+    message: Toda operação deve ter x-trace com IDs de rastreabilidade (RF/CA/DEC).
+    given: $.paths[*][get,post,put,patch,delete]
+    then:
+      field: x-trace
+      function: truthy
+
+  # ─── Contrato de erro (PLANO §6, BLOCO_P P.6, RFC 9457) ───
+  error-response-content-type:
+    severity: error
+    message: Respostas de erro (4xx/5xx) devem usar application/problem+json.
+    given: $.paths[*][*].responses[?(@property.match(/^[45]\d\d$/))]
+    then:
+      field: content
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required:
+            - application/problem+json
+
+  error-response-correlation-id:
+    severity: warn
+    message: Respostas de erro devem incluir header X-Correlation-ID.
+    given: $.paths[*][*].responses[?(@property.match(/^[45]\d\d$/))]
+    then:
+      field: headers.X-Correlation-ID
+      function: truthy
+
+  # ─── Proibições explícitas ───
+  no-request-body-on-get-delete:
+    severity: error
+    message: GET e DELETE não devem ter requestBody.
+    given: $.paths[*][get,delete]
+    then:
+      field: requestBody
+      function: falsy
