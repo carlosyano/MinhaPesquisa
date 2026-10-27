@@ -8,7 +8,7 @@ ENT-001 Tenant,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,no
 ENT-001 Tenant,ativo,tenant ativo,boolean,sim,—,—,true/false,true,não,—,não
 ENT-002 Usuario,id,identificador do usuário,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-002 Usuario,tenant_id,tenant do usuário,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
-ENT-002 Usuario,email,e-mail de login,varchar,sim,255,email RFC 5322,—,—,"sim (global, provisório Q-005)",—,pessoal
+ENT-002 Usuario,email,e-mail de login,varchar,sim,255,email RFC 5322,—,—,"sim (global, DEC-054)",—,pessoal
 ENT-002 Usuario,nome,nome do usuário,varchar,sim,200,—,—,—,não,—,pessoal
 ENT-002 Usuario,senha_hash,hash Argon2id,varchar,sim,255,Argon2id,—,—,não,—,sensível
 ENT-002 Usuario,mfa_secret,segredo TOTP,varchar,não,64,base32,—,NULL,não,—,sensível
@@ -27,7 +27,7 @@ ENT-004 Projeto,tenant_id,tenant do projeto,uuid,sim,36,UUID v4,—,—,não,Ten
 ENT-004 Projeto,nome,nome do projeto,varchar,sim,200,—,—,—,não,—,não
 ENT-004 Projeto,descricao,descrição,text,não,5000,—,—,NULL,não,—,não
 ENT-004 Projeto,status,status do projeto,enum,sim,—,—,ativo; arquivado,ativo,não,—,não
-ENT-004 Projeto,grupo_minimo,tamanho mínimo de grupo,int,sim,—,—,1..1000,1,não,—,não
+ENT-004 Projeto,grupo_minimo,tamanho mínimo de grupo,int,sim,—,—,1..1000,5,não,—,não
 ENT-004 Projeto,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-005 Formulario,id,identificador do formulário,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-005 Formulario,tenant_id,tenant do formulário,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não

@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.2.0
+  version: 0.2.1
   description: |
     API do SaaS MinhaPesquisa — digitalização de pesquisas em papel com leitura por IA,
     revisão humana e dashboards anonimizados, em conformidade com a LGPD.
-    Fonte normativa: REQ v1.3 e PLANO.md v2.4. Contract-first — este arquivo valida
+    Fonte normativa: REQ v1.4 e PLANO.md v2.5. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: rotas públicas declaram `security: []`; rotas de MFA usam a pré-sessão (DEC-050);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -527,8 +527,8 @@ paths:
       operationId: createProject
       tags: [projects]
       summary: Cria projeto com grupo_minimo
-      description: Projeto inicia `ativo`; criação registrada no histórico e na auditoria (CA-027, DEC-023).
-      x-trace: [RF-003, CA-027, DEC-023]
+      description: Projeto inicia `ativo`; criação registrada no histórico e na auditoria (CA-027, DEC-055).
+      x-trace: [RF-003, CA-027, DEC-055]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -579,8 +579,8 @@ paths:
       operationId: updateProject
       tags: [projects]
       summary: Atualiza nome, descrição ou grupo_minimo
-      description: Alteração de grupo_minimo é auditada (seção 2.9 da REQ, DEC-023).
-      x-trace: [RF-003, DEC-023, RN-008]
+      description: Alteração de grupo_minimo é auditada (seção 2.9 da REQ, DEC-055).
+      x-trace: [RF-003, DEC-055, RN-008]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1277,7 +1277,7 @@ paths:
         maior grupo_minimo (CA-034). Cruzamento por uma segunda pergunta (CA-017). Grupos
         contam respondentes pela aplicação mais recente do período; padrão de 12 meses
         (CA-031, DEC-024). Aplicações sem assinatura ficam fora (CA-021).
-      x-trace: [RF-009, CA-009, CA-010, CA-016, CA-017, CA-021, CA-031, CA-034, DEC-023, DEC-024, DEC-045]
+      x-trace: [RF-009, CA-009, CA-010, CA-016, CA-017, CA-021, CA-031, CA-034, DEC-024, DEC-045, DEC-055]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1376,7 +1376,7 @@ paths:
       summary: Localiza respondente pelo CPF (acesso individual)
       description: |
         Exige perfil analista_individual e concessão vigente em projeto vinculado (ERR-008;
-        provisório, Q-011). CPF no corpo, nunca na URL. Busca auditada. Pedidos do titular
+        DEC-060). CPF no corpo, nunca na URL. Busca auditada. Pedidos do titular
         usam o CPF diretamente (createDataSubjectRequest).
       x-trace: [RF-009, CA-011, CA-025, RN-013]
       security:
@@ -2067,7 +2067,7 @@ components:
       properties:
         nome: { type: string, minLength: 1, maxLength: 200 }
         descricao: { type: string, maxLength: 5000 }
-        grupo_minimo: { type: integer, minimum: 1, maximum: 1000, default: 1, description: Padrão provisório; ver Q-006 }
+        grupo_minimo: { type: integer, minimum: 1, maximum: 1000, default: 5, description: Padrão da DEC-055 }
 
     ProjectUpdate:
       type: object

@@ -1,9 +1,9 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 aplicada, pendente de aceite formal do responsável
-Versão: 1.3
-Data de aprovação: 24/10/2026 (v1.2) · CHG-002 em 27/10/2026 (v1.3)
+Status: APROVADO (Gate 1) · CHG-002 e CHG-003 aceitas pelo responsável
+Versão: 1.4
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado)
 Responsável: Carlos Yano
@@ -81,26 +81,26 @@ A v1 não verifica automaticamente se todas as páginas de um envio são da mesm
 | Mitigação na v1 | Procedimento operacional: digitalizar uma aplicação por vez e conferir as páginas antes de enviar; correção pela revisão, com auditoria |
 | Tratamento futuro | ID único por cópia impressa no QR, ou comparação automática do nome lido em cada página |
 
-#### Risco 2 — Grupo mínimo 1 (DEC-023)
+#### Risco 2 — Grupo mínimo reduzido até 1 (DEC-055)
 
-Um filtro estreito (ex.: projeto X, idade 91, viúva) pode identificar uma pessoa e expor seus dados de saúde a um analista que não tem acesso individual. Com o padrão 1, a separação de perfis (analista vs. analista com acesso individual) deixa de proteger.
+Um filtro estreito (ex.: projeto X, idade 91, viúva) pode identificar uma pessoa e expor seus dados de saúde a um analista que não tem acesso individual. O padrão passou a 5 (DEC-055), mas o administrador do tenant pode reduzir até 1; nesse caso a separação de perfis (analista vs. analista com acesso individual) deixa de proteger.
 
 | Campo | Descrição |
 |---|---|
-| Causa | Parâmetro `grupo_minimo` configurável por projeto, com padrão 1 |
+| Causa | Parâmetro `grupo_minimo` configurável por projeto (padrão 5), podendo ser reduzido até 1 |
 | Impacto | Reidentificação de indivíduo por filtro estreito, expondo dados de saúde sem acesso individual |
 | Probabilidade | Baixa em projetos com muitos respondentes; alta em projetos pequenos ou filtros muito específicos |
-| Mitigação na v1 | O parâmetro fica configurável; o projeto que precisar de anonimização usa um valor maior que 1 |
+| Mitigação na v1 | Padrão 5; redução auditada; o projeto que precisar de anonimização mantém valor maior que 1 |
 | Fora da v1 | Proteção contra deduzir valores comparando dois filtros |
 
 2.9 Parâmetros de configuração (RN-008)
 
 | Chave | Escopo | Padrão | Faixa | Quem altera | Origem |
 |---|---|---|---|---|---|
-| grupo_minimo | projeto | 1 | 1..1000 | Administrador do tenant (`createProject`, `updateProject`), com auditoria | DEC-023, RN-026 |
-| limite_confianca | plataforma | 0,90 (provisório, DEC-028) | 0..1, calibrado no conjunto-ouro | Administrador da plataforma, por script, com auditoria (provisório, Q-010) | DEC-028 |
-| custo_ia_teto | tenant | R$ 500,00/mês | ≥ 0 | Administrador da plataforma, por script, com auditoria (provisório, Q-010) | DEC-035 |
-| retencao_dias | tenant | NULL (sem expurgo por tempo até GX-001) | 1..3650 | Administrador da plataforma, por script, com auditoria (provisório, Q-010) | RN-030, Q-002 |
+| grupo_minimo | projeto | 5 | 1..1000 | Administrador do tenant (`createProject`, `updateProject`), com auditoria | DEC-055, RN-026 |
+| limite_confianca | plataforma | 0,90 (provisório, DEC-028) | 0..1, calibrado no conjunto-ouro | Administrador da plataforma, por script, com auditoria | DEC-028, DEC-059 |
+| custo_ia_teto | tenant | R$ 500,00/mês | ≥ 0 | Administrador da plataforma, por script, com auditoria | DEC-035, DEC-058, DEC-059 |
+| retencao_dias | tenant | NULL (sem expurgo por tempo até GX-001) | 1..3650 | Administrador da plataforma, por script, com auditoria | RN-030, Q-002, DEC-059 |
 
 3. Tabela única de decisões (DEC)
 
@@ -130,7 +130,7 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-020 | 23/10/2026 | negócio | Campos obrigatórios | Nenhum; Alguns; Todos os 5 | Nome, nascimento, CPF, data e local bloqueiam a conclusão | Integridade mínima | definitivo | Alto | RF-004, RF-008, CA-032, CA-036 |
 | DEC-021 | 23/10/2026 | negócio | Mascaramento de CPF | Sempre visível; Sempre mascarado; Exceções | Exceto na revisão, na portabilidade e na exportação linha a linha, com auditoria | Equilíbrio entre LGPD e operação | definitivo | Alto | RNF-003, CA-008 |
 | DEC-022 | 23/10/2026 | técnica | Envio à IA | Página inteira; Recortes | Recortes dos campos; identificação e saúde em chamadas separadas; sem metadados | Minimização de dado sensível | definitivo | Alto | RF-007, RNF-011 |
-| DEC-023 | 23/10/2026 | negócio | Grupo mínimo | Fixo; Configurável | Por projeto, podendo ser 1; entre projetos vale o maior; ocultação por célula, também na exportação | Flexibilidade e anonimização | definitivo | Alto | RF-009, CA-010, CA-034 |
+| DEC-023 | 23/10/2026 | negócio | Grupo mínimo | Fixo; Configurável | Por projeto, podendo ser 1; entre projetos vale o maior; ocultação por célula, também na exportação | Flexibilidade e anonimização | substituído (DEC-055) | Alto | RF-009, CA-010, CA-034 |
 | DEC-024 | 23/10/2026 | negócio | Unidade dos grupos | Aplicação; Respondente | Respondente; cada filtro usa a aplicação mais recente que tenha a pergunta; período padrão de 12 meses | Coerência analítica | definitivo | Alto | RF-009, CA-009, CA-031 |
 | DEC-025 | 23/10/2026 | negócio | Autenticação | Sem MFA; MFA opcional; MFA obrigatório | Regras de senha, bloqueio e sessão para todos; MFA para todos os perfis | Segurança de dado sensível | definitivo | Alto | RF-002, CA-026, RNF-002 |
 | DEC-026 | 23/10/2026 | negócio | Eliminação a pedido do titular | Parcial; Total | Apaga imagens e respostas, anonimiza o respondente; auditoria só com referências; lista de eliminações por 180 dias | Conformidade LGPD | definitivo | Alto | RF-010, CA-023, RNF-008 |
@@ -144,6 +144,13 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-034 | 23/10/2026 | negócio | Operação | Sem link assinado; Link de 5 min; Link de 1 h | Link de imagem de 5 minutos; avisos por e-mail e na tela; reserva de aplicação por 30 minutos | Segurança e UX | provisório | Médio | RNF-007, CA-043 |
 | DEC-035 | 24/10/2026 | negócio | Teto de custo de IA na v1 | Sem teto; R$ 500/mês; R$ 1.000/mês | R$ 500,00/mês por tenant | Valor provisório para viabilizar a fila de espera (CA-030) na v1 | provisório | Alto | RF-007, CA-030, RNF-014 |
 | DEC-036 | 24/10/2026 | técnica | Definição do ambiente de nuvem | AWS sa-east-1; Azure Brazil South | A definir na Fase 3 (ADR), sempre com região no Brasil | Soberania de dados; decisão técnica adiada para análise | substituído (DEC-038) | Alto | RNF-011, RNF-002 |
+| DEC-054 | 27/10/2026 | negócio | Identificação do usuário no login | E-mail único global; e-mail único por tenant | E-mail único em toda a plataforma; um e-mail pertence a um único tenant | Login sem ambiguidade de tenant (Q-005) | definitivo | Alto | RF-001, RF-002, ENT-002 |
+| DEC-055 | 27/10/2026 | negócio | Grupo mínimo | Padrão 1; padrão 5; padrão 5 com piso 3 | Por projeto, padrão 5, alterável de 1 a 1000 pelo administrador do tenant com auditoria; entre projetos vale o maior; ocultação por célula, também na exportação | Reduz a reidentificação de idosos por filtros estreitos (Q-006); substitui a DEC-023 | definitivo | Alto | RF-009, CA-010, CA-034 |
+| DEC-056 | 27/10/2026 | negócio | Origem do conjunto-ouro | Voluntários com dados fictícios; dados reais após GX-001; preenchimento digital | Formulários preenchidos à mão por voluntários 60+ com dados fictícios, sob termo de participação próprio, sem dado pessoal real | Permite calibrar e escolher o provedor sem depender do GX-001 (Q-007) | definitivo | Alto | DEC-004, DEC-028, RN-046 |
+| DEC-057 | 27/10/2026 | negócio | Leitura de texto livre | Sempre revisão; regra geral de confiança; sem leitura por IA | Itens do tipo `texto_livre` sempre vão para `a_revisar` | Texto livre não tem schema que valide o valor (Q-008) | definitivo | Médio | RF-007, FL-002, DEC-010 |
+| DEC-058 | 27/10/2026 | negócio | Período e moeda do teto de custo de IA | Mês civil e PTAX diária; janela móvel de 30 dias; mês civil e cotação fixa mensal | Mês civil no fuso America/Sao_Paulo; custo em dólar convertido por cotação fixa configurada pela plataforma a cada mês | Previsibilidade do teto (Q-009) | definitivo | Médio | DEC-035, RN-036, CA-030 |
+| DEC-059 | 27/10/2026 | negócio | Alteração de limite_confianca, custo_ia_teto e retencao_dias | Plataforma por script; administrador do tenant pela tela; misto | Administrador da plataforma, por script, com auditoria | Não há gestão de tenant por tela na v1 (DEC-017); Q-010 | definitivo | Médio | RN-008, DEC-017, DEC-018 |
+| DEC-060 | 27/10/2026 | negócio | Perfil analista_individual × concessão | Perfil e concessão; só concessão; só perfil | O acesso individual exige o perfil `analista_individual` e uma concessão vigente para o projeto | Defesa em duas camadas para dados individuais de saúde (Q-011) | definitivo | Alto | RF-001, RF-009, DEC-031, CA-025 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -252,7 +259,7 @@ RN-025 — CPF obrigatório (RNF-003)
 CPF obrigatório como identificador do respondente, armazenado cifrado (com hash para busca) e exibido mascarado.
 
 RN-026 — Tamanho mínimo de grupo (RNF-004)
-Tamanho mínimo de grupo nos dashboards configurável por projeto, podendo ser 1 (padrão).
+Tamanho mínimo de grupo nos dashboards configurável por projeto, padrão 5, podendo ser de 1 a 1000 (DEC-055).
 
 RN-027 — Trilha de auditoria (RNF-005)
 Trilha de auditoria imutável de acesso a dado individual, correção, exportação e mudança de status; a auditoria guarda só referências (quem, quando, qual registro, qual campo, qual ação), nunca os valores.
@@ -361,7 +368,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 |---|---|---|---|---|---|---|---|---|---|---|
 | id | identificador do usuário | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
 | tenant_id | tenant do usuário | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
-| email | e-mail de login | varchar | sim | 255 | email RFC 5322 | — | — | sim (global, provisório Q-005) | — | pessoal |
+| email | e-mail de login | varchar | sim | 255 | email RFC 5322 | — | — | sim (global, DEC-054) | — | pessoal |
 | nome | nome do usuário | varchar | sim | 200 | — | — | — | não | — | pessoal |
 | senha_hash | hash Argon2id | varchar | sim | 255 | Argon2id | — | — | não | — | sensível |
 | mfa_secret | segredo TOTP | varchar | não | 64 | base32 | — | NULL | não | — | sensível |
@@ -390,7 +397,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | nome | nome do projeto | varchar | sim | 200 | — | — | — | não | — | não |
 | descricao | descrição | text | não | 5000 | — | — | NULL | não | — | não |
 | status | status do projeto | enum | sim | — | — | ativo; arquivado | ativo | não | — | não |
-| grupo_minimo | tamanho mínimo de grupo | int | sim | — | — | 1..1000 | 1 | não | — | não |
+| grupo_minimo | tamanho mínimo de grupo | int | sim | — | — | 1..1000 | 5 | não | — | não |
 | criado_em | data de criação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 
 **ENT-005 Formulario**
@@ -869,7 +876,7 @@ Ordem de avaliação ao fim da leitura de um item (a primeira regra que se aplic
 | 3 | Origem resolvida, a regra manda pular e o item está preenchido (CA-019) | a_revisar |
 | 4 | Origem em `em_branco`, `ilegivel` ou `rasurado` (condição indeterminada) | a_revisar |
 | 5 | Pergunta do tipo `cpf` (RN-012) | a_revisar |
-| 6 | Pergunta do tipo `texto_livre` (provisório, Q-008) | a_revisar |
+| 6 | Pergunta do tipo `texto_livre` (DEC-057) | a_revisar |
 | 7 | Valor fora do schema: tipo, faixa, opção inexistente ou mais de uma marcação em escolha única (CA-006) | a_revisar |
 | 8 | Confiança > limite_confianca (DEC-028) | confirmado_automaticamente |
 | 9 | Demais casos (confiança ≤ limite) | a_revisar |
@@ -1249,7 +1256,7 @@ E nenhuma página é descartada
 | 1 | 499,00 | 500,00 | 0,50 | Chamada feita; acumulado 499,50 |
 | 2 | 499,80 | 500,00 | 0,50 | Chamada não feita; aplicação em `aguardando_cota`; aviso enviado |
 | 3 | 500,00 | 500,00 | 0,01 | Chamada não feita; aplicação em `aguardando_cota` |
-| 4 | 0,00 (virada do mês, Q-009) | 500,00 | 0,50 | Fila retomada; aplicações voltam para `em_leitura` |
+| 4 | 0,00 (virada do mês civil, DEC-058) | 500,00 | 0,50 | Fila retomada; aplicações voltam para `em_leitura` |
 
 CA-033 — Descarte de aplicação
 Dado que uma aplicação tem agrupamento errado
@@ -1387,7 +1394,7 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 
 9. Questões em aberto (Q)
 
-Q-001 a Q-004 foram respondidas e incorporadas. Q-005 a Q-011 foram abertas pela CHG-002 (lacunas encontradas na revisão de 27/10/2026); até a resposta, vale o texto provisório, já refletido nesta REQ e no PLANO.
+Todas as questões foram respondidas. Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, foram respondidas em 27/10/2026 (recomendações aceitas) e incorporadas na v1.4 como DEC-054 a DEC-060 (CHG-003).
 
 | id | data | pergunta | por_que_importa | opcao_a | opcao_b | opcao_c | recomendacao | texto_provisorio (agora definitivo) | resposta | status | relacionados |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1395,13 +1402,13 @@ Q-001 a Q-004 foram respondidas e incorporadas. Q-005 a Q-011 foram abertas pela
 | Q-002 | 24/10/2026 | Retenção de dados e backups | Impacto em custo de armazenamento e conformidade com direito à eliminação | A: 30 dias | B: 90 dias | C: Indeterminado até o jurídico | B | Backups serão retidos por no máximo 90 dias. A retenção de dados de produção em ambiente ativo aguarda definição do parecer jurídico (GX-001). | Aceito sua sugestão. | respondida | RNF-008, CA-023, DEC-033 |
 | Q-003 | 24/10/2026 | Teto de Custo de IA na v1 | Impacto direto em custo operacional e comportamento da fila de processamento | A: Sem teto | B: R$ 500/mês | C: R$ 1.000/mês | B | O teto provisório de custo de IA é de R$ 500,00/mês por tenant para a v1, acionando a fila de espera (CA-030) ao ser atingido. | Aceito sua sugestão. | respondida | RF-007, CA-030, DEC-035 |
 | Q-004 | 24/10/2026 | Ambiente de Nuvem | Impacto em arquitetura, custo e soberania de dados | A: AWS sa-east-1 | B: Azure Brazil South | C: Deixar para a Fase 3 | C | A definição da nuvem (AWS sa-east-1 ou Azure Brazil South) será formalizada via ADR na Fase 3, garantindo a soberania de dados no Brasil. | Aceito sua sugestão. | respondida | RNF-011, DEC-036 |
-| Q-005 | 27/10/2026 | Identificação do usuário no login | O e-mail é único por tenant, mas o login não informa o tenant: o mesmo e-mail em dois tenants torna o login ambíguo | A: e-mail único global (um e-mail pertence a um único tenant) | B: e-mail único por tenant, com identificador do tenant no login | — | A | O e-mail do usuário é único em toda a plataforma; um e-mail pertence a um único tenant. | — | aberta | RF-001, RF-002, ENT-002 |
-| Q-006 | 27/10/2026 | Valor padrão de grupo_minimo | Com padrão 1, filtros estreitos expõem dados de saúde de idosos a analistas sem acesso individual (Risco 2, seção 2.8) | A: manter padrão 1 (DEC-023) | B: padrão 5, podendo ser reduzido por projeto com auditoria | C: padrão 5 com piso de 3 | B | Mantém-se a DEC-023 (padrão 1) até a resposta. | — | aberta | DEC-023, RN-026, CA-010 |
-| Q-007 | 27/10/2026 | Origem do conjunto-ouro | Caligrafia real de pessoas 60+ é dado pessoal (bloqueado por GX-001); caligrafia sintética não representa o público; sem conjunto-ouro não há como escolher provedor nem medir a DEC-004 | A: voluntários 60+ preenchem formulários com dados fictícios, com termo próprio | B: usar dados reais só após GX-001 | C: formulários preenchidos digitalmente (sintéticos) | A | O conjunto-ouro é formado por formulários preenchidos à mão por voluntários 60+ com dados fictícios, sob termo de participação próprio, sem dado pessoal real. | — | aberta | DEC-004, DEC-028, RN-046, GX-001 |
-| Q-008 | 27/10/2026 | Leitura de texto livre | Texto livre não tem schema que permita validar o valor, então a regra "valor dentro do schema" não protege contra erro silencioso | A: texto_livre sempre vai para revisão | B: segue a regra geral de confiança | C: texto_livre não é lido por IA; o digitalizador digita | A | Itens do tipo `texto_livre` sempre vão para `a_revisar`. | — | aberta | RF-007, FL-002, DEC-010 |
-| Q-009 | 27/10/2026 | Período e moeda do teto de custo de IA | O teto é em reais e o provedor cobra em dólar; "mês" pode ser civil ou janela móvel | A: mês civil (America/Sao_Paulo) e cotação PTAX do dia | B: janela móvel de 30 dias | C: mês civil (America/Sao_Paulo) e cotação fixa configurada pela plataforma a cada mês | C | O teto vale por mês civil no fuso America/Sao_Paulo; o custo em dólar é convertido por cotação fixa configurada pela plataforma a cada mês. | — | aberta | DEC-035, RN-036, CA-030 |
-| Q-010 | 27/10/2026 | Quem altera limite_confianca, custo_ia_teto e retencao_dias | RN-008 exige forma de alteração definida; na v1 não há gestão de tenant por tela (DEC-017) | A: administrador da plataforma, por script, com auditoria | B: administrador do tenant, pela tela | C: teto e retenção pelo administrador do tenant; limite pela plataforma | A | Os três parâmetros são alterados pelo administrador da plataforma, por script, com auditoria (seção 2.9). | — | aberta | RN-008, DEC-017, DEC-018 |
-| Q-011 | 27/10/2026 | Perfil analista_individual × concessão de acesso individual | A REQ tem o perfil `analista_individual` (ENT-003) e a concessão por projeto com 90 dias (ENT-015, DEC-031), sem dizer se ambos são exigidos | A: exige o perfil e uma concessão vigente no projeto | B: basta a concessão vigente (o perfil deixa de existir) | C: basta o perfil | A | O acesso individual exige o perfil `analista_individual` e uma concessão vigente para o projeto. | — | aberta | RF-001, RF-009, DEC-031, CA-025 |
+| Q-005 | 27/10/2026 | Identificação do usuário no login | O e-mail é único por tenant, mas o login não informa o tenant: o mesmo e-mail em dois tenants torna o login ambíguo | A: e-mail único global (um e-mail pertence a um único tenant) | B: e-mail único por tenant, com identificador do tenant no login | — | A | O e-mail do usuário é único em toda a plataforma; um e-mail pertence a um único tenant. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | RF-001, RF-002, ENT-002 |
+| Q-006 | 27/10/2026 | Valor padrão de grupo_minimo | Com padrão 1, filtros estreitos expõem dados de saúde de idosos a analistas sem acesso individual (Risco 2, seção 2.8) | A: manter padrão 1 (DEC-023) | B: padrão 5, podendo ser reduzido por projeto com auditoria | C: padrão 5 com piso de 3 | B | Mantém-se a DEC-023 (padrão 1) até a resposta. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | DEC-023, RN-026, CA-010 |
+| Q-007 | 27/10/2026 | Origem do conjunto-ouro | Caligrafia real de pessoas 60+ é dado pessoal (bloqueado por GX-001); caligrafia sintética não representa o público; sem conjunto-ouro não há como escolher provedor nem medir a DEC-004 | A: voluntários 60+ preenchem formulários com dados fictícios, com termo próprio | B: usar dados reais só após GX-001 | C: formulários preenchidos digitalmente (sintéticos) | A | O conjunto-ouro é formado por formulários preenchidos à mão por voluntários 60+ com dados fictícios, sob termo de participação próprio, sem dado pessoal real. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | DEC-004, DEC-028, RN-046, GX-001 |
+| Q-008 | 27/10/2026 | Leitura de texto livre | Texto livre não tem schema que permita validar o valor, então a regra "valor dentro do schema" não protege contra erro silencioso | A: texto_livre sempre vai para revisão | B: segue a regra geral de confiança | C: texto_livre não é lido por IA; o digitalizador digita | A | Itens do tipo `texto_livre` sempre vão para `a_revisar`. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | RF-007, FL-002, DEC-010 |
+| Q-009 | 27/10/2026 | Período e moeda do teto de custo de IA | O teto é em reais e o provedor cobra em dólar; "mês" pode ser civil ou janela móvel | A: mês civil (America/Sao_Paulo) e cotação PTAX do dia | B: janela móvel de 30 dias | C: mês civil (America/Sao_Paulo) e cotação fixa configurada pela plataforma a cada mês | C | O teto vale por mês civil no fuso America/Sao_Paulo; o custo em dólar é convertido por cotação fixa configurada pela plataforma a cada mês. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | DEC-035, RN-036, CA-030 |
+| Q-010 | 27/10/2026 | Quem altera limite_confianca, custo_ia_teto e retencao_dias | RN-008 exige forma de alteração definida; na v1 não há gestão de tenant por tela (DEC-017) | A: administrador da plataforma, por script, com auditoria | B: administrador do tenant, pela tela | C: teto e retenção pelo administrador do tenant; limite pela plataforma | A | Os três parâmetros são alterados pelo administrador da plataforma, por script, com auditoria (seção 2.9). | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | RN-008, DEC-017, DEC-018 |
+| Q-011 | 27/10/2026 | Perfil analista_individual × concessão de acesso individual | A REQ tem o perfil `analista_individual` (ENT-003) e a concessão por projeto com 90 dias (ENT-015, DEC-031), sem dizer se ambos são exigidos | A: exige o perfil e uma concessão vigente no projeto | B: basta a concessão vigente (o perfil deixa de existir) | C: basta o perfil | A | O acesso individual exige o perfil `analista_individual` e uma concessão vigente para o projeto. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | RF-001, RF-009, DEC-031, CA-025 |
 
 10. Gates externos (GX)
 
@@ -1430,18 +1437,18 @@ Testes sentinela são casos de teste de alto nível que validam os riscos críti
 
 Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tools/validar_consistencia.py`; o resultado do script prevalece sobre este texto.
 
-- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-046, ENT-001 a ENT-022, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 46 CAs (CA-001 a CA-044, CA-014b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036, Q-001 a Q-011 e GX-001. Verificado por script (IDs citados existem nos registros).
+- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-046, ENT-001 a ENT-022, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 46 CAs (CA-001 a CA-044, CA-014b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-060 (negócio; DEC-037 a DEC-053 são técnicas, no PLANO), Q-001 a Q-011 e GX-001. Verificado por script (IDs citados existem nos registros).
 - [x] 2. BDD com dados concretos: tabelas de exemplos nos CAs de alto risco CA-002, CA-008, CA-010, CA-012, CA-023, CA-029, CA-030, CA-032 e CA-043 (adicionadas na v1.3; na v1.2 só o CA-029 tinha tabela).
 - [x] 3. Estados e fluxos fechados: FL-001 com tabela de criação e entradas em `aguardando_cota`; FL-002 com ordem de avaliação explícita. Estados verificados por script contra o dicionário e o contrato.
 - [x] 4. Dicionário de dados completo: 22 entidades com as 11 propriedades; `registros/dicionario_dados.csv` idêntico, verificado por script.
 - [x] 5. Concorrência e duplicidade definidas (seção 6.5), com idempotência e If-Match obrigatórios nas operações listadas.
 - [x] 6. Resiliência em chamadas externas (seção 6.6), incluindo PDF e jobs.
 - [x] 7. Zero contradições com a tabela de decisões: DEC-020 × ERR-006 e DEC-026 × dicionário corrigidos na v1.3.
-- [x] 8. Toda escolha técnica é DEC; lacuna de negócio é Q (Q-005 a Q-011 abertas). DEC-036 foi resolvida pela DEC-038 (PLANO).
+- [x] 8. Toda escolha técnica é DEC; lacuna de negócio é Q, e Q respondida vira DEC (Q-005 a Q-011 → DEC-054 a DEC-060). DEC-036 foi resolvida pela DEC-038 (PLANO); DEC-023 substituída pela DEC-055.
 - [x] 9. Testes sentinela cobrindo riscos: TS-001 a TS-008.
 - [x] 10. Gates externos registrados: GX-001 (bloqueia piloto e produção).
-- [ ] 11. Nenhum trecho exige "bom senso": depende das respostas a Q-005 a Q-011.
-- [ ] 12. Toda Q respondida: Q-005 a Q-011 abertas.
+- [x] 11. Nenhum trecho exige "bom senso": lacunas resolvidas pelas DEC-054 a DEC-060.
+- [x] 12. Toda Q respondida: Q-001 a Q-011.
 - [ ] 13. Consenso DEV/TEST sem divergência bloqueante: depende da REV-REQ-005.
 - [x] 14. REQ autocontida: referências externas (MeuRemedio, Kit v3) são informativas; o Bloco P está em `docs/spec/BLOCO_P.md`.
 - [ ] 15. Última revisão independente sem achado bloqueante ou alto: REV-REQ-005 (humana) pendente. As REV anteriores foram feitas por IA (simulada ou não independente).
@@ -1469,6 +1476,6 @@ A revisão independente é obrigatória no nível Completo. O revisor não pode 
 | REV-REQ-002 | 24/10/2026 | IA Revisora (Simulada) | 1.1 | 0 | 0 | 0 | 0 | Resolvido | Verificação cruzada declarada sem achados; a REV-REQ-004 mostrou que a verificação não foi efetiva. |
 | REV-REQ-003 | 24/10/2026 | Carlos Yano (CHG-001) | 1.2 | 0 | 0 | 0 | 0 | Resolvido | CHG-001 aplicada: CA-032 de ERR-036 para ERR-006. CA-014b e CA-037b adicionados. |
 | REV-REQ-004 | 27/10/2026 | Claude (assistente IA; não independente) | 1.2 | 4 | n/c | n/c | n/c | Resolvido | Bloqueantes: ERR duplicados; DEC-020 × ERR-006; eliminação × NOT NULL; CPF de exemplo inválido. Demais achados não classificados por severidade. Validação mecânica (`tools/validar_consistencia.py`) e leitura cruzada: ERR duplicados (005/043, 007/029); DEC-020 × ERR-006; eliminação × NOT NULL; CPF de exemplo inválido; FL-001 sem entradas em `aguardando_cota`; FL-002 sem precedência; RN-008 citando tabela inexistente; regex de Perfil; tabelas de exemplos ausentes nos CAs de alto risco; contrato sem 30 operações. Corrigidos na v1.3 (CHG-002); lacunas de negócio viraram Q-005 a Q-011. |
-| REV-REQ-005 | 27/10/2026 | Revisor humano independente (a designar) | 1.3 | — | — | — | — | Pendente | Exigida pelo nível Completo: o revisor não pode ser o autor nem a mesma IA que corrigiu. |
+| REV-REQ-005 | 27/10/2026 | Revisor humano independente (a designar) | 1.4 | — | — | — | — | Pendente | Exigida pelo nível Completo: o revisor não pode ser o autor nem a mesma IA que corrigiu. |
 
 Fim do documento `REQ.md`

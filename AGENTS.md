@@ -10,7 +10,7 @@ Evidências de implementação e testes não são fonte normativa.
 
 ## 2. Proibições
 
-- Não alterar regra de negócio. Lacuna de negócio vira Q-xxx em `docs/spec/REQ.md` §9; use o texto provisório e avise o responsável.
+- Não alterar regra de negócio. Lacuna de negócio vira Q-xxx em `docs/spec/REQ.md` §9 e o responsável é avisado; até a resposta, use o texto provisório da Q e não o trate como definitivo.
 - Não editar `registros/*.csv` à mão (exceto `controle_mudancas.csv`). Altere REQ/PLANO e rode `python3 tools/gerar_registros.py`.
 - Não usar dado pessoal real (Q-001, GX-001). Fixtures e exemplos são sintéticos; CPFs de exemplo devem ser válidos ou marcados como inválidos.
 - Não registrar em log nome, CPF, dado de saúde ou conteúdo lido (RN-028).

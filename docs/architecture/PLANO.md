@@ -3,13 +3,13 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.3 (CHG-002 aplicada, pendente de aceite formal) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v1.4 (CHG-002 e CHG-003 aceitas) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.4
-**Status:** EM REVISÃO — REV-PLANO-007 (humana) pendente; Q-005 a Q-011 abertas
+**Versão do plano:** 2.5
+**Status:** EM REVISÃO — REV-PLANO-007 (humana) pendente
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
-**Este plano não altera regra de negócio.** Onde a REQ tem lacuna de negócio, o plano usa o texto provisório da Q correspondente.
+**Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
 ---
 
@@ -89,9 +89,9 @@ recebe o recorte já normalizado.
 - Outbox registra `leitura.solicitada` na mesma transação.
 - Worker lê páginas em paralelo, em recortes; identificação e saúde em chamadas separadas, sem identificador do respondente (DEC-022, RN-038, RN-039).
 - Antes de cada chamada, reserva atômica de orçamento (DEC-051); sem reserva → `aguardando_cota`.
-- Saída validada contra schema; estado de cada item pela ordem de avaliação da FL-002 (REQ v1.3). Pontos de atenção:
+- Saída validada contra schema; estado de cada item pela ordem de avaliação da FL-002 (REQ §6.4). Pontos de atenção:
   - Confiança comparada no valor bruto; **estritamente maior** que o limite confirma (0,90 exato vai para `a_revisar` — CA-005, CA-006, TS-003).
-  - CPF sempre revisável (RN-012); valor fora do schema sempre revisável (CA-006); `texto_livre` sempre revisável (provisório, Q-008).
+  - CPF sempre revisável (RN-012); valor fora do schema sempre revisável (CA-006); `texto_livre` sempre revisável (DEC-057).
   - Regra de salto dependente de campo não resolvido → `aguardando_condicao` (CA-018).
 - Revisão humana com reserva de 30 min (ReservaAplicacao é a fonte única) e ETag/If-Match obrigatório (RN-043, DEC-034).
 - Conclusão (`confirmApplication`) exige os 5 campos da DEC-020 e assinatura presente (RN-044); vínculo por CPF é feito aqui — CPF existente vincula, CPF novo cria respondente (CA-014b). Divergência de cadastro: o digitalizador escolhe o valor (CA-014).
@@ -99,7 +99,7 @@ recebe o recorte já normalizado.
 
 ### 4.2 Falha e cota
 
-Timeout e retentativas conforme tabela abaixo. Após 3 falhas consecutivas em chamada idempotente → `erro_leitura` (ERR-041). Cota mensal atingida → `aguardando_cota` (ERR-003) + aviso ao administrador por e-mail e na tela (`getQuotaStatus`); nada é descartado (DEC-035). Período e conversão de moeda: provisório da Q-009.
+Timeout e retentativas conforme tabela abaixo. Após 3 falhas consecutivas em chamada idempotente → `erro_leitura` (ERR-041). Cota mensal atingida → `aguardando_cota` (ERR-003) + aviso ao administrador por e-mail e na tela (`getQuotaStatus`); nada é descartado (DEC-035). Período e conversão de moeda: DEC-058.
 
 #### 4.2.1 Tabela de timeouts por operação
 
@@ -146,7 +146,7 @@ entidade=Usuario, registro_id=<usuario_id>.
 2. Sucesso cria **pré-sessão** (cookie próprio, 5 min, válida só para `/auth/mfa/*`) e informa a etapa: `mfa_verificacao` ou `mfa_cadastro`.
 3. `startMfaSetup` gera o segredo TOTP **no servidor**, grava cifrado e devolve a URI otpauth; `setupMfa` confirma com um código. `verifyMfa` valida o código para quem já tem MFA. Código errado → ERR-012 (conta como falha de login).
 4. Só então a sessão plena é criada (30 min de inatividade, 24 h no máximo). Com 3 sessões ativas, a nova é recusada com ERR-021 (mesmo comportamento validado no MeuRemedio, Bloco P P.2).
-5. Identificação do usuário: e-mail único global (provisório, Q-005).
+5. Identificação do usuário: e-mail único global (DEC-054).
 
 ### 4.7 Papéis de banco e RLS fora da requisição (DEC-046)
 
@@ -189,7 +189,7 @@ guardam dado pessoal; o payload carrega apenas IDs.
 
 | Tabela | Constraint |
 | --- | --- |
-| usuario | (email) — global, provisório Q-005 |
+| usuario | (email) — global (DEC-054) |
 | usuario_perfil | (tenant_id, usuario_id, perfil_id) |
 | vinculo_usuario_projeto | (tenant_id, usuario_id, projeto_id) |
 | concessao_acesso_individual | (tenant_id, usuario_id, projeto_id) WHERE ativo |
@@ -224,7 +224,7 @@ Drizzle com SQL explícito versionado; migração idempotente, `down` testado.
 Toda migração executa em CI contra PostgreSQL 17 real (Testcontainers).
 Idempotency-Key obrigatória nas mutações críticas (REQ §6.5); dedupe por `(aplicacao_id, pagina)` no worker.
 Reserva de aplicação com expiração; ETag/If-Match obrigatório em edições.
-Retenção por tenant (`retencao_dias`, provisório Q-010); backups ≤ 90 dias (DEC-033); expurgo ≤ 30 dias; lista de
+Retenção por tenant (`retencao_dias`, DEC-059); backups ≤ 90 dias (DEC-033); expurgo ≤ 30 dias; lista de
 eliminações por 180 dias reaplicada após restauração de backup.
 
 ---
@@ -258,7 +258,7 @@ recurso de projeto não vinculado → 404 ERR-002 (RN-004). Todas as rotas abaix
 | getQuotaStatus | sim | não | não | não |
 | getDashboardAggregated, listGroups, createGroup, deleteGroup | sim | não | sim | sim |
 | exportData (agregado) | sim | não | sim | sim |
-| exportData (linha a linha), findRespondent, getIndividualRecord | não | não | não | sim, com concessão vigente no projeto (provisório, Q-011) |
+| exportData (linha a linha), findRespondent, getIndividualRecord | não | não | não | sim, com concessão vigente no projeto (DEC-060) |
 | RF-010 (pedidos do titular, auditoria) | sim | não | não | não |
 
 O perfil é cumulativo (RN-003): permissões efetivas são a união dos perfis do usuário.
@@ -354,9 +354,9 @@ fundação (`.github/workflows/ci.yml`).
 | Dashboard com gráfico cruzado e k-anon | integração + propriedade | Testcontainers + fast-check | CA-017, CA-034 |
 | Assinatura ausente fora de relatórios/exportações | integração + E2E | Testcontainers + Playwright | CA-021 |
 
-### 10.1 Conjunto-ouro (DEC-004, DEC-047, Q-007)
+### 10.1 Conjunto-ouro (DEC-004, DEC-047, DEC-056)
 
-- Origem provisória: formulários preenchidos à mão por voluntários 60+ com dados fictícios (Q-007).
+- Origem: formulários preenchidos à mão por voluntários 60+ com dados fictícios, sob termo de participação próprio (DEC-056).
 - Tamanho mínimo por tipo de pergunta: para afirmar erro silencioso ≤ 0,5% com 95% de confiança sem nenhum erro observado, são necessários **pelo menos 600 campos autoconfirmados** por tipo (regra dos três: 3/n ≤ 0,005). Com erros observados, o tamanho é recalculado pelo limite superior de Clopper-Pearson.
 - Gabarito com dupla digitação humana e arbitragem das divergências.
 - Saídas: escolha do provedor e do método de confiança, calibração do `limite_confianca` (DEC-028 é provisória) e relatório versionado em `docs/`.
@@ -383,10 +383,10 @@ validada a cada merge.
 
 | IMP | Escopo | CAs cobertos | Entrada | Saída / evidência esperada |
 | --- | --- | --- | --- | --- |
-| IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo; Q-005 respondida | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA |
+| IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA |
 | IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-015, CA-017, CA-018, CA-019, CA-020, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada |
-| IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-018, CA-019, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 aceito; Q-008 e Q-009 respondidas | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` |
-| IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-010, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031, CA-034 | IMP-003 aceito; Q-006 respondida | TS-004/TS-005/TS-008; k-anon por célula; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações; grupo mínimo entre projetos |
+| IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-018, CA-019, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 aceito | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` |
+| IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-010, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031, CA-034 | IMP-003 aceito | TS-004/TS-005/TS-008; k-anon por célula; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações; grupo mínimo entre projetos |
 
 Cada IMP: IA-TEST escreve testes vermelhos → IA-DEV implementa → verificações
 completas → ciclo de revisão por PR → merge pelo responsável → ciclo sobre o
@@ -394,10 +394,10 @@ incremento inteiro → Gate 2 (aceite do responsável).
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 46 CAs da REQ v1.3
+### 11.1 Cobertura dos 46 CAs da REQ v1.4
 
 A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 46 critérios
-de aceite da REQ v1.3 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
+de aceite da REQ v1.4 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
 confere que cada CA está no incremento do seu RF.
 
 **CA-017** e **CA-021** aparecem em mais de um incremento porque a REQ os
@@ -433,10 +433,10 @@ validado pelo CI a cada merge.
 | Provedor de IA | dependência | escolha no conjunto-ouro; interface isolada |
 | Retenção de produção | jurídico | aguarda GX-001; backups já definidos em 90 dias (DEC-033) |
 | Risco aceito: páginas de pessoas distintas | risco | DEC-008; procedimento operacional na v1 (§2.8 da REQ) |
-| Risco aceito: grupo mínimo 1 | risco | DEC-023; reavaliação proposta em Q-006 |
+| Risco aceito: grupo mínimo reduzido até 1 | risco | DEC-055 (padrão 5; redução auditada) |
 | CHG-001 — CA-032 × catálogo ERR | mudança normativa | aplicada na REQ v1.2 |
-| CHG-002 — correções de consistência e lacunas | mudança normativa | aplicada na REQ v1.3; pendente de aceite formal do responsável |
-| Q-005 a Q-011 | lacunas de negócio | abertas; textos provisórios em uso |
+| CHG-002 — correções de consistência e lacunas | mudança normativa | aceita em 27/10/2026 (REQ v1.3) |
+| CHG-003 — respostas às Q-005 a Q-011 | mudança normativa | aceita em 27/10/2026 (REQ v1.4, DEC-054 a DEC-060) |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
@@ -477,11 +477,11 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.3
-- [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio registradas como Q-005 a Q-011)
+- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.4
+- [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
-- [ ] Q-005 respondida (pré-requisito do IMP-001)
-- [ ] CHG-002 aceita formalmente pelo responsável
+- [x] Q-005 a Q-011 respondidas
+- [x] CHG-002 e CHG-003 aceitas pelo responsável
 - [ ] Revisão independente humana (REV-PLANO-007) com 0 achados bloqueantes, altos e médios
 
 **Bloqueio de status:** este plano NÃO pode ser declarado PRONTO PARA IMPLEMENTAÇÃO
@@ -521,8 +521,8 @@ REQ §8.1; o CI falha se divergirem.
 | REV-PLANO-004 | 27/10/2026 | IA Revisora (Simulada) | 2.2 | 0 | 1 | 0 | 0 | Resolvido | Alocação de CA-017, CA-021 e CA-034 divergia da matriz canônica. Corrigido na v2.3 (o CSV de incrementos não foi atualizado; ver REV-PLANO-006). |
 | REV-PLANO-005 | 27/10/2026 | IA Revisora (Simulada) | 2.3 | 0 | 0 | 0 | 0 | Invalidado | O CSV registrava "Convergente" enquanto o plano dizia "Pendente"; a REV-PLANO-006 encontrou achados bloqueantes na mesma versão. |
 | REV-PLANO-006 | 27/10/2026 | Claude (assistente IA; não independente) | 2.3 | 4 | n/c | n/c | n/c | Resolvido | Bloqueantes: IDs de DEC colidindo entre REQ e CSV; status da REV-PLANO-005 divergente; CSV de incrementos desatualizado; rotas públicas exigindo sessão no contrato. Também: RLS sem desenho para login e jobs, confiança e recortes indefinidos, segredo MFA enviado pelo cliente, 30 operações ausentes no contrato, CSVs corrompidos e nomes de arquivo com caixa errada. Corrigidos na v2.4. |
-| REV-PLANO-007 | 27/10/2026 | Revisor humano independente (a designar) | 2.4 | — | — | — | — | Pendente | Exigida pelo nível Completo. |
+| REV-PLANO-007 | 27/10/2026 | Revisor humano independente (a designar) | 2.5 | — | — | — | — | Pendente | Exigida pelo nível Completo. |
 
 ---
 
-**Fim do documento `PLANO.md` v2.4**
+**Fim do documento `PLANO.md` v2.5**
