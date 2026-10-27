@@ -1,12 +1,15 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     API do SaaS MinhaPesquisa — digitalização de pesquisas em papel com leitura por IA,
     revisão humana e dashboards anonimizados, em conformidade com a LGPD.
-    Fonte normativa: REQ v1.2 e PLANO.md v2.3. Contract-first — este arquivo valida
-    requisição e resposta. Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
+    Fonte normativa: REQ v1.3 e PLANO.md v2.4. Contract-first — este arquivo valida
+    requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
+    Segurança: rotas públicas declaram `security: []`; rotas de MFA usam a pré-sessão (DEC-050);
+    demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
+    mesmo objeto de segurança significam E, não OU).
   contact:
     name: Carlos Yano
 servers:
@@ -17,220 +20,339 @@ servers:
 
 tags:
   - name: auth
-    description: Autenticação, sessão, MFA e recuperação de senha (RF-001, RF-002)
+    description: Autenticação, sessão, MFA, convites e recuperação de senha (RF-002)
   - name: admin
-    description: Gestão de usuários, convites e concessões (RF-001)
+    description: Usuários, perfis, vínculos e concessões de acesso individual (RF-001)
   - name: projects
-    description: Ciclo de vida de projetos (RF-003)
+    description: Ciclo de vida e parâmetros de projetos (RF-003)
   - name: forms
     description: Formulários, versões, publicação e PDF (RF-004)
   - name: upload
-    description: Upload de imagens e criação de aplicação (RF-006)
+    description: Upload de imagens, identificação e cota (RF-006, RF-007)
   - name: review
-    description: Fila de revisão, conclusão, descarte e reabertura (RF-008)
+    description: Fila de revisão, conclusão, assinatura, descarte e reabertura (RF-008)
   - name: dashboard
     description: Agregados, grupos e ficha individual (RF-009)
   - name: lgpd
-    description: Exportação e direitos do titular (RF-010)
+    description: Exportação, direitos do titular e auditoria (RF-010)
 
 security:
   - sessionCookie: []
 
 paths:
+  # ───────────────────────────── auth (RF-002) ─────────────────────────────
   /auth/login:
     post:
       operationId: login
       tags: [auth]
-      summary: Autenticação com senha e MFA
+      summary: Primeira etapa do login (e-mail e senha)
       description: |
-        Autentica o usuário com e-mail e senha. Após 5 falhas em 15 minutos, a conta é
-        bloqueada por 15 minutos sem revelar se ela existe (RN-002, CA-026). O MFA é
-        obrigatório para todos os perfis e verificado nesta etapa (DEC-025).
-      x-trace: [RF-002, CA-026, DEC-025]
-      security:
-        - sessionCookie: []
-        - csrfToken: []
+        Rota pública. Valida e-mail e senha e cria uma pré-sessão restrita às rotas de MFA
+        (DEC-050). Falha → ERR-013; 5 falhas em 15 min para o mesmo e-mail, exista ou não a
+        conta → ERR-014 (CA-026). O MFA é obrigatório para todos os perfis (DEC-025).
+      x-trace: [RF-002, CA-026, DEC-025, DEC-050]
+      security: []
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
+            schema: { $ref: '#/components/schemas/LoginRequest' }
       responses:
         '200':
-          description: Sessão criada (MFA verificado)
+          description: Pré-sessão criada; próxima etapa informada
           headers:
             Set-Cookie:
-              description: Cookie de sessão httpOnly
+              description: Cookies mp_pre_session (httpOnly, 5 min) e mp_csrf
               schema: { type: string }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/LoginResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+        '429': { $ref: '#/components/responses/LoginThrottled' }
+
+  /auth/mfa/verify:
+    post:
+      operationId: verifyMfa
+      tags: [auth]
+      summary: Segunda etapa do login (código TOTP)
+      description: Valida o código TOTP de quem já tem MFA e cria a sessão plena (DEC-050).
+      x-trace: [RF-002, CA-026, DEC-050]
+      security:
+        - preSessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '200':
+          description: Sessão criada
+          headers:
+            Set-Cookie:
+              description: Cookie mp_session (httpOnly, SameSite)
+              schema: { type: string }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+        '400': { $ref: '#/components/responses/MfaInvalid' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/SessionLimit' }
+        '429': { $ref: '#/components/responses/LoginThrottled' }
+
+  /auth/mfa/setup/start:
+    post:
+      operationId: startMfaSetup
+      tags: [auth]
+      summary: Gera o segredo TOTP no servidor (primeiro acesso ou após reset)
+      description: |
+        O segredo é gerado pelo servidor, gravado cifrado e devolvido uma única vez para
+        cadastro no aplicativo autenticador (DEC-050, CA-035, CA-037b).
+      x-trace: [RF-002, CA-035, CA-037b, DEC-050]
+      security:
+        - preSessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: Segredo gerado
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaSetupStart' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/mfa/setup:
+    post:
+      operationId: setupMfa
+      tags: [auth]
+      summary: Confirma o cadastro do MFA com um código e cria a sessão
+      description: Confirma o segredo gerado em startMfaSetup (CA-035, CA-037b).
+      x-trace: [RF-002, CA-035, CA-037b, DEC-050]
+      security:
+        - preSessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaCode' }
+      responses:
+        '200':
+          description: MFA ativo; sessão criada
+          headers:
+            Set-Cookie:
+              description: Cookie mp_session (httpOnly, SameSite)
+              schema: { type: string }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+        '400': { $ref: '#/components/responses/MfaInvalid' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/SessionLimit' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /auth/logout:
     post:
       operationId: logout
       tags: [auth]
       summary: Encerra a sessão atual
-      description: |
-        Encerra a sessão atual do usuário, invalidando o cookie de sessão em banco (DEC-044).
-      x-trace: [RF-002]
+      description: Invalida a sessão atual em banco (DEC-044).
+      x-trace: [RF-002, DEC-044]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       responses:
-        '204':
-          description: Sessão encerrada
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+        '204': { description: Sessão encerrada }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/session:
+    get:
+      operationId: getCurrentSession
+      tags: [auth]
+      summary: Dados da sessão atual (usuário, perfis, projetos)
+      description: Dados da sessão atual (usuário, perfis, projetos).
+      x-trace: [RF-002]
+      responses:
+        '200':
+          description: Sessão ativa
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /auth/password/reset:
     post:
       operationId: resetPassword
       tags: [auth]
-      summary: Solicita recuperação de senha (uso único, 60 min)
-      description: |
-        Solicita a recuperação de senha, gerando um token de uso único válido por 60 minutos (P.2).
-        A resposta é idêntica exista ou não a conta, para não vazar informação (CA-037).
+      summary: Solicita recuperação de senha (link de uso único, 60 min)
+      description: Rota pública. A resposta é idêntica exista ou não a conta (CA-037).
       x-trace: [RF-002, CA-037]
-      security:
-        - sessionCookie: []
-        - csrfToken: []
+      security: []
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/ResetPasswordRequest'
+            schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
       responses:
         '202':
-          description: Aceito. A resposta é idêntica exista ou não a conta (CA-037).
+          description: Aceito
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/AcceptedResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+              schema: { $ref: '#/components/schemas/AcceptedResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
-  /auth/mfa/setup:
+  /auth/password/reset/confirm:
     post:
-      operationId: setupMfa
+      operationId: confirmPasswordReset
       tags: [auth]
-      summary: Cadastra MFA (TOTP) no primeiro acesso ou após reset
+      summary: Define nova senha com o token recebido por e-mail
       description: |
-        Cadastra o MFA (TOTP) no primeiro acesso ou após um reset pelo administrador (CA-035, CA-037b).
-        O segredo TOTP é armazenado cifrado (ENT-002.mfa_secret).
-      x-trace: [RF-002, CA-035, CA-037b]
-      security:
-        - sessionCookie: []
-        - csrfToken: []
+        Rota pública. Token inválido, expirado ou usado → ERR-011. Senha fora da política
+        (P.2) → ERR-001. Encerra todas as sessões do usuário.
+      x-trace: [RF-002, CA-037]
+      security: []
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/MfaSetupRequest'
+            schema: { $ref: '#/components/schemas/ConfirmPasswordResetRequest' }
+      responses:
+        '204': { description: Senha redefinida }
+        '400': { $ref: '#/components/responses/TokenInvalid' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/invites/accept:
+    post:
+      operationId: acceptInvite
+      tags: [auth]
+      summary: Aceita convite (24 h, uso único) e define a senha
+      description: |
+        Rota pública. Convite vencido ou já usado → ERR-011 (CA-035). Cria pré-sessão com
+        etapa `mfa_cadastro`.
+      x-trace: [RF-002, CA-035, DEC-032]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AcceptInviteRequest' }
       responses:
         '200':
-          description: MFA ativo
+          description: Senha definida; pré-sessão criada para cadastro do MFA
+          headers:
+            Set-Cookie:
+              description: Cookies mp_pre_session e mp_csrf
+              schema: { type: string }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/MfaSetupResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400': { $ref: '#/components/responses/TokenInvalid' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
+  # ───────────────────────────── admin (RF-001) ─────────────────────────────
   /admin/users:
+    get:
+      operationId: listUsers
+      tags: [admin]
+      summary: Lista usuários do tenant
+      description: Lista usuários do tenant.
+      x-trace: [RF-001]
+      parameters:
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Página de usuários
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
     post:
       operationId: createTenantUser
       tags: [admin]
-      summary: Cria usuário no tenant
+      summary: Cria usuário no tenant e envia convite
       description: |
-        Cria um usuário no tenant atual e o vincula aos projetos informados (RN-004).
-        O padrão é todos os projetos do tenant. O vínculo limita dashboards, relatórios,
-        exportações e ficha individual.
-      x-trace: [RF-001, CA-012]
+        Cria o usuário (inativo até aceitar o convite), atribui um ou mais perfis (RN-003) e
+        vincula aos projetos informados; sem projetos, vincula a todos (RN-004). Envia convite
+        de 24 h (DEC-032).
+      x-trace: [RF-001, CA-012, CA-035, RN-003, RN-004]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/UserCreate'
+            schema: { $ref: '#/components/schemas/UserCreate' }
       responses:
         '201':
-          description: Usuário criado
+          description: Usuário criado; convite enviado
           headers:
-            X-Correlation-ID:
-              $ref: '#/components/headers/CorrelationId'
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-
-  /admin/invites:
-    post:
-      operationId: inviteUser
-      tags: [admin]
-      summary: Envia convite (24 h, uso único)
-      description: |
-        Envia um convite por e-mail, válido por 24 horas e de uso único (DEC-032, CA-035).
-        O convidado define a senha e cadastra o MFA no primeiro acesso.
-      x-trace: [RF-001, CA-035, DEC-032]
-      security:
-        - sessionCookie: []
-        - csrfToken: []
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InviteCreate'
-      responses:
-        '202':
-          description: Convite enviado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AcceptedResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /admin/users/{userId}:
+    get:
+      operationId: getUser
+      tags: [admin]
+      summary: Consulta usuário
+      description: Consulta usuário.
+      x-trace: [RF-001, CA-012]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Usuário
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
     patch:
       operationId: updateUser
       tags: [admin]
-      summary: Atualiza dados/perfil do usuário
+      summary: Atualiza nome, perfis, vínculos ou situação do usuário
       description: |
-        Atualiza dados e perfil do usuário. Requer If-Match para controle de concorrência (P.8).
-        Mudanças de perfil são auditadas (RN-027).
-      x-trace: [RF-001]
+        Desativar (`ativo: false`) encerra todas as sessões imediatamente. Mudanças de perfil
+        e de vínculo são auditadas (RN-027).
+      x-trace: [RF-001, CA-016, RN-003, RN-004]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/UserId'
         - $ref: '#/components/parameters/IfMatch'
@@ -238,107 +360,253 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/UserUpdate'
+            schema: { $ref: '#/components/schemas/UserUpdate' }
       responses:
         '200':
           description: Usuário atualizado
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '412':
-          $ref: '#/components/responses/PreconditionFailed'
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
-  /admin/users/{userId}/access:
-    delete:
-      operationId: revokeAccess
+  /admin/users/{userId}/invite:
+    post:
+      operationId: inviteUser
       tags: [admin]
-      summary: Revoga acesso (efeito imediato, sessões encerradas)
-      description: |
-        Revoga o acesso do usuário com efeito imediato, encerrando todas as sessões ativas
-        e registrando a ação em auditoria (CA-038).
-      x-trace: [RF-001, CA-038]
+      summary: Reenvia convite a usuário que ainda não aceitou
+      description: Gera novo convite de 24 h e invalida o anterior (DEC-032, CA-035).
+      x-trace: [RF-001, CA-035, DEC-032]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: Acesso revogado e sessões encerradas
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        '202':
+          description: Convite enviado
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AcceptedResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /admin/users/{userId}/mfa-reset:
     post:
       operationId: resetMfa
       tags: [admin]
-      summary: Reseta MFA do usuário (encerra sessões)
+      summary: Reseta o MFA do usuário (encerra sessões)
       description: |
-        Reseta o MFA do usuário (CA-037b). Todas as sessões ativas são encerradas e o usuário
-        cadastra um novo MFA no próximo login. Ação registrada em auditoria.
+        Todas as sessões são encerradas e o usuário cadastra novo MFA no próximo login.
+        Auditoria: acao=RESET_MFA, entidade=Usuario (CA-037b).
       x-trace: [RF-001, CA-037b]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/UserId'
       responses:
-        '204':
-          description: MFA resetado; sessões encerradas; auditado
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        '204': { description: MFA resetado; sessões encerradas; auditado }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
-  /projects:
+  /admin/individual-access-grants:
+    get:
+      operationId: listIndividualAccessGrants
+      tags: [admin]
+      summary: Lista concessões de acesso individual
+      description: Lista concessões de acesso individual.
+      x-trace: [RF-001, CA-025]
+      parameters:
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Limite'
+        - name: somente_vigentes
+          in: query
+          required: false
+          schema: { type: boolean, default: true }
+      responses:
+        '200':
+          description: Página de concessões
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GrantList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
     post:
-      operationId: createProject
-      tags: [projects]
-      summary: Cria projeto com parâmetros de configuração
+      operationId: grantIndividualAccess
+      tags: [admin]
+      summary: Concede acesso individual por 90 dias, com justificativa
       description: |
-        Cria um projeto com parâmetros de configuração, incluindo grupo_minimo (DEC-023).
-        O projeto inicia com status ativo. Toda criação é registrada em auditoria (CA-027).
-      x-trace: [RF-003, CA-027]
+        Vale enquanto ativo e dentro de `valido_ate` (90 dias, DEC-031). Já existindo concessão
+        vigente para o par usuário/projeto → ERR-018 (CA-025).
+      x-trace: [RF-001, CA-025, DEC-031]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/ProjectCreate'
+            schema: { $ref: '#/components/schemas/GrantCreate' }
+      responses:
+        '201':
+          description: Concessão criada
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Grant' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /admin/individual-access-grants/{grantId}:
+    delete:
+      operationId: revokeAccess
+      tags: [admin]
+      summary: Revoga concessão de acesso individual (efeito imediato)
+      description: Efeito imediato; as sessões do analista são encerradas; ação auditada (CA-038).
+      x-trace: [RF-001, CA-038]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/GrantId'
+      responses:
+        '204': { description: Concessão revogada; sessões encerradas }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ───────────────────────────── projects (RF-003) ─────────────────────────────
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: Lista projetos vinculados ao usuário
+      description: Lista projetos vinculados ao usuário.
+      x-trace: [RF-003, CA-016]
+      parameters:
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Página de projetos
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Cria projeto com grupo_minimo
+      description: Projeto inicia `ativo`; criação registrada no histórico e na auditoria (CA-027, DEC-023).
+      x-trace: [RF-003, CA-027, DEC-023]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectCreate' }
       responses:
         '201':
           description: Projeto criado
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/Project'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+              schema: { $ref: '#/components/schemas/Project' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /projects/{projectId}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Consulta projeto
+      description: Consulta projeto.
+      x-trace: [RF-003, CA-012, CA-016]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Projeto
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Atualiza nome, descrição ou grupo_minimo
+      description: Alteração de grupo_minimo é auditada (seção 2.9 da REQ, DEC-023).
+      x-trace: [RF-003, DEC-023, RN-008]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectUpdate' }
+      responses:
+        '200':
+          description: Projeto atualizado
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /projects/{projectId}/archive:
     post:
@@ -346,102 +614,120 @@ paths:
       tags: [projects]
       summary: Arquiva projeto (reversível)
       description: |
-        Arquiva o projeto (reversível). Novos uploads são recusados, mas aplicações em revisão
-        continuam e relatórios permanecem disponíveis (CA-027, DEC-027). A mudança é registrada
-        no histórico com data, hora e usuário.
+        Novos uploads passam a ser recusados (ERR-001); revisões em andamento continuam;
+        relatórios permanecem; histórico registra data, hora e usuário (CA-027, DEC-027).
       x-trace: [RF-003, CA-027, DEC-027]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/ProjectId'
       responses:
         '200':
           description: Projeto arquivado
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/Project'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              schema: { $ref: '#/components/schemas/Project' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /projects/{projectId}/unarchive:
     post:
       operationId: unarchiveProject
       tags: [projects]
       summary: Restaura projeto arquivado
-      description: |
-        Restaura um projeto arquivado para o status ativo. A mudança é registrada no histórico
-        com data, hora e usuário (CA-027, DEC-027).
+      description: Restaura projeto arquivado.
       x-trace: [RF-003, CA-027, DEC-027]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/ProjectId'
       responses:
         '200':
           description: Projeto restaurado
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/Project'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              schema: { $ref: '#/components/schemas/Project' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ───────────────────────────── forms (RF-004) ─────────────────────────────
+  /projects/{projectId}/forms:
+    get:
+      operationId: listForms
+      tags: [forms]
+      summary: Lista formulários e versões de um projeto
+      description: Lista formulários e versões de um projeto.
+      x-trace: [RF-004]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Página de formulários
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FormList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /forms:
     post:
       operationId: createForm
       tags: [forms]
-      summary: Cria formulário com versão 1 em rascunho
-      description: |
-        Cria um formulário vinculado a um projeto, com a versão 1 em rascunho.
+      summary: Cria formulário com a versão 1 em rascunho (vazia)
+      description: Cria formulário com a versão 1 em rascunho (vazia).
       x-trace: [RF-004]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/FormCreate'
+            schema: { $ref: '#/components/schemas/FormCreate' }
       responses:
         '201':
           description: Formulário criado
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/FormSummary'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+              schema: { $ref: '#/components/schemas/FormSummary' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /forms/{formId}/versions:
     post:
       operationId: createVersion
       tags: [forms]
-      summary: Cria nova versão em rascunho
-      description: |
-        Cria uma nova versão em rascunho do formulário. Versões publicadas são imutáveis
-        (ERR-009, RN-042); alterações devem sempre criar uma nova versão.
+      summary: Cria nova versão em rascunho (opcionalmente copiando outra)
+      description: Alterações em versão publicada sempre criam nova versão (RN-042, CA-001).
       x-trace: [RF-004, CA-001, RN-042]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/FormId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -449,102 +735,153 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/VersionCreate'
+            schema: { $ref: '#/components/schemas/VersionCreate' }
       responses:
         '201':
           description: Versão em rascunho criada
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/VersionSummary'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/VersionImmutable'
+              schema: { $ref: '#/components/schemas/Version' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /forms/{formId}/versions/{versionId}:
+    get:
+      operationId: getVersion
+      tags: [forms]
+      summary: Consulta versão completa (perguntas, opções e regras de salto)
+      description: Consulta versão completa (perguntas, opções e regras de salto).
+      x-trace: [RF-004]
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - $ref: '#/components/parameters/VersionId'
+      responses:
+        '200':
+          description: Versão
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Version' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+    put:
+      operationId: updateVersion
+      tags: [forms]
+      summary: Substitui o conteúdo de uma versão em rascunho
+      description: Versão publicada é imutável → ERR-009 (CA-001, TS-006).
+      x-trace: [RF-004, CA-001, CA-015, RN-042, TS-006]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - $ref: '#/components/parameters/VersionId'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionContent' }
+      responses:
+        '200':
+          description: Rascunho atualizado
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Version' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/VersionImmutable' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /forms/{formId}/versions/{versionId}/publish:
     post:
       operationId: publishVersion
       tags: [forms]
-      summary: Publica versão (exige campos obrigatórios)
+      summary: Publica versão (exige os campos obrigatórios)
       description: |
-        Publica uma versão em rascunho. Exige perguntas marcadas como nome, data de nascimento,
-        CPF (tipo CPF), data e local da aplicação (RN-017). Sem elas, retorna ERR-036 (CA-036).
-      x-trace: [RF-004, CA-036, RN-017]
+        Exige perguntas marcadas como nome, data de nascimento, CPF (tipo `cpf`), data e local
+        da aplicação (RN-017); sem elas → ERR-036 (CA-036). Grava o mapa de layout (DEC-048).
+      x-trace: [RF-004, CA-036, RN-017, DEC-048]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/FormId'
         - $ref: '#/components/parameters/VersionId'
       responses:
         '200':
           description: Versão publicada
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/VersionSummary'
-        '400':
-          $ref: '#/components/responses/MissingPublishFields'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/VersionImmutable'
+              schema: { $ref: '#/components/schemas/Version' }
+        '400': { $ref: '#/components/responses/MissingPublishFields' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/VersionImmutable' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /forms/{formId}/versions/{versionId}/pdf:
     get:
       operationId: generatePdf
       tags: [forms]
-      summary: Gera PDF imprimível com QR por página
+      summary: Gera PDF imprimível com QR e marcadores por página
       description: |
-        Gera o PDF imprimível com QR code por página, contendo identificador opaco da versão e
-        número da página (DEC-005, CA-028). A primeira página traz o termo de consentimento com
-        campo de assinatura. Versões em rascunho não geram PDF.
-      x-trace: [RF-004, CA-028, DEC-005]
+        Cada página traz QR com identificador opaco da versão e número da página, e marcadores
+        fiduciais (DEC-048). A página 1 traz o termo de consentimento com campo de assinatura.
+        Versão em rascunho não gera PDF → ERR-018 (CA-028).
+      x-trace: [RF-004, CA-028, DEC-005, DEC-048]
       parameters:
         - $ref: '#/components/parameters/FormId'
         - $ref: '#/components/parameters/VersionId'
       responses:
         '200':
           description: PDF gerado
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/pdf:
-              schema:
-                type: string
-                format: binary
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  # ───────────────────────────── upload (RF-006, RF-007) ─────────────────────────────
   /projects/{projectId}/applications/upload:
     post:
       operationId: uploadImages
       tags: [upload]
-      summary: Upload de imagens; cria aplicação e dispara leitura
+      summary: Upload de uma aplicação (um envio = uma pessoa, DEC-008)
       description: |
-        Recebe imagens (JPEG/PNG/PDF, máx. 20 MB e 50 páginas), remove metadados incluindo GPS
-        (RN-040, CA-029), valida o QR contra tenant/projeto/versão/página e cria a aplicação,
-        disparando a leitura assíncrona. Arquivos recusados retornam ERR-007/ERR-029.
-      x-trace: [RF-006, CA-003, CA-004, CA-029, RN-040, DEC-029]
+        Valida tipo, tamanho e páginas (DEC-029) e varre malware; recusa → 400 ERR-029 com o
+        motivo; projeto arquivado → 400 ERR-001 (CA-027). Remove metadados (RN-040), valida QR
+        e registra a imagem (DEC-048). O estado inicial segue a tabela de criação da FL-001; o
+        campo `aviso` traz ERR-004, ERR-039 ou ERR-003 quando aplicável (CA-004, CA-039, CA-030).
+      x-trace: [RF-006, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040, RN-040, DEC-029]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -552,75 +889,192 @@ paths:
         required: true
         content:
           multipart/form-data:
-            schema:
-              type: object
-              required: [arquivos]
-              properties:
-                arquivos:
-                  type: array
-                  items:
-                    type: string
-                    format: binary
-                  description: JPEG/PNG/PDF, máx. 20 MB e 50 páginas por arquivo
+            schema: { $ref: '#/components/schemas/UploadRequest' }
       responses:
         '202':
-          description: Aplicação criada; leitura enfileirada
+          description: Aplicação criada
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/UploadResponse'
-        '400':
-          $ref: '#/components/responses/FileRejected'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              schema: { $ref: '#/components/schemas/UploadResponse' }
+        '400': { $ref: '#/components/responses/FileRejected' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /applications/{applicationId}/identify:
+    post:
+      operationId: identifyApplication
+      tags: [upload]
+      summary: Identificação manual de versão e páginas (aplicação em identificacao_pendente)
+      description: |
+        O digitalizador informa a versão e o número de cada página, ou corrige as páginas.
+        Continua inválido → 400 ERR-004 ou ERR-039. Próximo estado conforme FL-001.
+      x-trace: [RF-006, CA-004, CA-013, CA-039, CA-040]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IdentifyRequest' }
+      responses:
+        '200':
+          description: Aplicação identificada
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Application' }
+        '400': { $ref: '#/components/responses/QrInvalid' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /tenant/quota:
+    get:
+      operationId: getQuotaStatus
+      tags: [upload]
+      summary: Situação da cota de IA do tenant (aviso na tela, CA-030)
+      description: Situação da cota de IA do tenant (aviso na tela, CA-030).
+      x-trace: [RF-007, CA-030, DEC-035]
+      responses:
+        '200':
+          description: Situação da cota
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QuotaStatus' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ───────────────────────────── review (RF-008) ─────────────────────────────
+  /projects/{projectId}/review-queue:
+    get:
+      operationId: listReviewQueue
+      tags: [review]
+      summary: Fila de aplicações por estado
+      description: Fila de aplicações por estado.
+      x-trace: [RF-008, CA-043]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Limite'
+        - name: estado
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/ApplicationState' }
+      responses:
+        '200':
+          description: Página de aplicações
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApplicationList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /applications/{applicationId}:
+    get:
+      operationId: getApplication
+      tags: [review]
+      summary: Consulta aplicação sem reservá-la
+      description: Consulta aplicação sem reservá-la.
+      x-trace: [RF-008]
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      responses:
+        '200':
+          description: Aplicação
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Application' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /applications/{applicationId}/review/open:
     post:
       operationId: openReview
       tags: [review]
-      summary: Abre aplicação para revisão (reserva por 30 min)
-      description: |
-        Abre a aplicação para revisão e a reserva por 30 minutos (RN-043, CA-043). Se já estiver
-        em uso por outro digitalizador, retorna ERR-043 com o nome de quem a está usando.
+      summary: Abre a aplicação e a reserva por 30 min
+      description: Em uso por outro → 409 ERR-043 com `reservado_por` (RN-043, CA-043).
       x-trace: [RF-008, CA-043, RN-043]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
       responses:
         '200':
           description: Aplicação reservada e aberta
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/ReviewApplication'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/ReservationConflict'
+              schema: { $ref: '#/components/schemas/Application' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/ReservationConflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /applications/{applicationId}/items/{itemId}/image:
+    get:
+      operationId: getItemImage
+      tags: [review]
+      summary: Link assinado (5 min) do recorte do item para revisão lado a lado
+      description: Exige reserva ativa do solicitante (CA-007, DEC-034).
+      x-trace: [RF-008, CA-007, DEC-034]
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/ItemId'
+      responses:
+        '200':
+          description: Link assinado
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ItemImage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/ReservationConflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /applications/{applicationId}/review:
     patch:
       operationId: saveReview
       tags: [review]
-      summary: Salva itens revisados (confirmar/corrigir/marcar estados)
+      summary: Salva ações de revisão sobre os itens
       description: |
-        Salva as ações de revisão sobre os itens (confirmar, corrigir, em branco, ilegível,
-        rasurado, não se aplica) conforme CA-007. Requer If-Match para concorrência (P.8);
-        reserva expirada ou em uso retorna ERR-005/ERR-043.
-      x-trace: [RF-008, CA-007, CA-008]
+        Ações: confirmar, corrigir, em branco, ilegível, rasurado, não se aplica (CA-007).
+        Correções são auditadas sem valores (CA-008). Reavalia regras de salto (CA-020).
+      x-trace: [RF-008, CA-007, CA-008, CA-020]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
         - $ref: '#/components/parameters/IfMatch'
@@ -628,309 +1082,535 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/ReviewPatch'
+            schema: { $ref: '#/components/schemas/ReviewPatch' }
       responses:
         '200':
           description: Revisão salva
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/ReviewApplication'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/ReservationConflict'
-        '412':
-          $ref: '#/components/responses/PreconditionFailed'
+              schema: { $ref: '#/components/schemas/Application' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/ReservationConflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /applications/{applicationId}/confirm:
     post:
       operationId: confirmApplication
       tags: [review]
-      summary: Conclui aplicação (exige CPF, data, local, assinatura)
+      summary: Conclui a aplicação e vincula o respondente
       description: |
-        Conclui a aplicação após todos os campos resolvidos, CPF conferido, assinatura presente e
-        data/local informados (RN-016, RN-044). Sem CPF, data ou local válidos, retorna ERR-006 (CA-032).
-        O vínculo do respondente é feito aqui — CPF existente vincula, CPF novo cria (CA-014b).
-      x-trace: [RF-008, CA-032, CA-014b, RN-044, RN-016]
+        Exige itens resolvidos e nome, data de nascimento, CPF válido, data e local (DEC-020);
+        faltando → 400 ERR-006 (CA-032). Assinatura ausente → `sem_assinatura` (RN-044).
+        Vínculo por CPF: existente vincula, novo cria (CA-002, CA-014b); divergência de cadastro
+        resolvida pelo digitalizador (CA-014).
+      x-trace: [RF-008, CA-002, CA-014, CA-014b, CA-021, CA-032, RN-016, RN-044, DEC-020]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/ConfirmApplicationRequest'
+            schema: { $ref: '#/components/schemas/ConfirmApplicationRequest' }
       responses:
         '200':
-          description: Aplicação concluída; vínculo de respondente feito
+          description: Aplicação concluída ou em sem_assinatura
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/ReviewApplication'
-        '400':
-          $ref: '#/components/responses/MissingMandatoryFields'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/ReservationConflict'
+              schema: { $ref: '#/components/schemas/Application' }
+        '400': { $ref: '#/components/responses/MissingMandatoryFields' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/ReservationConflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /applications/{applicationId}/signature:
+    post:
+      operationId: attachSignaturePage
+      tags: [review]
+      summary: Anexa a página 1 assinada (aplicação em sem_assinatura)
+      description: Confere QR da versão e da página sem reler os outros campos (CA-044).
+      x-trace: [RF-008, CA-044, RN-044]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/SignatureUpload' }
+      responses:
+        '200':
+          description: Assinatura conferida; aplicação concluída
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Application' }
+        '400': { $ref: '#/components/responses/FileRejected' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /applications/{applicationId}/retry:
+    post:
+      operationId: retryReading
+      tags: [review]
+      summary: Manda ler de novo (aplicação em erro_leitura)
+      description: Manda ler de novo (aplicação em erro_leitura).
+      x-trace: [RF-008, CA-041]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Leitura reenfileirada (em_leitura ou aguardando_cota)
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Application' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /applications/{applicationId}/discard:
     post:
       operationId: discardApplication
       tags: [review]
-      summary: Descarta aplicação (apaga imagens, audita motivo)
-      description: |
-        Descarta a aplicação com motivo, apagando as imagens e registrando quem, quando e o motivo
-        em auditoria (CA-033).
+      summary: Descarta a aplicação com motivo (apaga imagens)
+      description: Descarta a aplicação com motivo (apaga imagens).
       x-trace: [RF-008, CA-033]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/DiscardApplicationRequest'
+            schema: { $ref: '#/components/schemas/ReasonRequest' }
       responses:
         '200':
           description: Aplicação descartada
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/ReviewApplication'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/ReservationConflict'
+              schema: { $ref: '#/components/schemas/Application' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /applications/{applicationId}/reopen:
     post:
       operationId: reopenApplication
       tags: [review]
-      summary: Reabre aplicação concluída (reverte cadastro se CPF corrigido)
-      description: |
-        Reabre uma aplicação concluída, voltando a em_revisao e removendo-a dos relatórios (CA-042).
-        Se o CPF for corrigido, o vínculo é refeito e as alterações de cadastro feitas por essa
-        aplicação são revertidas, com registro em auditoria.
+      summary: Reabre aplicação concluída (sai dos relatórios)
+      description: Se o CPF for corrigido, o vínculo é refeito e o cadastro revertido, com auditoria (CA-042).
       x-trace: [RF-008, CA-042]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/ReopenApplicationRequest'
+            schema: { $ref: '#/components/schemas/ReasonRequest' }
       responses:
         '200':
-          description: Aplicação reaberta (em_revisao); fora dos relatórios
+          description: Aplicação reaberta (em_revisao)
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/ReviewApplication'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              schema: { $ref: '#/components/schemas/Application' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
+  # ───────────────────────────── dashboard (RF-009) ─────────────────────────────
   /dashboard/aggregated:
-    get:
+    post:
       operationId: getDashboardAggregated
       tags: [dashboard]
-      summary: Dashboards agregados com k-anonimato por célula
+      summary: Consulta agregada com k-anonimato por célula (somente leitura)
       description: |
-        Retorna dashboards agregados com k-anonimato por célula (DEC-045). Células com menos
-        respondentes que o grupo_minimo são ocultadas (CA-010). Em cruzamento entre projetos,
-        aplica-se o maior grupo_minimo (CA-034). Gráficos por pergunta podem ser cruzados por
-        uma segunda pergunta (CA-017).
-      x-trace: [RF-009, CA-009, CA-010, CA-017, CA-031, CA-034, DEC-023]
-      parameters:
-        - $ref: '#/components/parameters/ProjectIdQuery'
-        - name: filtros
-          in: query
-          description: Filtros serializados (idade, estado civil, resposta, período)
-          schema: { type: string }
-        - name: cruzamento
-          in: query
-          description: Código da segunda pergunta para gráfico cruzado (CA-017)
-          schema: { type: string }
+        POST por causa da estrutura dos filtros; não altera dados. Células abaixo do
+        grupo_minimo vêm ocultas, sem contagem (CA-010, DEC-045). Com vários projetos vale o
+        maior grupo_minimo (CA-034). Cruzamento por uma segunda pergunta (CA-017). Grupos
+        contam respondentes pela aplicação mais recente do período; padrão de 12 meses
+        (CA-031, DEC-024). Aplicações sem assinatura ficam fora (CA-021).
+      x-trace: [RF-009, CA-009, CA-010, CA-016, CA-017, CA-021, CA-031, CA-034, DEC-023, DEC-024, DEC-045]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DashboardQuery' }
       responses:
         '200':
-          description: Agregados respeitando grupo_minimo
+          description: Agregados
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/AggregatedResult'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              schema: { $ref: '#/components/schemas/AggregatedResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /groups:
+    get:
+      operationId: listGroups
+      tags: [dashboard]
+      summary: Lista grupos salvos de um projeto
+      description: Lista grupos salvos de um projeto.
+      x-trace: [RF-009, CA-009]
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdQuery'
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Página de grupos
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroupList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
     post:
       operationId: createGroup
       tags: [dashboard]
-      summary: Salva um grupo (filtro dinâmico)
-      description: |
-        Salva um grupo (filtro dinâmico) recalculado a cada consulta, sem copiar dados (CA-009).
+      summary: Salva um grupo (filtro recalculado a cada consulta)
+      description: Salva um grupo (filtro recalculado a cada consulta).
       x-trace: [RF-009, CA-009]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/GroupCreate'
+            schema: { $ref: '#/components/schemas/GroupCreate' }
       responses:
         '201':
           description: Grupo salvo
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/Group'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+              schema: { $ref: '#/components/schemas/Group' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /groups/{groupId}:
+    delete:
+      operationId: deleteGroup
+      tags: [dashboard]
+      summary: Apaga um grupo salvo (só o dono)
+      description: Apaga um grupo salvo (só o dono).
+      x-trace: [RF-009]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '204': { description: Grupo apagado }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /respondents/search:
+    post:
+      operationId: findRespondent
+      tags: [dashboard]
+      summary: Localiza respondente pelo CPF (acesso individual)
+      description: |
+        Exige perfil analista_individual e concessão vigente em projeto vinculado (ERR-008;
+        provisório, Q-011). CPF no corpo, nunca na URL. Busca auditada. Pedidos do titular
+        usam o CPF diretamente (createDataSubjectRequest).
+      x-trace: [RF-009, CA-011, CA-025, RN-013]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RespondentSearch' }
+      responses:
+        '200':
+          description: Respondente encontrado
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespondentRef' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/ForbiddenIndividual' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /respondents/{respondentId}/record:
     get:
       operationId: getIndividualRecord
       tags: [dashboard]
-      summary: Ficha individual (exige concessão de acesso individual)
+      summary: Ficha individual (evolução no tempo)
       description: |
-        Retorna a evolução individual do respondente (CA-011). Exige concessão de acesso individual
-        válida (90 dias, CA-025); sem ela, retorna ERR-008. Cada abertura é auditada. O analista vê
-        apenas dados dos projetos aos quais está vinculado.
+        Exige concessão vigente (90 dias, CA-025); sem ela → ERR-008. Só projetos vinculados
+        (CA-011). Cada abertura é auditada.
       x-trace: [RF-009, CA-011, CA-025]
       parameters:
-        - name: respondentId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/RespondentId'
       responses:
         '200':
           description: Evolução individual
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/IndividualRecord'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/ForbiddenIndividual'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              schema: { $ref: '#/components/schemas/IndividualRecord' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/ForbiddenIndividual' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
+  # ───────────────────────────── lgpd (RF-010) ─────────────────────────────
   /exports:
     post:
       operationId: exportData
       tags: [lgpd]
-      summary: Gera exportação (agregada ou linha a linha)
+      summary: Gera exportação CSV/XLSX (job assíncrono)
       description: |
-        Gera exportação em CSV/XLSX (DEC-014). Analistas comuns exportam apenas agregados;
-        exportação linha a linha exige acesso individual (CA-022). A ocultação por k-anon também
-        se aplica à exportação (CA-010). Toda exportação é registrada em auditoria.
-      x-trace: [RF-010, CA-022, CA-021, DEC-014]
+        Analista exporta só agregados; linha a linha exige concessão vigente (CA-022, ERR-008).
+        k-anonimato também na exportação (CA-010, CA-034). Sem assinatura fica fora (CA-021).
+      x-trace: [RF-010, CA-010, CA-021, CA-022, CA-034, DEC-014]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/ExportRequest'
+            schema: { $ref: '#/components/schemas/ExportRequest' }
       responses:
         '202':
-          description: Exportação enfileirada (job assíncrono)
+          description: Exportação enfileirada
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/AcceptedResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/ForbiddenIndividual'
-        '404':
-          $ref: '#/components/responses/NotFound'
+              schema: { $ref: '#/components/schemas/ExportStatus' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/ForbiddenIndividual' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /exports/{exportId}:
+    get:
+      operationId: getExport
+      tags: [lgpd]
+      summary: Situação da exportação e link assinado para baixar
+      description: Situação da exportação e link assinado para baixar.
+      x-trace: [RF-010, CA-022]
+      parameters:
+        - $ref: '#/components/parameters/ExportId'
+      responses:
+        '200':
+          description: Situação da exportação
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExportStatus' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /data-subject-requests:
+    get:
+      operationId: listDataSubjectRequests
+      tags: [lgpd]
+      summary: Lista pedidos do titular
+      description: Lista pedidos do titular.
+      x-trace: [RF-010, RN-031]
+      parameters:
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Página de pedidos
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataSubjectRequestList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+    post:
+      operationId: createDataSubjectRequest
+      tags: [lgpd]
+      summary: Registra pedido do titular (identificado pelo CPF)
+      description: Registra pedido do titular (identificado pelo CPF).
+      x-trace: [RF-010, CA-023, CA-024, RN-031]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DataSubjectRequestCreate' }
+      responses:
+        '201':
+          description: Pedido registrado (pendente)
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataSubjectRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /data-subject-requests/{requestId}:
+    get:
+      operationId: getDataSubjectRequest
+      tags: [lgpd]
+      summary: Consulta pedido do titular (com link do resultado para acesso/portabilidade)
+      description: Consulta pedido do titular (com link do resultado para acesso/portabilidade).
+      x-trace: [RF-010, CA-024]
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Pedido
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataSubjectRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /data-subject-requests/{requestId}/execute:
     post:
       operationId: executeDataSubjectRequest
       tags: [lgpd]
-      summary: Executa direito do titular (acesso/correção/eliminação/portabilidade)
+      summary: Executa o pedido do titular (job assíncrono)
       description: |
-        Executa um direito do titular (acesso, correção, eliminação ou portabilidade) conforme a LGPD
-        (RN-031, CA-024). A eliminação anonimiza o respondente, sobrescreve os valores de resposta,
-        apaga imagens e exportações pendentes e preenche a ListaEliminacoes por 180 dias (CA-023).
+        Eliminação: bloqueio imediato, anonimização (nome, CPF, data de nascimento e endereço),
+        sobrescrita das respostas, expurgo de imagens e exportações, descarte das aplicações em
+        andamento e registro na ListaEliminacoes por 180 dias (CA-023, DEC-026). Acesso e
+        portabilidade geram CSV ou JSON (CA-024). Pedido já executado ou cancelado → ERR-018.
       x-trace: [RF-010, CA-023, CA-024, DEC-026]
       security:
         - sessionCookie: []
-        - csrfToken: []
+          csrfToken: []
       parameters:
-        - name: requestId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '200':
-          description: Pedido executado
+        '202':
+          description: Execução iniciada (em_andamento)
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/DataSubjectRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
+              schema: { $ref: '#/components/schemas/DataSubjectRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /audit-events:
+    get:
+      operationId: listAuditEvents
+      tags: [lgpd]
+      summary: Consulta a trilha de auditoria do tenant (TL-011)
+      description: Só referências, nunca valores pessoais (RN-027).
+      x-trace: [RF-010, RN-027]
+      parameters:
+        - $ref: '#/components/parameters/Pagina'
+        - $ref: '#/components/parameters/Limite'
+        - { name: acao, in: query, required: false, schema: { type: string, maxLength: 100 } }
+        - { name: entidade, in: query, required: false, schema: { type: string, maxLength: 100 } }
+        - { name: de, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: ate, in: query, required: false, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: Página de eventos
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditEventList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
 components:
   securitySchemes:
@@ -938,628 +1618,865 @@ components:
       type: apiKey
       in: cookie
       name: mp_session
-      description: Cookie de sessão httpOnly, SameSite, armazenado em banco.
+      description: Sessão plena em banco; cookie httpOnly, Secure, SameSite=Lax (DEC-044).
+    preSessionCookie:
+      type: apiKey
+      in: cookie
+      name: mp_pre_session
+      description: Pré-sessão de 5 min, válida só para /auth/mfa/* (DEC-050).
     csrfToken:
       type: apiKey
       in: header
       name: X-CSRF-Token
-      description: Token CSRF (double-submit) obrigatório em toda mutação autenticada.
+      description: Token CSRF (double-submit com o cookie mp_csrf) em toda mutação autenticada.
 
   parameters:
-    UserId:
-      name: userId
-      in: path
-      required: true
-      schema: { type: string, format: uuid }
-    ProjectId:
-      name: projectId
-      in: path
-      required: true
-      schema: { type: string, format: uuid }
-    ProjectIdQuery:
-      name: projeto_id
-      in: query
-      required: true
-      schema: { type: string, format: uuid }
-    FormId:
-      name: formId
-      in: path
-      required: true
-      schema: { type: string, format: uuid }
-    VersionId:
-      name: versionId
-      in: path
-      required: true
-      schema: { type: string, format: uuid }
-    ApplicationId:
-      name: applicationId
-      in: path
-      required: true
-      schema: { type: string, format: uuid }
+    UserId: { name: userId, in: path, required: true, schema: { type: string, format: uuid } }
+    GrantId: { name: grantId, in: path, required: true, schema: { type: string, format: uuid } }
+    ProjectId: { name: projectId, in: path, required: true, schema: { type: string, format: uuid } }
+    ProjectIdQuery: { name: projeto_id, in: query, required: true, schema: { type: string, format: uuid } }
+    FormId: { name: formId, in: path, required: true, schema: { type: string, format: uuid } }
+    VersionId: { name: versionId, in: path, required: true, schema: { type: string, format: uuid } }
+    ApplicationId: { name: applicationId, in: path, required: true, schema: { type: string, format: uuid } }
+    ItemId: { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    GroupId: { name: groupId, in: path, required: true, schema: { type: string, format: uuid } }
+    RespondentId: { name: respondentId, in: path, required: true, schema: { type: string, format: uuid } }
+    ExportId: { name: exportId, in: path, required: true, schema: { type: string, format: uuid } }
+    RequestId: { name: requestId, in: path, required: true, schema: { type: string, format: uuid } }
+    Pagina: { name: pagina, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+    Limite: { name: limite, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
     IdempotencyKey:
       name: Idempotency-Key
       in: header
-      required: false
-      description: Chave de idempotência para mutações críticas (P.8)
-      schema: { type: string, maxLength: 64 }
+      required: true
+      description: Chave de idempotência obrigatória nas mutações críticas (P.8, REQ §6.5); reuso com outro conteúdo → ERR-019.
+      schema: { type: string, minLength: 16, maxLength: 64 }
     IfMatch:
       name: If-Match
       in: header
-      required: false
-      description: ETag para controle de concorrência (P.8)
+      required: true
+      description: ETag obtido na leitura; divergente → ERR-017 (P.8).
       schema: { type: string }
 
   headers:
     CorrelationId:
-      description: Identificador de correlação da requisição (RFC 9457)
+      description: Identificador de correlação da requisição
+      schema: { type: string }
+    ETag:
+      description: Versão do recurso para If-Match
       schema: { type: string }
 
   responses:
     BadRequest:
       description: Validação falhou (ERR-001)
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example:
-                  type: https://api.minhapesquisa.example.com.br/errors/ERR-001
-                  title: Erro de validação
-                  status: 400
-                  detail: Revise os campos destacados e tente novamente.
-                  errorCode: ERR-001
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-001', title: Erro de validação, status: 400, detail: Revise os campos destacados e tente novamente., errorCode: ERR-001, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+    InvalidCredentials:
+      description: Credenciais inválidas (ERR-013), mesma resposta exista ou não a conta
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-013', title: Credenciais inválidas, status: 401, detail: Credenciais inválidas., errorCode: ERR-013, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+    LoginThrottled:
+      description: Bloqueio por tentativas (ERR-014) ou limite geral (ERR-010)
+      headers:
+        X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+        Retry-After: { description: Segundos a aguardar, schema: { type: integer } }
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-014', title: Muitas tentativas, status: 429, detail: Muitas tentativas. Tente novamente em 15 minutos., errorCode: ERR-014, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+    MfaInvalid:
+      description: Código MFA inválido (ERR-012) ou formato inválido (ERR-001)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-012', title: Código inválido, status: 400, detail: Código de verificação inválido. Tente novamente., errorCode: ERR-012, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+    TokenInvalid:
+      description: Link inválido, expirado ou usado (ERR-011), ou senha fora da política (ERR-001)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-011', title: Link inválido, status: 400, detail: Este link é inválido ou expirou. Solicite um novo., errorCode: ERR-011, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     Unauthorized:
-      description: Sessão ausente, expirada ou inválida
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+      description: Sessão ausente, expirada ou encerrada (ERR-015)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ProblemDetails'
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-015', title: Sessão expirada, status: 401, detail: Sua sessão expirou. Entre novamente., errorCode: ERR-015, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     Forbidden:
-      description: Ação não permitida para o perfil atual
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+      description: Perfil sem permissão ou CSRF inválido (ERR-016)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ProblemDetails'
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-016', title: Sem permissão, status: 403, detail: Você não tem permissão para realizar esta ação., errorCode: ERR-016, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     ForbiddenIndividual:
-      description: Acesso individual não concedido (ERR-008)
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+      description: Sem concessão vigente de acesso individual (ERR-008)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example:
-                  type: https://api.minhapesquisa.example.com.br/errors/ERR-008
-                  title: Acesso negado
-                  status: 403
-                  detail: Você não tem permissão para acessar dados individuais neste projeto.
-                  errorCode: ERR-008
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-008', title: Acesso negado, status: 403, detail: Você não tem permissão para acessar dados individuais neste projeto., errorCode: ERR-008, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     NotFound:
-      description: Recurso inexistente ou de outro tenant (ERR-002) — nunca revela existência
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+      description: Recurso inexistente, de outro tenant ou de projeto não vinculado (ERR-002) — nunca revela existência
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example:
-                  type: https://api.minhapesquisa.example.com.br/errors/ERR-002
-                  title: Não encontrado
-                  status: 404
-                  detail: O recurso solicitado não existe ou você não tem acesso.
-                  errorCode: ERR-002
-    Conflict:
-      description: Conflito de estado
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-002', title: Não encontrado, status: 404, detail: O recurso solicitado não existe ou você não tem acesso., errorCode: ERR-002, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+    InvalidState:
+      description: Ação não permitida no estado atual (ERR-018) ou chave de idempotência reutilizada (ERR-019)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ProblemDetails'
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-018', title: Estado inválido, status: 409, detail: Esta ação não é permitida no estado atual., errorCode: ERR-018, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+    IdempotencyConflict:
+      description: Chave de idempotência reutilizada com outro conteúdo (ERR-019)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-019', title: Requisição duplicada, status: 409, detail: Esta solicitação já foi enviada com outros dados. Gere uma nova solicitação., errorCode: ERR-019, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     ReservationConflict:
-      description: Aplicação em uso ou reserva expirada (ERR-005/ERR-043)
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+      description: Aplicação em uso ou reserva expirada (ERR-043); também ERR-018 e ERR-019 quando aplicável
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example:
-                  type: https://api.minhapesquisa.example.com.br/errors/ERR-043
-                  title: Conflito de reserva
-                  status: 409
-                  detail: Esta aplicação está em uso ou a reserva expirou.
-                  errorCode: ERR-043
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-043', title: Conflito de reserva, status: 409, detail: Esta aplicação está em uso ou a reserva expirou., errorCode: ERR-043, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, reservado_por: Ana Digitalizadora }
     VersionImmutable:
       description: Versão publicada é imutável (ERR-009)
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example:
-                  type: https://api.minhapesquisa.example.com.br/errors/ERR-009
-                  title: Versão imutável
-                  status: 409
-                  detail: Versões publicadas são imutáveis. Crie uma nova versão em rascunho.
-                  errorCode: ERR-009
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-009', title: Versão imutável, status: 409, detail: Versões publicadas são imutáveis. Crie uma nova versão em rascunho., errorCode: ERR-009, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     PreconditionFailed:
-      description: ETag não corresponde (edição concorrente)
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+      description: ETag divergente (ERR-017)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ProblemDetails'
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-017', title: Edição concorrente, status: 412, detail: Os dados foram alterados por outra pessoa. Recarregue e tente novamente., errorCode: ERR-017, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     TooManyRequests:
       description: Limite de requisições excedido (ERR-010)
       headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
-        Retry-After:
-          description: Segundos a aguardar
-          schema: { type: integer }
+        X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+        Retry-After: { description: Segundos a aguardar, schema: { type: integer } }
       content:
         application/problem+json:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example:
-                  type: https://api.minhapesquisa.example.com.br/errors/ERR-010
-                  title: Muitas tentativas
-                  status: 429
-                  detail: Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.
-                  errorCode: ERR-010
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-010', title: Muitas tentativas, status: 429, detail: Muitas tentativas. Aguarde alguns minutos antes de tentar novamente., errorCode: ERR-010, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     MissingMandatoryFields:
-      description: Conclusão sem CPF, data ou local válidos (ERR-006)
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+      description: Conclusão sem os campos obrigatórios da DEC-020 (ERR-006)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example:
-                  type: https://api.minhapesquisa.example.com.br/errors/ERR-006
-                  title: Campos obrigatórios ausentes
-                  status: 400
-                  detail: A aplicação não pode ser concluída sem data, local e CPF válidos.
-                  errorCode: ERR-006
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-006', title: Campos obrigatórios ausentes, status: 400, detail: 'A aplicação não pode ser concluída sem nome, data de nascimento, CPF válido, data e local da aplicação.', errorCode: ERR-006, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, campos: [local_aplicacao] }
     MissingPublishFields:
       description: Publicação sem campos obrigatórios (ERR-036)
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example:
-                  type: https://api.minhapesquisa.example.com.br/errors/ERR-036
-                  title: Campos obrigatórios ausentes
-                  status: 400
-                  detail: 'ERR-036: Campos obrigatórios ausentes: [lista dos campos].'
-                  errorCode: ERR-036
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-036', title: Campos obrigatórios ausentes, status: 400, detail: 'Publicação recusada: faltam [lista dos campos].', errorCode: ERR-036, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, campos: [data_da_aplicacao] }
     FileRejected:
-      description: Arquivo recusado por tipo, tamanho ou segurança (ERR-007/ERR-029)
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
+      description: Arquivo recusado (ERR-029, com motivo) ou projeto arquivado (ERR-001)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example:
-                  type: https://api.minhapesquisa.example.com.br/errors/ERR-029
-                  title: Arquivo recusado
-                  status: 400
-                  detail: 'ERR-029: Arquivo excede o limite de 20 MB.'
-                  errorCode: ERR-029
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-029', title: Arquivo recusado, status: 400, detail: 'Arquivo recusado: [motivo].', errorCode: ERR-029, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, motivo: excede o limite de 20 MB }
+    QrInvalid:
+      description: Identificação ainda inválida (ERR-004 ou ERR-039)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-039', title: QR inválido, status: 400, detail: QR code inválido para o contexto atual. Informe manualmente., errorCode: ERR-039, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+    SessionLimit:
+      description: Limite de 3 sessões ativas (ERR-021)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-021', title: Limite de sessões, status: 409, detail: Você já tem 3 sessões ativas. Encerre uma delas para entrar., errorCode: ERR-021, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+    ServiceUnavailable:
+      description: Dependência indisponível após retentativas (ERR-020)
+      headers:
+        X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+        Retry-After: { description: Segundos a aguardar, schema: { type: integer } }
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-020', title: Serviço indisponível, status: 503, detail: Serviço temporariamente indisponível. Tente novamente em instantes., errorCode: ERR-020, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
 
   schemas:
     ProblemDetails:
       type: object
-      description: Problem Details (RFC 9457). Nunca expõe stack trace ou detalhe interno.
-      required: [type, title, status]
+      description: |
+        Problem Details (RFC 9457). Nunca expõe stack trace nem detalhe interno. Extensões
+        permitidas: `campos` (ERR-001, ERR-006, ERR-036), `motivo` (ERR-029), `reservado_por` (ERR-043).
+      required: [type, title, status, detail, errorCode, correlationId]
       properties:
-        type:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string, description: 'Mensagem exata do catálogo, em pt-BR' }
+        instance: { type: string }
+        correlationId: { type: string, description: Espelha X-Correlation-ID }
+        errorCode: { $ref: '#/components/schemas/ErrorCode' }
+        campos: { type: array, items: { type: string } }
+        motivo:
           type: string
-          format: uri
-          description: URI de referência do tipo de erro
-        title:
-          type: string
-        status:
-          type: integer
-        detail:
-          type: string
-          description: Mensagem exata em pt-BR
-        instance:
-          type: string
-        correlationId:
-          type: string
-          description: Espelha X-Correlation-ID
-        errorCode:
-          $ref: '#/components/schemas/ErrorCode'
+          enum: [excede o limite de 20 MB, excede o limite de 50 páginas, tipo de arquivo não permitido, risco de segurança detectado]
+        reservado_por: { type: string }
 
     ErrorCode:
       type: string
-      description: Catálogo fechado de erros (REQ §8.2)
-      enum:
-        - ERR-001
-        - ERR-002
-        - ERR-003
-        - ERR-004
-        - ERR-005
-        - ERR-006
-        - ERR-007
-        - ERR-008
-        - ERR-009
-        - ERR-010
-        - ERR-029
-        - ERR-036
-        - ERR-039
-        - ERR-041
-        - ERR-043
+      description: Catálogo fechado de erros ativos (REQ §8.2)
+      enum: [ERR-001, ERR-002, ERR-003, ERR-004, ERR-006, ERR-008, ERR-009, ERR-010, ERR-011, ERR-012, ERR-013, ERR-014, ERR-015, ERR-016, ERR-017, ERR-018, ERR-019, ERR-020, ERR-021, ERR-029, ERR-036, ERR-039, ERR-041, ERR-043]
+
+    PerfilCodigo:
+      type: string
+      enum: [admin_tenant, digitalizador, analista, analista_individual]
+
+    ApplicationState:
+      type: string
+      description: FL-001 / ENT-010.estado
+      enum: [identificacao_pendente, aguardando_cota, em_leitura, erro_leitura, em_revisao, aguardando_cpf, sem_assinatura, concluida, descartada]
+
+    ItemState:
+      type: string
+      description: FL-002 / ENT-011.estado
+      enum: [pendente_leitura, aguardando_condicao, confirmado_automaticamente, a_revisar, confirmado, corrigido, em_branco, ilegivel, rasurado, nao_se_aplica]
+
+    PageMeta:
+      type: object
+      additionalProperties: false
+      required: [pagina, limite, total]
+      properties:
+        pagina: { type: integer, minimum: 1 }
+        limite: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
 
     LoginRequest:
       type: object
+      additionalProperties: false
       required: [email, senha]
       properties:
-        email:
-          type: string
-          format: email
-        senha:
-          type: string
-          format: password
-          minLength: 10
-          maxLength: 72
-        codigo_mfa:
-          type: string
-          pattern: '^[0-9]{6}$'
+        email: { type: string, format: email, maxLength: 255 }
+        senha: { type: string, format: password, minLength: 10, maxLength: 72 }
 
     LoginResponse:
       type: object
+      additionalProperties: false
+      required: [etapa]
+      properties:
+        etapa: { type: string, enum: [mfa_verificacao, mfa_cadastro] }
+
+    MfaCode:
+      type: object
+      additionalProperties: false
+      required: [codigo]
+      properties:
+        codigo: { type: string, pattern: '^[0-9]{6}$' }
+
+    MfaSetupStart:
+      type: object
+      additionalProperties: false
+      required: [otpauth_uri, segredo_base32]
+      properties:
+        otpauth_uri: { type: string, description: URI otpauth para QR no aplicativo autenticador }
+        segredo_base32: { type: string, description: Exibido uma única vez para digitação manual }
+
+    SessionInfo:
+      type: object
+      additionalProperties: false
+      required: [usuario_id, nome, perfis, projetos, expira_em]
       properties:
         usuario_id: { type: string, format: uuid }
-        mfa_obrigatorio: { type: boolean }
-        mfa_configurado: { type: boolean }
+        nome: { type: string }
+        perfis: { type: array, items: { $ref: '#/components/schemas/PerfilCodigo' } }
+        projetos: { type: array, items: { type: string, format: uuid } }
+        expira_em: { type: string, format: date-time }
 
     ResetPasswordRequest:
       type: object
+      additionalProperties: false
       required: [email]
       properties:
-        email:
-          type: string
-          format: email
+        email: { type: string, format: email, maxLength: 255 }
+
+    ConfirmPasswordResetRequest:
+      type: object
+      additionalProperties: false
+      required: [token, nova_senha]
+      properties:
+        token: { type: string, minLength: 32, maxLength: 128 }
+        nova_senha: { type: string, format: password, minLength: 10, maxLength: 72 }
+
+    AcceptInviteRequest:
+      type: object
+      additionalProperties: false
+      required: [token, senha]
+      properties:
+        token: { type: string, minLength: 32, maxLength: 128 }
+        senha: { type: string, format: password, minLength: 10, maxLength: 72 }
 
     AcceptedResponse:
       type: object
+      additionalProperties: false
+      required: [mensagem]
       properties:
-        mensagem:
-          type: string
-        correlation_id:
-          type: string
-
-    MfaSetupRequest:
-      type: object
-      required: [secret, codigo]
-      properties:
-        secret:
-          type: string
-          description: Segredo TOTP em base32
-        codigo:
-          type: string
-          pattern: '^[0-9]{6}$'
-
-    MfaSetupResponse:
-      type: object
-      properties:
-        mfa_ativo: { type: boolean }
+        mensagem: { type: string }
 
     UserCreate:
       type: object
-      required: [email, nome, perfil_codigo]
+      additionalProperties: false
+      required: [email, nome, perfis]
       properties:
-        email: { type: string, format: email }
-        nome: { type: string, maxLength: 200 }
-        perfil_codigo:
-          type: string
-          enum: [admin_tenant, digitalizador, analista, analista_individual]
+        email: { type: string, format: email, maxLength: 255 }
+        nome: { type: string, minLength: 1, maxLength: 200 }
+        perfis: { type: array, minItems: 1, uniqueItems: true, items: { $ref: '#/components/schemas/PerfilCodigo' } }
         projetos:
           type: array
+          uniqueItems: true
+          description: Ausente = todos os projetos do tenant (RN-004)
           items: { type: string, format: uuid }
 
     UserUpdate:
       type: object
+      additionalProperties: false
+      minProperties: 1
+      x-todos-opcionais: true
       properties:
-        nome: { type: string, maxLength: 200 }
-        perfil_codigo:
-          type: string
-          enum: [admin_tenant, digitalizador, analista, analista_individual]
+        nome: { type: string, minLength: 1, maxLength: 200 }
+        perfis: { type: array, minItems: 1, uniqueItems: true, items: { $ref: '#/components/schemas/PerfilCodigo' } }
+        projetos: { type: array, uniqueItems: true, items: { type: string, format: uuid } }
         ativo: { type: boolean }
-        projetos:
-          type: array
-          items: { type: string, format: uuid }
 
     User:
       type: object
+      additionalProperties: false
+      required: [id, email, nome, perfis, projetos, mfa_ativo, ativo, criado_em]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         nome: { type: string }
-        perfil_codigo:
-          type: string
-          enum: [admin_tenant, digitalizador, analista, analista_individual]
+        perfis: { type: array, items: { $ref: '#/components/schemas/PerfilCodigo' } }
+        projetos: { type: array, items: { type: string, format: uuid } }
         mfa_ativo: { type: boolean }
         ativo: { type: boolean }
         criado_em: { type: string, format: date-time }
 
-    InviteCreate:
+    UserList:
       type: object
-      required: [email, perfil_codigo]
+      additionalProperties: false
+      required: [itens, meta]
       properties:
-        email: { type: string, format: email }
-        perfil_codigo:
-          type: string
-          enum: [admin_tenant, digitalizador, analista, analista_individual]
-        projetos:
-          type: array
-          items: { type: string, format: uuid }
+        itens: { type: array, items: { $ref: '#/components/schemas/User' } }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+
+    GrantCreate:
+      type: object
+      additionalProperties: false
+      required: [usuario_id, projeto_id, justificativa]
+      properties:
+        usuario_id: { type: string, format: uuid }
+        projeto_id: { type: string, format: uuid }
+        justificativa: { type: string, minLength: 10, maxLength: 1000 }
+
+    Grant:
+      type: object
+      additionalProperties: false
+      required: [id, usuario_id, projeto_id, concedido_em, valido_ate, vigente]
+      properties:
+        id: { type: string, format: uuid }
+        usuario_id: { type: string, format: uuid }
+        projeto_id: { type: string, format: uuid }
+        concedido_em: { type: string, format: date-time }
+        valido_ate: { type: string, format: date-time }
+        revogado_em: { type: string, format: date-time, nullable: true }
+        vigente: { type: boolean, description: ativo e valido_ate no futuro }
+
+    GrantList:
+      type: object
+      additionalProperties: false
+      required: [itens, meta]
+      properties:
+        itens: { type: array, items: { $ref: '#/components/schemas/Grant' } }
+        meta: { $ref: '#/components/schemas/PageMeta' }
 
     ProjectCreate:
       type: object
+      additionalProperties: false
       required: [nome]
       properties:
-        nome: { type: string, maxLength: 200 }
+        nome: { type: string, minLength: 1, maxLength: 200 }
         descricao: { type: string, maxLength: 5000 }
-        grupo_minimo:
-          type: integer
-          minimum: 1
-          maximum: 1000
-          default: 1
+        grupo_minimo: { type: integer, minimum: 1, maximum: 1000, default: 1, description: Padrão provisório; ver Q-006 }
+
+    ProjectUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      x-todos-opcionais: true
+      properties:
+        nome: { type: string, minLength: 1, maxLength: 200 }
+        descricao: { type: string, maxLength: 5000 }
+        grupo_minimo: { type: integer, minimum: 1, maximum: 1000 }
 
     Project:
       type: object
+      additionalProperties: false
+      required: [id, nome, status, grupo_minimo, criado_em]
       properties:
         id: { type: string, format: uuid }
         nome: { type: string }
-        descricao: { type: string }
-        status:
-          type: string
-          enum: [ativo, arquivado]
+        descricao: { type: string, nullable: true }
+        status: { type: string, enum: [ativo, arquivado] }
         grupo_minimo: { type: integer }
         criado_em: { type: string, format: date-time }
 
+    ProjectList:
+      type: object
+      additionalProperties: false
+      required: [itens, meta]
+      properties:
+        itens: { type: array, items: { $ref: '#/components/schemas/Project' } }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+
     FormCreate:
       type: object
+      additionalProperties: false
       required: [nome, projeto_id]
       properties:
-        nome: { type: string, maxLength: 200 }
+        nome: { type: string, minLength: 1, maxLength: 200 }
         projeto_id: { type: string, format: uuid }
 
     FormSummary:
       type: object
+      additionalProperties: false
+      required: [id, nome, projeto_id, criado_em, versoes]
       properties:
         id: { type: string, format: uuid }
         nome: { type: string }
         projeto_id: { type: string, format: uuid }
         criado_em: { type: string, format: date-time }
+        versoes: { type: array, items: { $ref: '#/components/schemas/VersionSummary' } }
+
+    FormList:
+      type: object
+      additionalProperties: false
+      required: [itens, meta]
+      properties:
+        itens: { type: array, items: { $ref: '#/components/schemas/FormSummary' } }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+
+    Question:
+      type: object
+      additionalProperties: false
+      required: [codigo, tipo, enunciado, ordem, pagina]
+      properties:
+        codigo: { type: string, pattern: '^[A-Z0-9_]+$', maxLength: 100 }
+        tipo: { type: string, enum: [escolha_unica, multipla_escolha, escala, matriz, numero, data, sim_nao, cpf, texto_curto, texto_livre] }
+        enunciado: { type: string, maxLength: 2000 }
+        ordem: { type: integer, minimum: 1 }
+        pagina: { type: integer, minimum: 1 }
+        obrigatorio: { type: boolean, default: false }
+        campo_respondente: { type: string, enum: [nome, data_nascimento, cpf, endereco], nullable: true }
+        campo_aplicacao: { type: string, enum: [data_aplicacao, local_aplicacao], nullable: true, description: Marca as perguntas de data e local exigidas pela RN-017 }
+        valor_min: { type: number, nullable: true }
+        valor_max: { type: number, nullable: true }
+        unidade: { type: string, maxLength: 20, nullable: true }
+        opcoes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [codigo, rotulo, ordem]
+            properties:
+              codigo: { type: string, pattern: '^[a-z0-9_]+$', maxLength: 50 }
+              rotulo: { type: string, maxLength: 200 }
+              ordem: { type: integer, minimum: 1 }
+
+    SkipRule:
+      type: object
+      additionalProperties: false
+      required: [pergunta_origem_codigo, pergunta_destino_codigo, opcao_codigo]
+      properties:
+        pergunta_origem_codigo: { type: string, pattern: '^[A-Z0-9_]+$' }
+        pergunta_destino_codigo: { type: string, pattern: '^[A-Z0-9_]+$' }
+        opcao_codigo: { type: string, pattern: '^[a-z0-9_]+$' }
+
+    VersionContent:
+      type: object
+      additionalProperties: false
+      required: [perguntas, regras_salto]
+      properties:
+        perguntas: { type: array, items: { $ref: '#/components/schemas/Question' } }
+        regras_salto: { type: array, items: { $ref: '#/components/schemas/SkipRule' } }
 
     VersionCreate:
       type: object
+      additionalProperties: false
+      x-todos-opcionais: true
       properties:
-        perguntas:
-          type: array
-          items:
-            type: object
-            required: [codigo, tipo, enunciado, ordem, pagina]
-            properties:
-              codigo: { type: string, pattern: '^[A-Z0-9_]+$', maxLength: 100 }
-              tipo:
-                type: string
-                enum: [escolha_unica, multipla_escolha, escala, matriz, numero, data, sim_nao, cpf, texto_curto, texto_livre]
-              enunciado: { type: string, maxLength: 2000 }
-              ordem: { type: integer, minimum: 1 }
-              pagina: { type: integer, minimum: 1 }
-              obrigatorio: { type: boolean, default: false }
-              campo_respondente:
-                type: string
-                enum: [nome, data_nascimento, cpf, endereco]
-                nullable: true
-              valor_min: { type: number, nullable: true }
-              valor_max: { type: number, nullable: true }
-              unidade: { type: string, maxLength: 20, nullable: true }
-              opcoes:
-                type: array
-                items:
-                  type: object
-                  required: [codigo, rotulo, ordem]
-                  properties:
-                    codigo: { type: string, pattern: '^[a-z0-9_]+$', maxLength: 50 }
-                    rotulo: { type: string, maxLength: 200 }
-                    ordem: { type: integer, minimum: 1 }
-        regras_salto:
-          type: array
-          items:
-            type: object
-            required: [pergunta_origem_codigo, pergunta_destino_codigo, opcao_codigo]
-            properties:
-              pergunta_origem_codigo: { type: string }
-              pergunta_destino_codigo: { type: string }
-              opcao_codigo: { type: string }
+        copiar_de_versao_id: { type: string, format: uuid, description: Ausente = versão vazia }
 
     VersionSummary:
       type: object
+      additionalProperties: false
+      required: [id, formulario_id, numero, status, criada_em]
       properties:
         id: { type: string, format: uuid }
         formulario_id: { type: string, format: uuid }
-        numero: { type: integer }
-        status:
-          type: string
-          enum: [rascunho, publicada]
+        numero: { type: integer, minimum: 1 }
+        status: { type: string, enum: [rascunho, publicada] }
         publicada_em: { type: string, format: date-time, nullable: true }
         criada_em: { type: string, format: date-time }
 
+    Version:
+      type: object
+      additionalProperties: false
+      required: [resumo, conteudo]
+      properties:
+        resumo: { $ref: '#/components/schemas/VersionSummary' }
+        conteudo: { $ref: '#/components/schemas/VersionContent' }
+
+    UploadRequest:
+      type: object
+      additionalProperties: false
+      required: [arquivos]
+      properties:
+        arquivos:
+          type: array
+          minItems: 1
+          items: { type: string, format: binary }
+          description: JPEG/PNG/PDF, até 20 MB e 50 páginas por arquivo; todos da mesma pessoa (DEC-008)
+
     UploadResponse:
       type: object
+      additionalProperties: false
+      required: [aplicacao_id, estado, paginas]
       properties:
         aplicacao_id: { type: string, format: uuid }
-        estado:
-          type: string
-          enum: [identificacao_pendente, em_leitura, aguardando_cota]
-        paginas:
-          type: integer
+        estado: { $ref: '#/components/schemas/ApplicationState' }
+        paginas: { type: integer, minimum: 1 }
+        aviso:
+          allOf:
+            - $ref: '#/components/schemas/ErrorCode'
+          nullable: true
+          description: ERR-004, ERR-039 ou ERR-003 quando o estado inicial não é em_leitura
 
-    ReviewApplication:
+    IdentifyRequest:
       type: object
+      additionalProperties: false
+      required: [versao_id, paginas]
+      properties:
+        versao_id: { type: string, format: uuid }
+        paginas:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [imagem_id, numero_pagina]
+            properties:
+              imagem_id: { type: string, format: uuid }
+              numero_pagina: { type: integer, minimum: 1 }
+
+    QuotaStatus:
+      type: object
+      additionalProperties: false
+      required: [teto, consumido, periodo_inicio, periodo_fim, atingido, aplicacoes_aguardando]
+      properties:
+        teto: { type: string, pattern: '^[0-9]+\.[0-9]{2}$', description: Valor em reais (decimal exato) }
+        consumido: { type: string, pattern: '^[0-9]+\.[0-9]{2}$' }
+        periodo_inicio: { type: string, format: date }
+        periodo_fim: { type: string, format: date }
+        atingido: { type: boolean }
+        aplicacoes_aguardando: { type: integer, minimum: 0 }
+
+    Application:
+      type: object
+      additionalProperties: false
+      required: [id, projeto_id, estado, assinatura, itens]
       properties:
         id: { type: string, format: uuid }
-        estado:
-          type: string
-          enum: [identificacao_pendente, aguardando_cota, em_leitura, erro_leitura, em_revisao, aguardando_cpf, sem_assinatura, concluida, descartada]
-        assinatura:
-          type: string
-          enum: [presente, ausente, nao_conferida]
+        projeto_id: { type: string, format: uuid }
+        versao_id: { type: string, format: uuid, nullable: true }
+        estado: { $ref: '#/components/schemas/ApplicationState' }
+        assinatura: { type: string, enum: [presente, ausente, nao_conferida] }
+        aviso:
+          allOf:
+            - $ref: '#/components/schemas/ErrorCode'
+          nullable: true
         reserva_expira_em: { type: string, format: date-time, nullable: true }
         reservado_por: { type: string, nullable: true }
+        divergencias_cadastro:
+          type: array
+          description: Atributos em que o valor lido difere do cadastro existente (CA-014)
+          items: { type: string, enum: [nome, data_nascimento, endereco] }
+        itens: { type: array, items: { $ref: '#/components/schemas/ReviewItem' } }
+
+    ApplicationList:
+      type: object
+      additionalProperties: false
+      required: [itens, meta]
+      properties:
         itens:
           type: array
-          items: { $ref: '#/components/schemas/ReviewItem' }
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, estado, criada_em]
+            properties:
+              id: { type: string, format: uuid }
+              estado: { $ref: '#/components/schemas/ApplicationState' }
+              criada_em: { type: string, format: date-time }
+              reservado_por: { type: string, nullable: true }
+        meta: { $ref: '#/components/schemas/PageMeta' }
 
     ReviewItem:
       type: object
+      additionalProperties: false
+      required: [id, pergunta_codigo, estado]
       properties:
         id: { type: string, format: uuid }
         pergunta_codigo: { type: string }
-        valor_ia: { type: string, nullable: true }
-        confianca: { type: number, format: float, minimum: 0, maximum: 1, nullable: true }
+        valor_ia: { type: string, nullable: true, description: CPF mascarado fora da revisão (RN-013) }
+        confianca: { type: number, minimum: 0, maximum: 1, nullable: true, description: Valor bruto (até 4 casas) }
         valor_final: { type: string, nullable: true }
-        estado:
-          type: string
-          enum: [pendente_leitura, aguardando_condicao, confirmado_automaticamente, a_revisar, confirmado, corrigido, em_branco, ilegivel, rasurado, nao_se_aplica]
+        estado: { $ref: '#/components/schemas/ItemState' }
+
+    ItemImage:
+      type: object
+      additionalProperties: false
+      required: [url, expira_em]
+      properties:
+        url: { type: string, format: uri, description: Link assinado de 5 min (DEC-034) }
+        expira_em: { type: string, format: date-time }
+        regiao:
+          type: object
+          additionalProperties: false
+          required: [x, y, largura, altura]
+          properties:
+            x: { type: number, minimum: 0, maximum: 1 }
+            y: { type: number, minimum: 0, maximum: 1 }
+            largura: { type: number, minimum: 0, maximum: 1 }
+            altura: { type: number, minimum: 0, maximum: 1 }
 
     ReviewPatch:
       type: object
+      additionalProperties: false
       required: [itens]
       properties:
         itens:
           type: array
+          minItems: 1
           items:
             type: object
+            additionalProperties: false
             required: [item_id, acao]
             properties:
               item_id: { type: string, format: uuid }
-              acao:
-                type: string
-                enum: [confirmar, corrigir, em_branco, ilegivel, rasurado, nao_se_aplica]
-              valor_final:
-                type: string
-                nullable: true
+              acao: { type: string, enum: [confirmar, corrigir, em_branco, ilegivel, rasurado, nao_se_aplica] }
+              valor_final: { type: string, maxLength: 2000, nullable: true, description: Obrigatório quando acao = corrigir }
 
     ConfirmApplicationRequest:
       type: object
-      required: [cpf, data_aplicacao, local_aplicacao, assinatura]
+      additionalProperties: false
+      required: [assinatura]
       properties:
-        cpf:
-          type: string
-          pattern: '^[0-9]{11}$'
-        data_aplicacao:
-          type: string
-          format: date
-          description: Data civil (não convertida para UTC)
-        local_aplicacao:
-          type: string
-          maxLength: 200
-        assinatura:
-          type: string
-          enum: [presente]
+        assinatura: { type: string, enum: [presente, ausente] }
+        manter_cadastro:
+          type: object
+          additionalProperties: false
+          description: Escolha do digitalizador para cada atributo listado em divergencias_cadastro (CA-014); obrigatória para todos eles, senão 400 ERR-001
+          properties:
+            nome: { type: string, enum: [existente, aplicacao] }
+            data_nascimento: { type: string, enum: [existente, aplicacao] }
+            endereco: { type: string, enum: [existente, aplicacao] }
 
-    DiscardApplicationRequest:
+    SignatureUpload:
       type: object
+      additionalProperties: false
+      required: [arquivo]
+      properties:
+        arquivo: { type: string, format: binary, description: Imagem da página 1 assinada (JPEG/PNG/PDF) }
+
+    ReasonRequest:
+      type: object
+      additionalProperties: false
       required: [motivo]
       properties:
-        motivo: { type: string, maxLength: 2000 }
+        motivo: { type: string, minLength: 3, maxLength: 2000 }
 
-    ReopenApplicationRequest:
+    Filter:
       type: object
-      required: [motivo]
+      additionalProperties: false
+      required: [tipo, operador, valores]
+      description: |
+        tipo `idade`: idade na data da aplicação mais recente do período (CA-009).
+        tipo `resposta`: valor final de `pergunta_codigo` na aplicação mais recente do período que contenha a pergunta (CA-031).
       properties:
-        motivo: { type: string, maxLength: 2000 }
+        tipo: { type: string, enum: [idade, resposta] }
+        pergunta_codigo: { type: string, pattern: '^[A-Z0-9_]+$', description: Obrigatório quando tipo = resposta }
+        operador: { type: string, enum: [igual, diferente, maior, maior_igual, menor, menor_igual, entre, em] }
+        valores:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { type: string, maxLength: 200 }
+
+    Period:
+      type: object
+      additionalProperties: false
+      required: [de, ate]
+      properties:
+        de: { type: string, format: date }
+        ate: { type: string, format: date }
+
+    DashboardQuery:
+      type: object
+      additionalProperties: false
+      required: [projeto_ids, pergunta_codigo]
+      properties:
+        projeto_ids: { type: array, minItems: 1, uniqueItems: true, items: { type: string, format: uuid } }
+        pergunta_codigo: { type: string, pattern: '^[A-Z0-9_]+$' }
+        cruzamento_codigo: { type: string, pattern: '^[A-Z0-9_]+$', nullable: true }
+        filtros: { type: array, maxItems: 10, items: { $ref: '#/components/schemas/Filter' } }
+        grupo_id: { type: string, format: uuid, nullable: true }
+        periodo: { $ref: '#/components/schemas/Period' }
 
     AggregatedResult:
       type: object
+      additionalProperties: false
+      required: [grupo_minimo_efetivo, celulas]
       properties:
-        projeto_id: { type: string, format: uuid }
-        grupo_minimo_efetivo:
-          type: integer
-          description: Maior grupo_minimo quando há cruzamento entre projetos (CA-034)
+        grupo_minimo_efetivo: { type: integer, description: Maior grupo_minimo entre os projetos consultados (CA-034) }
         celulas:
           type: array
           items:
             type: object
+            additionalProperties: false
+            required: [opcao, oculto]
             properties:
-              chave: { type: string }
-              valor:
-                type: number
-                nullable: true
-                description: Null quando ocultado por k-anonimato
-              oculto:
-                type: boolean
-                description: True quando a célula tem menos respondentes que o mínimo
-        total_respondentes: { type: integer }
+              opcao: { type: string }
+              cruzamento: { type: string, nullable: true }
+              respondentes: { type: integer, nullable: true, description: Null quando oculto }
+              oculto: { type: boolean }
 
     GroupCreate:
       type: object
+      additionalProperties: false
       required: [nome, projeto_id, filtros]
       properties:
-        nome: { type: string, maxLength: 200 }
+        nome: { type: string, minLength: 1, maxLength: 200 }
         projeto_id: { type: string, format: uuid }
-        filtros:
-          type: object
-          additionalProperties: true
+        filtros: { type: array, minItems: 1, maxItems: 10, items: { $ref: '#/components/schemas/Filter' } }
+        periodo: { $ref: '#/components/schemas/Period' }
 
     Group:
       type: object
+      additionalProperties: false
+      required: [id, nome, projeto_id, filtros, criado_em]
       properties:
         id: { type: string, format: uuid }
         nome: { type: string }
         projeto_id: { type: string, format: uuid }
-        filtros:
-          type: object
-          additionalProperties: true
+        filtros: { type: array, items: { $ref: '#/components/schemas/Filter' } }
+        periodo: { $ref: '#/components/schemas/Period' }
         criado_em: { type: string, format: date-time }
+
+    GroupList:
+      type: object
+      additionalProperties: false
+      required: [itens, meta]
+      properties:
+        itens: { type: array, items: { $ref: '#/components/schemas/Group' } }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+
+    RespondentSearch:
+      type: object
+      additionalProperties: false
+      required: [cpf]
+      properties:
+        cpf: { type: string, pattern: '^[0-9]{11}$' }
+
+    RespondentRef:
+      type: object
+      additionalProperties: false
+      required: [respondente_id]
+      properties:
+        respondente_id: { type: string, format: uuid }
 
     IndividualRecord:
       type: object
+      additionalProperties: false
+      required: [respondente_id, evolucao]
       properties:
         respondente_id: { type: string, format: uuid }
         evolucao:
           type: array
           items:
             type: object
+            additionalProperties: false
+            required: [pergunta_codigo, data_aplicacao, projeto_id]
             properties:
               pergunta_codigo: { type: string }
               data_aplicacao: { type: string, format: date }
@@ -1568,32 +2485,74 @@ components:
 
     ExportRequest:
       type: object
-      required: [formato, escopo, projeto_id]
+      additionalProperties: false
+      required: [formato, escopo, projeto_ids]
       properties:
-        formato:
-          type: string
-          enum: [csv, xlsx]
-        escopo:
-          type: string
-          enum: [agregado, linha_a_linha]
-        projeto_id: { type: string, format: uuid }
-        filtros:
-          type: object
-          additionalProperties: true
-        rotulos:
-          type: string
-          enum: [codigos, rotulos]
-          default: rotulos
+        formato: { type: string, enum: [csv, xlsx] }
+        escopo: { type: string, enum: [agregado, linha_a_linha] }
+        projeto_ids: { type: array, minItems: 1, uniqueItems: true, items: { type: string, format: uuid } }
+        filtros: { type: array, maxItems: 10, items: { $ref: '#/components/schemas/Filter' } }
+        periodo: { $ref: '#/components/schemas/Period' }
+        rotulos: { type: string, enum: [codigos, rotulos], default: rotulos }
+
+    ExportStatus:
+      type: object
+      additionalProperties: false
+      required: [id, status, criado_em]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [enfileirada, em_andamento, concluida, falhou, cancelada] }
+        criado_em: { type: string, format: date-time }
+        url_download: { type: string, format: uri, nullable: true, description: 'Link assinado de 5 min, só quando concluida' }
+        expira_em: { type: string, format: date-time, nullable: true }
+
+    DataSubjectRequestCreate:
+      type: object
+      additionalProperties: false
+      required: [cpf, tipo]
+      properties:
+        cpf: { type: string, pattern: '^[0-9]{11}$' }
+        tipo: { type: string, enum: [acesso, correcao, eliminacao, portabilidade] }
+        descricao: { type: string, maxLength: 2000 }
 
     DataSubjectRequest:
       type: object
+      additionalProperties: false
+      required: [id, tipo, status, solicitado_em]
       properties:
         id: { type: string, format: uuid }
-        tipo:
-          type: string
-          enum: [acesso, correcao, eliminacao, portabilidade]
-        status:
-          type: string
-          enum: [pendente, em_andamento, concluido, cancelado]
+        tipo: { type: string, enum: [acesso, correcao, eliminacao, portabilidade] }
+        status: { type: string, enum: [pendente, em_andamento, concluido, cancelado] }
         solicitado_em: { type: string, format: date-time }
         executado_em: { type: string, format: date-time, nullable: true }
+        url_resultado: { type: string, format: uri, nullable: true, description: 'Acesso/portabilidade (CSV ou JSON), link assinado de 5 min' }
+
+    DataSubjectRequestList:
+      type: object
+      additionalProperties: false
+      required: [itens, meta]
+      properties:
+        itens: { type: array, items: { $ref: '#/components/schemas/DataSubjectRequest' } }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      required: [id, acao, entidade, criado_em]
+      properties:
+        id: { type: string, format: uuid }
+        usuario_id: { type: string, format: uuid, nullable: true }
+        acao: { type: string }
+        entidade: { type: string }
+        registro_id: { type: string, format: uuid, nullable: true }
+        campo: { type: string, nullable: true }
+        canal: { type: string, enum: [web, api, script], nullable: true }
+        criado_em: { type: string, format: date-time }
+
+    AuditEventList:
+      type: object
+      additionalProperties: false
+      required: [itens, meta]
+      properties:
+        itens: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } }
+        meta: { $ref: '#/components/schemas/PageMeta' }
