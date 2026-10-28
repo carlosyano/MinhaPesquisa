@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.2.3
+  version: 0.2.4
   description: |
     API do SaaS MinhaPesquisa — digitalização de pesquisas em papel com leitura por IA,
     revisão humana e dashboards anonimizados, em conformidade com a LGPD.
-    Fonte normativa: REQ v1.6 e PLANO.md v2.7. Contract-first — este arquivo valida
+    Fonte normativa: REQ v1.7 e PLANO.md v2.8. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: rotas públicas declaram `security: []`; rotas de MFA usam a pré-sessão (DEC-050);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -294,7 +294,7 @@ paths:
         Cria o usuário (inativo até aceitar o convite), atribui um ou mais perfis (RN-003) e
         vincula aos projetos informados; sem projetos, vincula a todos (RN-004). Envia convite
         de 24 h (DEC-032). E-mail já existente na plataforma → 400 ERR-023, mesma resposta
-        para qualquer tenant (DEC-054; provisório, Q-013). Projeto de outro tenant em
+        para qualquer tenant (DEC-054; DEC-065). Projeto de outro tenant em
         `projetos` → 404 ERR-002.
       x-trace: [RF-001, CA-012, CA-035, RN-003, RN-004, DEC-054]
       security:
@@ -1181,7 +1181,7 @@ paths:
         Precedência (REQ FL-001): item não resolvido → 400 ERR-022; CPF ausente ou inválido →
         200 com `aviso: ERR-006` e estado `aguardando_cpf`; nome, nascimento, data ou local
         ausentes → 400 ERR-006 (CA-032). Assinatura ausente → `sem_assinatura`, sem vincular
-        o respondente (provisório, Q-012).
+        o respondente (DEC-064).
         Vínculo por CPF: existente vincula, novo cria (CA-002, CA-014b); divergência de cadastro
         resolvida pelo digitalizador (CA-014).
       x-trace: [RF-008, CA-002, CA-014, CA-014b, CA-021, CA-032, RN-016, RN-044, DEC-020]
@@ -1356,7 +1356,7 @@ paths:
         maior grupo_minimo (CA-034). Cruzamento por uma segunda pergunta (CA-017). Grupos
         contam respondentes pela aplicação mais recente do período; padrão de 12 meses
         (CA-031, DEC-024). Aplicações sem assinatura ficam fora (CA-021). Supressão
-        complementar impede deduzir célula oculta por subtração (provisório, Q-015).
+        complementar impede deduzir célula oculta por subtração (DEC-067).
       x-trace: [RF-009, CA-009, CA-010, CA-016, CA-017, CA-021, CA-031, CA-034, DEC-024, DEC-045, DEC-055]
       security:
         - sessionCookie: []
@@ -2114,7 +2114,7 @@ components:
         email: { type: string, format: email, maxLength: 255 }
         nome: { type: string, minLength: 1, maxLength: 200 }
         perfis: { type: array, minItems: 1, uniqueItems: true, items: { $ref: '#/components/schemas/PerfilCodigo' } }
-        todos_projetos: { type: boolean, default: true, description: 'Vínculo dinâmico a todos os projetos (RN-004; provisório, Q-016)' }
+        todos_projetos: { type: boolean, default: true, description: 'Vínculo dinâmico a todos os projetos (RN-004; DEC-068)' }
         projetos:
           type: array
           uniqueItems: true

@@ -3,7 +3,7 @@ ENT-001 Tenant,id,identificador do tenant,uuid,sim,36,UUID v4,—,—,sim,—,n�
 ENT-001 Tenant,nome,nome do tenant,varchar,sim,200,—,—,—,não,—,pessoal
 ENT-001 Tenant,slug,identificador curto,varchar,sim,50,^[a-z0-9-]+$,—,—,sim,—,não
 ENT-001 Tenant,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
-ENT-001 Tenant,ativo,"tenant ativo (false: login recusado com ERR-013 e jobs do tenant suspensos, sem apagar dados; provisório, Q-018)",boolean,sim,—,—,true/false,true,não,—,não
+ENT-001 Tenant,ativo,"tenant ativo (false: login recusado com ERR-013 e jobs do tenant suspensos, sem apagar dados; DEC-070)",boolean,sim,—,—,true/false,true,não,—,não
 ENT-002 Usuario,id,identificador do usuário,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-002 Usuario,tenant_id,tenant do usuário,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-002 Usuario,email,e-mail de login,varchar,sim,255,email RFC 5322,—,—,"sim (global, DEC-054)",—,pessoal
@@ -13,7 +13,7 @@ ENT-002 Usuario,mfa_secret,segredo TOTP,varchar,não,64,base32,—,NULL,não,—
 ENT-002 Usuario,mfa_ativo,MFA habilitado,boolean,sim,—,—,true/false,false,não,—,não
 ENT-002 Usuario,ultimo_login,último login,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
 ENT-002 Usuario,situacao,situação do usuário,enum,sim,—,—,pendente_convite; ativo; inativo,pendente_convite,não,—,não
-ENT-002 Usuario,todos_projetos,"vínculo dinâmico a todos os projetos do tenant (RN-004; provisório, Q-016); true ignora VinculoUsuarioProjeto",boolean,sim,—,—,true/false,true,não,—,não
+ENT-002 Usuario,todos_projetos,vínculo dinâmico a todos os projetos do tenant (RN-004; DEC-068); true ignora VinculoUsuarioProjeto,boolean,sim,—,—,true/false,true,não,—,não
 ENT-002 Usuario,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-003 Perfil,id,identificador do perfil,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-003 Perfil,tenant_id,tenant do perfil,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não

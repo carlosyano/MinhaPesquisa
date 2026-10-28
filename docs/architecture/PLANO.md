@@ -3,11 +3,11 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.6 (CHG-004 aplicada, pendente de aceite) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v1.7 (CHG-002 a CHG-005 aceitas) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.7
-**Status:** EM REVISÃO — REV-PLANO-009 pendente; Q-012 a Q-020 abertas; DEC-061 (revisão por IA) aguardando o responsável
+**Versão do plano:** 2.8
+**Status:** EM REVISÃO — REV-PLANO-009 pendente (critério da DEC-073)
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -413,10 +413,10 @@ incremento inteiro → Gate 2 (aceite do responsável).
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 46 CAs da REQ v1.6
+### 11.1 Cobertura dos 46 CAs da REQ v1.7
 
 A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 46 critérios
-de aceite da REQ v1.6 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
+de aceite da REQ v1.7 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
 confere que cada CA está no incremento do seu RF.
 
 **CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
@@ -452,9 +452,8 @@ validado pelo CI a cada merge.
 | CHG-001 — CA-032 × catálogo ERR | mudança normativa | aplicada na REQ v1.2 |
 | CHG-002 — correções de consistência e lacunas | mudança normativa | aceita em 27/10/2026 (REQ v1.3) |
 | CHG-003 — respostas às Q-005 a Q-011 | mudança normativa | aceita em 27/10/2026 (REQ v1.4, DEC-054 a DEC-060) |
-| CHG-004 — achados da REV-REQ-005/REV-PLANO-007 | mudança normativa | aplicada na REQ v1.5; pendente de aceite |
-| Q-012 a Q-020 | lacunas de negócio | abertas; textos provisórios em uso |
-| DEC-061 — revisão independente por agente de IA | decisão de negócio | proposta, aguardando o responsável |
+| CHG-004 — achados das revisões independentes (rodadas 1 e 2) | mudança normativa | aceita em 28/10/2026 (REQ v1.6) |
+| CHG-005 — respostas às Q-012 a Q-020, DEC-061 e DEC-073 | mudança normativa | aceita em 28/10/2026 (REQ v1.7, DEC-064 a DEC-073) |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
@@ -493,17 +492,25 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 
 ---
 
+### 12.3 Achados registrados para tratamento posterior (DEC-073)
+
+Achados médios e baixos de revisões independentes aceitos para tratamento posterior, com responsável e incremento. Vazio enquanto não houver.
+
+| Achado | Revisão | Severidade | Descrição | Responsável | Incremento |
+| --- | --- | --- | --- | --- | --- |
+| — | — | — | — | — | — |
+
 ## 13. Critério de prontidão e ciclo de verificação
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.6
+- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.7
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
 - [x] CHG-002 e CHG-003 aceitas pelo responsável
-- [ ] Q-012 a Q-020 respondidas e CHG-004 aceita
-- [ ] Revisão independente (REV-PLANO-009) com 0 achados bloqueantes, altos e médios; forma de revisão definida na DEC-061
+- [x] Q-012 a Q-020 respondidas; CHG-004 e CHG-005 aceitas
+- [ ] Revisão independente (REV-PLANO-009) com 0 bloqueantes e 0 altos; médios e baixos registrados no §12.3 (DEC-061, DEC-073)
 
 **Bloqueio de status:** este plano NÃO pode ser declarado PRONTO PARA IMPLEMENTAÇÃO
 enquanto os itens acima não estiverem marcados.
@@ -544,8 +551,8 @@ REQ §8.1; o CI falha se divergirem.
 | REV-PLANO-006 | 27/10/2026 | Claude (assistente IA; não independente) | 2.3 | 4 | n/c | n/c | n/c | Resolvido | Bloqueantes: IDs de DEC colidindo entre REQ e CSV; status da REV-PLANO-005 divergente; CSV de incrementos desatualizado; rotas públicas exigindo sessão no contrato. Também: RLS sem desenho para login e jobs, confiança e recortes indefinidos, segredo MFA enviado pelo cliente, 30 operações ausentes no contrato, CSVs corrompidos e nomes de arquivo com caixa errada. Corrigidos na v2.4. |
 | REV-PLANO-007 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.5 | 2 | 10 | 17 | 5 | Resolvido | Achados em conjunto com a REV-REQ-005 (lista de eliminações no banco restaurado; nulidade na criação da aplicação; entidades faltantes; autorização sem 403; histórico de atributos sem entidade; oasdiff declarado e ausente; RLS sem WITH CHECK; imutabilidade da auditoria sem mecanismo). Corrigidos na v2.6. |
 | REV-PLANO-008 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.6 | 2 | 7 | 19 | 6 | Resolvido | Em conjunto com a REV-REQ-006: matriz de autorização contraditória (linhas por RF); resolução de sessão sob RLS sem desenho; ordem de validação do upload; versionamento do bucket de imagens; corpo da resposta guardado na idempotência; IDs de outro recurso pai no corpo. Corrigidos na v2.7. |
-| REV-PLANO-009 | 28/10/2026 | Agente revisor-independente (nova rodada) | 2.7 | — | — | — | — | Pendente | Aguardando as respostas às Q-012 a Q-020 e a DEC-061. |
+| REV-PLANO-009 | 28/10/2026 | Agente revisor-independente (nova rodada) | 2.8 | — | — | — | — | Pendente | Rodada 3. |
 
 ---
 
-**Fim do documento `PLANO.md` v2.7**
+**Fim do documento `PLANO.md` v2.8**

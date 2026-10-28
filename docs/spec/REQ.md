@@ -1,9 +1,9 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 e CHG-003 aceitas · CHG-004 aplicada, pendente de aceite do responsável
-Versão: 1.6
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004 rodadas 1 e 2)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-005 aceitas
+Versão: 1.7
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado)
 Responsável: Carlos Yano
@@ -91,7 +91,7 @@ Um filtro estreito (ex.: projeto X, idade 91, viúva) pode identificar uma pesso
 | Impacto | Reidentificação de indivíduo por filtro estreito, expondo dados de saúde sem acesso individual |
 | Probabilidade | Baixa em projetos com muitos respondentes; alta em projetos pequenos ou filtros muito específicos |
 | Mitigação na v1 | Padrão 5; redução auditada; o projeto que precisar de anonimização mantém valor maior que 1 |
-| Mitigação adicional | Faixas fixas de idade e mínimo aplicado ao complemento do filtro (provisório, Q-019). Supressão complementar: além das células abaixo do mínimo, a consulta oculta outra célula da mesma linha e da mesma coluna (e o total marginal quando necessário), para que a célula oculta não possa ser deduzida por subtração no cruzamento (CA-017) nem pela consulta sem cruzamento (provisório, Q-015) |
+| Mitigação adicional | Faixas fixas de idade e mínimo aplicado ao complemento do filtro (DEC-071). Supressão complementar: além das células abaixo do mínimo, a consulta oculta outra célula da mesma linha e da mesma coluna (e o total marginal quando necessário), para que a célula oculta não possa ser deduzida por subtração no cruzamento (CA-017) nem pela consulta sem cruzamento (DEC-067) |
 | Fora da v1 | Proteção contra deduzir valores comparando filtros diferentes ao longo do tempo |
 
 2.9 Parâmetros de configuração (RN-008)
@@ -103,7 +103,7 @@ Um filtro estreito (ex.: projeto X, idade 91, viúva) pode identificar uma pesso
 | custo_ia_teto | tenant | R$ 500,00/mês | ≥ 0 | Administrador da plataforma, por script, com auditoria | DEC-035, DEC-058, DEC-059 |
 | retencao_dias | tenant | NULL (sem expurgo por tempo até GX-001) | 1..3650 | Administrador da plataforma, por script, com auditoria | RN-030, Q-002, DEC-059 |
 | cotacao_usd_brl | plataforma, por mês civil | — (obrigatória para o mês corrente; sem ela, nenhuma leitura é feita) | > 0 | Administrador da plataforma, por script, com auditoria | DEC-058 |
-| retencao_exportacao_dias | plataforma | 7 (provisório, Q-017) | 1..90 | Administrador da plataforma, por script, com auditoria | RN-030, Q-017 |
+| retencao_exportacao_dias | plataforma | 7 (DEC-069) | 1..90 | Administrador da plataforma, por script, com auditoria | RN-030, Q-017 |
 
 Fonte única: todos os parâmetros vivem em ParametroConfiguracao (ENT-020). Ausente no nível mais específico, vale o nível acima (projeto → tenant → plataforma); ausente em todos, vale o padrão desta tabela.
 
@@ -133,7 +133,7 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-018 | 23/10/2026 | negócio | Administrador da plataforma | Com login no produto; Sem login | Sem login no produto na v1; atua por script e monitoramento | Separação de responsabilidades | definitivo | Médio | RF-001 |
 | DEC-019 | 23/10/2026 | negócio | Identificação do respondente | Por nome+data; Por CPF | Identificado só pelo CPF, obrigatório, sempre conferido por pessoa; vínculo na conclusão | Unicidade e LGPD | definitivo | Alto | RF-005, CA-002, CA-014 |
 | DEC-020 | 23/10/2026 | negócio | Campos obrigatórios | Nenhum; Alguns; Todos os 5 | Nome, nascimento, CPF, data e local bloqueiam a conclusão | Integridade mínima | definitivo | Alto | RF-004, RF-008, CA-032, CA-036 |
-| DEC-021 | 23/10/2026 | negócio | Mascaramento de CPF | Sempre visível; Sempre mascarado; Exceções | Exceto na revisão, na portabilidade e na exportação linha a linha, com auditoria | Equilíbrio entre LGPD e operação | definitivo | Alto | RNF-003, CA-008 |
+| DEC-021 | 23/10/2026 | negócio | Mascaramento de CPF | Sempre visível; Sempre mascarado; Exceções | Exceto na revisão, na portabilidade e na exportação linha a linha, com auditoria | Equilíbrio entre LGPD e operação | substituído (DEC-072) | Alto | RNF-003, CA-008 |
 | DEC-022 | 23/10/2026 | técnica | Envio à IA | Página inteira; Recortes | Recortes dos campos; identificação e saúde em chamadas separadas; sem metadados | Minimização de dado sensível | definitivo | Alto | RF-007, RNF-011 |
 | DEC-023 | 23/10/2026 | negócio | Grupo mínimo | Fixo; Configurável | Por projeto, podendo ser 1; entre projetos vale o maior; ocultação por célula, também na exportação | Flexibilidade e anonimização | substituído (DEC-055) | Alto | RF-009, CA-010, CA-034 |
 | DEC-024 | 23/10/2026 | negócio | Unidade dos grupos | Aplicação; Respondente | Respondente; cada filtro usa a aplicação mais recente que tenha a pergunta; período padrão de 12 meses | Coerência analítica | definitivo | Alto | RF-009, CA-009, CA-031 |
@@ -156,7 +156,17 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-058 | 27/10/2026 | negócio | Período e moeda do teto de custo de IA | Mês civil e PTAX diária; janela móvel de 30 dias; mês civil e cotação fixa mensal | Mês civil no fuso America/Sao_Paulo; custo em dólar convertido por cotação fixa configurada pela plataforma a cada mês | Previsibilidade do teto (Q-009) | definitivo | Médio | DEC-035, RN-036, CA-030 |
 | DEC-059 | 27/10/2026 | negócio | Alteração de limite_confianca, custo_ia_teto e retencao_dias | Plataforma por script; administrador do tenant pela tela; misto | Administrador da plataforma, por script, com auditoria | Não há gestão de tenant por tela na v1 (DEC-017); Q-010 | definitivo | Médio | RN-008, DEC-017, DEC-018 |
 | DEC-060 | 27/10/2026 | negócio | Perfil analista_individual × concessão | Perfil e concessão; só concessão; só perfil | O acesso individual exige o perfil `analista_individual` e uma concessão vigente para o projeto | Defesa em duas camadas para dados individuais de saúde (Q-011) | definitivo | Alto | RF-001, RF-009, DEC-031, CA-025 |
-| DEC-061 | 28/10/2026 | negócio | Forma da revisão independente (nível Completo) | Revisor humano; agente de IA isolado | Agente de IA de outro modelo, com contexto isolado e somente leitura (`.claude/agents/revisor-independente.md`); o responsável lê e aprova os achados de cada rodada | Não há revisor humano disponível; risco aceito: IAs tendem a errar de forma parecida | proposto (aguardando o responsável) | Alto | REV-REQ-005, REV-PLANO-007 |
+| DEC-061 | 28/10/2026 | negócio | Forma da revisão independente (nível Completo) | Revisor humano; agente de IA isolado | Agente de IA de outro modelo, com contexto isolado e somente leitura (`.claude/agents/revisor-independente.md`); o responsável lê e aprova os achados de cada rodada | Não há revisor humano disponível; risco aceito: IAs tendem a errar de forma parecida | definitivo | Alto | REV-REQ-005, REV-PLANO-007 |
+| DEC-064 | 28/10/2026 | negócio | Vínculo do respondente sem assinatura | Só ao concluir; já em sem_assinatura | O respondente só é criado ou vinculado, e o cadastro só é alterado, quando a aplicação chega a `concluida` | Sem assinatura não há evidência de consentimento (DEC-006, RN-041); Q-012 | definitivo | Alto | RF-005, RF-008, FL-001 |
+| DEC-065 | 28/10/2026 | negócio | E-mail já usado em outro tenant | Erro genérico; resposta igual ao sucesso | Erro ERR-023 igual para qualquer tenant, auditado e limitado por rate limit; risco residual aceito | Evita oráculo detalhado entre clientes (Q-013) | definitivo | Médio | RF-001, DEC-054 |
+| DEC-066 | 28/10/2026 | negócio | Leitura de texto curto | Sempre revisão; regra geral | Itens `texto_curto` sempre vão para `a_revisar` | Sem schema que valide o conteúdo (Q-014) | definitivo | Médio | RF-007, FL-002, DEC-057 |
+| DEC-067 | 28/10/2026 | negócio | Dedução de célula oculta por subtração | Supressão complementar; aceitar o risco | Supressão complementar na consulta agregada, também na exportação | Impede deduzir a célula oculta pela linha, pela coluna ou pela consulta sem cruzamento (Q-015) | definitivo | Alto | RF-009, DEC-045, CA-017 |
+| DEC-068 | 28/10/2026 | negócio | Vínculo padrão a todos os projetos | Dinâmico; fixado na criação | Dinâmico: inclui projetos criados depois (`todos_projetos`) | Leitura natural da RN-004 (Q-016) | definitivo | Médio | RN-004, RF-001 |
+| DEC-069 | 28/10/2026 | negócio | Retenção dos arquivos de exportação | 24 h; 7 dias; 30 dias | 7 dias após a geração | Dados pessoais em repouso pelo menor tempo útil (Q-017) | definitivo | Médio | RN-030, RF-010 |
+| DEC-070 | 28/10/2026 | negócio | Efeito de tenant inativo | Login, jobs e dados; só login | Login recusado (ERR-013), jobs do tenant suspensos, dados preservados, expurgos por eliminação e retenção mantidos | Gestão de tenant por script (DEC-017); Q-018 | definitivo | Médio | DEC-017, ENT-001 |
+| DEC-071 | 28/10/2026 | negócio | Dedução por diferença entre filtros | Faixas fixas e mínimo no complemento; aceitar o risco | Filtros de idade só em faixas fixas de 5 anos (60-64 ... 90+); consulta recusada quando o complemento do filtro no projeto tem menos respondentes que o mínimo | Dois filtros que diferem em uma pessoa revelariam suas respostas (Q-019) | definitivo | Alto | RF-009, RNF-004, DEC-055 |
+| DEC-072 | 28/10/2026 | negócio | Mascaramento de CPF | Ver DEC-021 | Exceto na revisão, no pedido de acesso e na portabilidade do titular e na exportação linha a linha, com auditoria | Inclui o acesso do próprio titular (Q-020); substitui a DEC-021 | definitivo | Alto | RNF-003, CA-008, CA-024 |
+| DEC-073 | 28/10/2026 | negócio | Critério de parada da revisão independente | Zero achados médios; zero bloqueantes e altos com médios registrados | Rodada aprovada com 0 bloqueantes e 0 altos; achados médios e baixos restantes só com registro de responsável e incremento (PLANO §12.3) | Rodadas sucessivas descem de nível e não convergem a zero médios; desvio do nível Completo aceito | definitivo | Médio | DEC-001, DEC-061 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -200,7 +210,7 @@ RN-003 — Perfis múltiplos
 Um usuário PODE ter mais de um perfil no mesmo tenant (ENT-022 UsuarioPerfil). As permissões efetivas são a união dos perfis.
 
 RN-004 — Vínculo a projetos
-Cada usuário DEVE ser vinculado aos projetos que pode ver; o padrão é "todos os projetos do tenant", inclusive os criados depois (vínculo dinâmico; provisório, Q-016). O vínculo limita tudo: dashboards, relatórios, exportações, ficha individual e evolução. NÃO há permissão por linha na v1.
+Cada usuário DEVE ser vinculado aos projetos que pode ver; o padrão é "todos os projetos do tenant", inclusive os criados depois (vínculo dinâmico; DEC-068). O vínculo limita tudo: dashboards, relatórios, exportações, ficha individual e evolução. NÃO há permissão por linha na v1.
 
 RN-005 — Sem acesso público
 NÃO existe acesso público nem envio sem login, como regra fixa da plataforma.
@@ -227,7 +237,7 @@ RN-012 — CPF validado
 O CPF DEVE ser validado na leitura (dígitos verificadores). CPF inválido, ilegível ou ausente vai para revisão, e a aplicação NÃO é concluída sem CPF válido.
 
 RN-013 — CPF cifrado e hash
-Para permitir busca com o CPF cifrado, o banco DEVE guardar também um hash com chave (HMAC). O CPF aparece mascarado, exceto na revisão (só para o titular da reserva ativa: `openReview`, `getApplication` com reserva ativa e `getItemImage`), na portabilidade e na exportação linha a linha, e cada exibição completa DEVE ser auditada (acao=EXIBICAO_CPF). Na ficha individual o CPF é sempre mascarado.
+Para permitir busca com o CPF cifrado, o banco DEVE guardar também um hash com chave (HMAC). O CPF aparece mascarado, exceto na revisão (só para o titular da reserva ativa: `openReview`, `getApplication` com reserva ativa e `getItemImage`), no pedido de acesso e na portabilidade do titular e na exportação linha a linha (DEC-072), e cada exibição completa DEVE ser auditada (acao=EXIBICAO_CPF). Na ficha individual o CPF é sempre mascarado.
 
 RN-014 — Correção de CPF
 Se o revisor corrigir um CPF já vinculado, o vínculo DEVE ser refeito: a aplicação passa ao respondente do CPF corrigido (ou a um novo), com auditoria.
@@ -372,7 +382,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | nome | nome do tenant | varchar | sim | 200 | — | — | — | não | — | pessoal |
 | slug | identificador curto | varchar | sim | 50 | ^[a-z0-9-]+$ | — | — | sim | — | não |
 | criado_em | data de criação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
-| ativo | tenant ativo (false: login recusado com ERR-013 e jobs do tenant suspensos, sem apagar dados; provisório, Q-018) | boolean | sim | — | — | true/false | true | não | — | não |
+| ativo | tenant ativo (false: login recusado com ERR-013 e jobs do tenant suspensos, sem apagar dados; DEC-070) | boolean | sim | — | — | true/false | true | não | — | não |
 
 **ENT-002 Usuario**
 
@@ -387,7 +397,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | mfa_ativo | MFA habilitado | boolean | sim | — | — | true/false | false | não | — | não |
 | ultimo_login | último login | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
 | situacao | situação do usuário | enum | sim | — | — | pendente_convite; ativo; inativo | pendente_convite | não | — | não |
-| todos_projetos | vínculo dinâmico a todos os projetos do tenant (RN-004; provisório, Q-016); true ignora VinculoUsuarioProjeto | boolean | sim | — | — | true/false | true | não | — | não |
+| todos_projetos | vínculo dinâmico a todos os projetos do tenant (RN-004; DEC-068); true ignora VinculoUsuarioProjeto | boolean | sim | — | — | true/false | true | não | — | não |
 | criado_em | data de criação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 
 **ENT-003 Perfil**
@@ -994,7 +1004,7 @@ Transições:
 | erro_leitura | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
 | em_revisao | digitalizador conclui | todos os itens resolvidos (FL-002); nome, data de nascimento, CPF válido, data e local informados (DEC-020); assinatura presente | grava manter_cadastro, vincula respondente, audita | concluida | digitalizador |
 | em_revisao | digitalizador conclui | CPF ausente, ilegível ou inválido | audita; ERR-006 | aguardando_cpf | digitalizador |
-| em_revisao | digitalizador conclui | assinatura marcada como ausente; demais condições atendidas | grava manter_cadastro; NÃO vincula respondente (provisório, Q-012); audita | sem_assinatura | digitalizador |
+| em_revisao | digitalizador conclui | assinatura marcada como ausente; demais condições atendidas | grava manter_cadastro; NÃO vincula respondente (DEC-064); audita | sem_assinatura | digitalizador |
 | em_revisao | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
 | aguardando_cpf | digitalizador informa CPF válido | — | volta para revisão | em_revisao | digitalizador |
 | aguardando_cpf | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
@@ -1048,7 +1058,7 @@ Ordem de avaliação ao fim da leitura de um item (a primeira regra que se aplic
 | 4 | Origem em `nao_se_aplica` (origem pulada por outra regra): destino em branco → `nao_se_aplica`; destino preenchido → `a_revisar` | nao_se_aplica ou a_revisar |
 | 4a | Origem em `em_branco`, `ilegivel` ou `rasurado` (condição indeterminada) | a_revisar |
 | 5 | Pergunta do tipo `cpf` (RN-012) | a_revisar |
-| 6 | Pergunta do tipo `texto_livre` (DEC-057) ou `texto_curto` (provisório, Q-014) | a_revisar |
+| 6 | Pergunta do tipo `texto_livre` (DEC-057) ou `texto_curto` (DEC-066) | a_revisar |
 | 7 | Valor fora do schema: tipo, faixa, opção inexistente, mais de uma marcação em escolha única, ou `nenhuma_das_anteriores` marcada junto com outra opção (CA-006) | a_revisar |
 | 8 | Confiança > limite_confianca (DEC-028) | confirmado_automaticamente |
 | 9 | Demais casos (confiança ≤ limite) | a_revisar |
@@ -1572,7 +1582,7 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 | ERR-010 | RATE_LIMIT_EXCEEDED | 429 | Mais de 100 req/min por usuário ou 20 req/min por IP em rotas públicas. | Muitas tentativas. Aguarde alguns minutos antes de tentar novamente. | warn: rate_limit_exceeded (ip/user) | Nada é gravado | RF-002, Bloco P.7 | ativo |
 | ERR-011 | TOKEN_INVALID | 400 | Link de convite ou de recuperação de senha inválido, expirado ou já usado. | Este link é inválido ou expirou. Solicite um novo. | warn: token_invalid | Nada é gravado | RF-002, CA-035, CA-037 | ativo |
 | ERR-012 | MFA_INVALID | 400 | Código MFA incorreto ou fora da janela de tempo. | Código de verificação inválido. Tente novamente. | warn: mfa_invalid (conta como falha de login) | Nada é gravado | RF-002, CA-026, CA-035 | ativo |
-| ERR-013 | INVALID_CREDENTIALS | 401 | E-mail ou senha incorretos, conta inexistente, inativa ou com convite pendente, ou tenant inativo (provisório, Q-018) — mesma resposta. | Credenciais inválidas. | warn: login_failed (HMAC do e-mail) | Contagem de falhas atualizada | RF-002, CA-026 | ativo |
+| ERR-013 | INVALID_CREDENTIALS | 401 | E-mail ou senha incorretos, conta inexistente, inativa ou com convite pendente, ou tenant inativo (DEC-070) — mesma resposta. | Credenciais inválidas. | warn: login_failed (HMAC do e-mail) | Contagem de falhas atualizada | RF-002, CA-026 | ativo |
 | ERR-014 | LOGIN_THROTTLED | 429 | 5 falhas em 15 minutos para o mesmo e-mail, exista ou não a conta. | Muitas tentativas. Tente novamente em 15 minutos. | warn: login_throttled (HMAC do e-mail) | Bloqueio de 15 minutos | RF-002, CA-026 | ativo |
 | ERR-015 | SESSION_REQUIRED | 401 | Sessão ausente, expirada (30 min de inatividade ou 24 h) ou encerrada. | Sua sessão expirou. Entre novamente. | info: session_required | Nada é gravado | RF-002, CA-026 | ativo |
 | ERR-016 | FORBIDDEN | 403 | Perfil sem permissão para a ação, ou token CSRF ausente ou inválido. | Você não tem permissão para realizar esta ação. | warn: forbidden_action | Nada é gravado | RF-001, RF-002 | ativo |
@@ -1582,7 +1592,7 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 | ERR-020 | DEPENDENCY_UNAVAILABLE | 503 | Storage, e-mail ou outro serviço interno indisponível após as retentativas. | Serviço temporariamente indisponível. Tente novamente em instantes. | error: dependency_unavailable (serviço) | Nada é gravado | RF-004, RF-006 | ativo |
 | ERR-021 | SESSION_LIMIT_REACHED | 409 | Usuário já tem 3 sessões ativas (Bloco P P.2). | Você já tem 3 sessões ativas. Saia em outro dispositivo ou aguarde até 30 minutos sem uso para entrar. | info: session_limit_reached | Nenhuma sessão nova | RF-002 | ativo |
 | ERR-022 | ITEMS_UNRESOLVED | 400 | Tentativa de concluir com itens em `pendente_leitura`, `aguardando_condicao` ou `a_revisar`. | Ainda há campos a revisar nesta aplicação. | info: items_unresolved | Nada é gravado | RF-008, FL-002 | ativo |
-| ERR-023 | EMAIL_UNAVAILABLE | 400 | E-mail informado na criação de usuário já pertence a um usuário da plataforma (DEC-054); a mesma resposta vale para qualquer tenant (provisório, Q-013). | Este e-mail não pode ser usado. Informe outro e-mail. | warn: email_unavailable (auditado) | Nada é gravado | RF-001, DEC-054 | ativo |
+| ERR-023 | EMAIL_UNAVAILABLE | 400 | E-mail informado na criação de usuário já pertence a um usuário da plataforma (DEC-054); a mesma resposta vale para qualquer tenant (DEC-065). | Este e-mail não pode ser usado. Informe outro e-mail. | warn: email_unavailable (auditado) | Nada é gravado | RF-001, DEC-054 | ativo |
 | ERR-029 | FILE_REJECTED_LIMIT | 400 | Upload recusado. Motivos exatos: "excede o limite de 20 MB"; "excede o limite de 50 páginas"; "tipo de arquivo não permitido"; "risco de segurança detectado". | Arquivo recusado: [motivo]. | warn: file_rejected (motivo) | Nada é gravado | RF-006, CA-029, RN-040 | ativo |
 | ERR-036 | MISSING_PUBLISH_FIELDS | 400 | Tentativa de publicar versão sem campos obrigatórios (nome, nascimento, CPF, data, local). | Publicação recusada: faltam [lista dos campos]. | warn: missing_publish_fields | Versão permanece em `rascunho` | RF-004, CA-036, RN-017 | ativo |
 | ERR-039 | QR_INVALID_CONTEXT | 400 | QR aponta para versão inexistente, de outro tenant ou de projeto diferente do envio. | QR code inválido para o contexto atual. Informe manualmente. | warn: qr_invalid_context | Aplicação em `identificacao_pendente` | RF-006, CA-039 | ativo |
@@ -1591,7 +1601,7 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 
 9. Questões em aberto (Q)
 
-Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, foram respondidas em 27/10/2026 e incorporadas na v1.4 como DEC-054 a DEC-060 (CHG-003). Q-012 a Q-020 foram abertas pela CHG-004 (REV-REQ-005 e REV-REQ-006); até a resposta, vale o texto provisório.
+Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, foram respondidas em 27/10/2026 e incorporadas na v1.4 como DEC-054 a DEC-060 (CHG-003). Q-012 a Q-020, abertas pela CHG-004, foram respondidas em 28/10/2026 (recomendações aceitas) e incorporadas na v1.7 como DEC-064 a DEC-072 (CHG-005).
 
 | id | data | pergunta | por_que_importa | opcao_a | opcao_b | opcao_c | recomendacao | texto_provisorio (definitivo quando respondida) | resposta | status | relacionados |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1606,15 +1616,15 @@ Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, f
 | Q-009 | 27/10/2026 | Período e moeda do teto de custo de IA | O teto é em reais e o provedor cobra em dólar; "mês" pode ser civil ou janela móvel | A: mês civil (America/Sao_Paulo) e cotação PTAX do dia | B: janela móvel de 30 dias | C: mês civil (America/Sao_Paulo) e cotação fixa configurada pela plataforma a cada mês | C | O teto vale por mês civil no fuso America/Sao_Paulo; o custo em dólar é convertido por cotação fixa configurada pela plataforma a cada mês. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | DEC-035, RN-036, CA-030 |
 | Q-010 | 27/10/2026 | Quem altera limite_confianca, custo_ia_teto e retencao_dias | RN-008 exige forma de alteração definida; na v1 não há gestão de tenant por tela (DEC-017) | A: administrador da plataforma, por script, com auditoria | B: administrador do tenant, pela tela | C: teto e retenção pelo administrador do tenant; limite pela plataforma | A | Os três parâmetros são alterados pelo administrador da plataforma, por script, com auditoria (seção 2.9). | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | RN-008, DEC-017, DEC-018 |
 | Q-011 | 27/10/2026 | Perfil analista_individual × concessão de acesso individual | A REQ tem o perfil `analista_individual` (ENT-003) e a concessão por projeto com 90 dias (ENT-015, DEC-031), sem dizer se ambos são exigidos | A: exige o perfil e uma concessão vigente no projeto | B: basta a concessão vigente (o perfil deixa de existir) | C: basta o perfil | A | O acesso individual exige o perfil `analista_individual` e uma concessão vigente para o projeto. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | RF-001, RF-009, DEC-031, CA-025 |
-| Q-012 | 28/10/2026 | Vínculo do respondente quando a assinatura está ausente | DEC-006 tira do relatório a aplicação sem assinatura; criar ou alterar cadastro do respondente sem evidência de consentimento conflita com RN-041 | A: vincular e alterar cadastro só ao chegar em `concluida` (inclusive depois de anexar a assinatura) | B: vincular já ao entrar em `sem_assinatura` | — | A | O respondente só é criado ou vinculado, e o cadastro só é alterado, quando a aplicação chega a `concluida`. | — | aberta | RF-005, RF-008, DEC-006, RN-041 |
-| Q-013 | 28/10/2026 | Criação de usuário com e-mail já usado em outro tenant | Com e-mail único global (DEC-054), qualquer resposta diferente do sucesso revela que o e-mail é usuário de outro cliente | A: erro genérico (ERR-023), igual para qualquer tenant, auditado e sujeito a rate limit (risco residual aceito) | B: resposta igual ao sucesso, sem enviar convite | — | A | A criação com e-mail já existente na plataforma devolve ERR-023, com a mesma resposta para qualquer tenant, auditada e limitada por rate limit. | — | aberta | RF-001, DEC-054, RN-002 |
-| Q-014 | 28/10/2026 | Leitura de texto curto | `texto_curto` também não tem schema que valide o conteúdo, além do tamanho; pode ser confirmado automaticamente com erro ou instrução injetada | A: `texto_curto` sempre vai para revisão (como DEC-057) | B: segue a regra geral de confiança | — | A | Itens do tipo `texto_curto` sempre vão para `a_revisar`. | — | aberta | RF-007, FL-002, DEC-057 |
-| Q-015 | 28/10/2026 | Dedução de célula oculta por subtração | No gráfico cruzado (CA-017), a célula oculta pode ser obtida subtraindo as visíveis da linha ou do total sem cruzamento | A: supressão complementar na consulta (ocultar outra célula da linha e da coluna e o marginal quando necessário) | B: aceitar formalmente o risco e ampliar o Risco 2 | — | A | A consulta agregada aplica supressão complementar para que nenhuma célula oculta possa ser deduzida por subtração dentro da mesma consulta ou pela consulta sem cruzamento. | — | aberta | RF-009, DEC-045, DEC-055, CA-010, CA-017 |
-| Q-016 | 28/10/2026 | "Todos os projetos" é vínculo dinâmico? | RN-004: o padrão é "todos os projetos"; não diz se inclui projetos criados depois | A: dinâmico (inclui projetos futuros) | B: fixado na criação do usuário | — | A | O vínculo padrão "todos os projetos do tenant" inclui os projetos criados depois. | — | aberta | RN-004, RF-001, CA-016 |
-| Q-017 | 28/10/2026 | Retenção dos arquivos de exportação | Exportação linha a linha guarda dados pessoais e de saúde em repouso, sem prazo | A: 7 dias | B: 30 dias | C: 24 horas | A | Arquivos de exportação são apagados 7 dias após a geração. | — | aberta | RN-030, RF-010 |
-| Q-018 | 28/10/2026 | Efeito de tenant inativo | `Tenant.ativo` existe, mas sem regra; a gestão é por script (DEC-017) | A: login recusado (ERR-013), jobs do tenant suspensos, dados preservados e expurgos legais mantidos | B: só login recusado | — | A | Tenant inativo: login recusado com ERR-013, jobs do tenant suspensos, dados preservados e expurgos por eliminação e retenção mantidos. | — | aberta | DEC-017, ENT-001 |
-| Q-019 | 28/10/2026 | Dedução por diferença entre filtros | Dois filtros que diferem em uma só pessoa (ex.: idade ≥ 65 e idade ≥ 66) revelam as respostas dela por subtração, mesmo com todas as células acima do mínimo | A: filtros de idade só em faixas fixas (60-64, 65-69, ..., 90+) e mínimo aplicado também ao complemento do filtro | B: aceitar formalmente o risco e reescrever o Risco 2 e a RNF-004 | — | A | Filtros de idade só em faixas fixas de 5 anos (90+ na última); uma consulta é recusada quando o complemento do filtro dentro do projeto tem menos respondentes que o mínimo. | — | aberta | RF-009, RNF-004, DEC-055, CA-009 |
-| Q-020 | 28/10/2026 | CPF completo no pedido de acesso do titular | DEC-021 lista portabilidade e linha a linha, mas não o pedido de acesso (CA-024) | A: incluir o acesso entre as exceções (o arquivo é do próprio titular) | B: mascarar no acesso | — | A | No pedido de acesso, o CPF do próprio titular aparece completo, com auditoria. | — | aberta | DEC-021, CA-024, RN-013 |
+| Q-012 | 28/10/2026 | Vínculo do respondente quando a assinatura está ausente | DEC-006 tira do relatório a aplicação sem assinatura; criar ou alterar cadastro do respondente sem evidência de consentimento conflita com RN-041 | A: vincular e alterar cadastro só ao chegar em `concluida` (inclusive depois de anexar a assinatura) | B: vincular já ao entrar em `sem_assinatura` | — | A | O respondente só é criado ou vinculado, e o cadastro só é alterado, quando a aplicação chega a `concluida`. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | RF-005, RF-008, DEC-006, RN-041 |
+| Q-013 | 28/10/2026 | Criação de usuário com e-mail já usado em outro tenant | Com e-mail único global (DEC-054), qualquer resposta diferente do sucesso revela que o e-mail é usuário de outro cliente | A: erro genérico (ERR-023), igual para qualquer tenant, auditado e sujeito a rate limit (risco residual aceito) | B: resposta igual ao sucesso, sem enviar convite | — | A | A criação com e-mail já existente na plataforma devolve ERR-023, com a mesma resposta para qualquer tenant, auditada e limitada por rate limit. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | RF-001, DEC-054, RN-002 |
+| Q-014 | 28/10/2026 | Leitura de texto curto | `texto_curto` também não tem schema que valide o conteúdo, além do tamanho; pode ser confirmado automaticamente com erro ou instrução injetada | A: `texto_curto` sempre vai para revisão (como DEC-057) | B: segue a regra geral de confiança | — | A | Itens do tipo `texto_curto` sempre vão para `a_revisar`. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | RF-007, FL-002, DEC-057 |
+| Q-015 | 28/10/2026 | Dedução de célula oculta por subtração | No gráfico cruzado (CA-017), a célula oculta pode ser obtida subtraindo as visíveis da linha ou do total sem cruzamento | A: supressão complementar na consulta (ocultar outra célula da linha e da coluna e o marginal quando necessário) | B: aceitar formalmente o risco e ampliar o Risco 2 | — | A | A consulta agregada aplica supressão complementar para que nenhuma célula oculta possa ser deduzida por subtração dentro da mesma consulta ou pela consulta sem cruzamento. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | RF-009, DEC-045, DEC-055, CA-010, CA-017 |
+| Q-016 | 28/10/2026 | "Todos os projetos" é vínculo dinâmico? | RN-004: o padrão é "todos os projetos"; não diz se inclui projetos criados depois | A: dinâmico (inclui projetos futuros) | B: fixado na criação do usuário | — | A | O vínculo padrão "todos os projetos do tenant" inclui os projetos criados depois. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | RN-004, RF-001, CA-016 |
+| Q-017 | 28/10/2026 | Retenção dos arquivos de exportação | Exportação linha a linha guarda dados pessoais e de saúde em repouso, sem prazo | A: 7 dias | B: 30 dias | C: 24 horas | A | Arquivos de exportação são apagados 7 dias após a geração. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | RN-030, RF-010 |
+| Q-018 | 28/10/2026 | Efeito de tenant inativo | `Tenant.ativo` existe, mas sem regra; a gestão é por script (DEC-017) | A: login recusado (ERR-013), jobs do tenant suspensos, dados preservados e expurgos legais mantidos | B: só login recusado | — | A | Tenant inativo: login recusado com ERR-013, jobs do tenant suspensos, dados preservados e expurgos por eliminação e retenção mantidos. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | DEC-017, ENT-001 |
+| Q-019 | 28/10/2026 | Dedução por diferença entre filtros | Dois filtros que diferem em uma só pessoa (ex.: idade ≥ 65 e idade ≥ 66) revelam as respostas dela por subtração, mesmo com todas as células acima do mínimo | A: filtros de idade só em faixas fixas (60-64, 65-69, ..., 90+) e mínimo aplicado também ao complemento do filtro | B: aceitar formalmente o risco e reescrever o Risco 2 e a RNF-004 | — | A | Filtros de idade só em faixas fixas de 5 anos (90+ na última); uma consulta é recusada quando o complemento do filtro dentro do projeto tem menos respondentes que o mínimo. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | RF-009, RNF-004, DEC-055, CA-009 |
+| Q-020 | 28/10/2026 | CPF completo no pedido de acesso do titular | DEC-021 lista portabilidade e linha a linha, mas não o pedido de acesso (CA-024) | A: incluir o acesso entre as exceções (o arquivo é do próprio titular) | B: mascarar no acesso | — | A | No pedido de acesso, o CPF do próprio titular aparece completo, com auditoria. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | DEC-021, CA-024, RN-013 |
 
 10. Gates externos (GX)
 
@@ -1643,7 +1653,7 @@ Testes sentinela são casos de teste de alto nível que validam os riscos críti
 
 Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tools/validar_consistencia.py`; o resultado do script prevalece sobre este texto.
 
-- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-048, ENT-001 a ENT-030, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 46 CAs (CA-001 a CA-044, CA-014b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), Q-001 a Q-020 e GX-001. Verificado por script (IDs citados existem nos registros).
+- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-048, ENT-001 a ENT-030, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 46 CAs (CA-001 a CA-044, CA-014b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-073 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), Q-001 a Q-020 e GX-001. Verificado por script (IDs citados existem nos registros).
 - [x] 2. BDD com dados concretos: tabelas de exemplos nos CAs de alto risco CA-002, CA-008, CA-010, CA-012, CA-023, CA-029, CA-030, CA-032 e CA-043 (adicionadas na v1.3; na v1.2 só o CA-029 tinha tabela).
 - [x] 3. Estados e fluxos fechados: FL-001 com tabela de criação e entradas em `aguardando_cota`; FL-002 com ordem de avaliação explícita. Estados verificados por script contra o dicionário e o contrato.
 - [x] 4. Dicionário de dados completo: 30 entidades com as 11 propriedades; `registros/dicionario_dados.csv` idêntico, verificado por script.
@@ -1653,11 +1663,11 @@ Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tool
 - [x] 8. Toda escolha técnica é DEC; lacuna de negócio é Q, e Q respondida vira DEC (Q-005 a Q-011 → DEC-054 a DEC-060). DEC-036 foi resolvida pela DEC-038 (PLANO); DEC-023 substituída pela DEC-055.
 - [x] 9. Testes sentinela cobrindo riscos: TS-001 a TS-008.
 - [x] 10. Gates externos registrados: GX-001 (bloqueia piloto e produção).
-- [ ] 11. Nenhum trecho exige "bom senso": depende das respostas a Q-012 a Q-020.
-- [ ] 12. Toda Q respondida: Q-012 a Q-020 abertas pela CHG-004.
+- [x] 11. Nenhum trecho exige "bom senso": lacunas resolvidas pelas DEC-054 a DEC-060 e DEC-064 a DEC-072.
+- [x] 12. Toda Q respondida: Q-001 a Q-020.
 - [ ] 13. Consenso DEV/TEST sem divergência bloqueante: depende da próxima rodada de revisão independente.
 - [x] 14. REQ autocontida: referências externas (MeuRemedio, Kit v3) são informativas; o Bloco P está em `docs/spec/BLOCO_P.md`.
-- [ ] 15. Última revisão independente sem achado bloqueante ou alto: pendente (REV-REQ-007). Revisões por agente de IA dependem da DEC-061.
+- [ ] 15. Última revisão independente sem achado bloqueante ou alto, com médios e baixos registrados (DEC-061, DEC-073): pendente (REV-REQ-007).
 
 Anexo A — Glossário técnico
 
@@ -1674,7 +1684,7 @@ Anexo A — Glossário técnico
 
 Anexo B — Registro de revisões independentes (REV)
 
-A revisão independente é obrigatória no nível Completo. O revisor não pode ser o autor da especificação. Cada rodada desce um nível de detalhe; para quando não houver achado bloqueante ou alto.
+A revisão independente é obrigatória no nível Completo. O revisor não pode ser o autor da especificação; na v1 é um agente de IA de outro modelo, isolado e somente leitura, com os achados aprovados pelo responsável (DEC-061). Cada rodada desce um nível de detalhe; para com 0 bloqueantes e 0 altos, com médios e baixos registrados no PLANO §12.3 (DEC-073).
 
 | id | data | revisor | versao_revisada | achados_bloqueantes | achados_altos | achados_medios | achados_baixos | status | resolucao |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1684,6 +1694,6 @@ A revisão independente é obrigatória no nível Completo. O revisor não pode 
 | REV-REQ-004 | 27/10/2026 | Claude (assistente IA; não independente) | 1.2 | 4 | n/c | n/c | n/c | Resolvido | Bloqueantes: ERR duplicados; DEC-020 × ERR-006; eliminação × NOT NULL; CPF de exemplo inválido. Demais achados não classificados por severidade. Validação mecânica (`tools/validar_consistencia.py`) e leitura cruzada: ERR duplicados (005/043, 007/029); DEC-020 × ERR-006; eliminação × NOT NULL; CPF de exemplo inválido; FL-001 sem entradas em `aguardando_cota`; FL-002 sem precedência; RN-008 citando tabela inexistente; regex de Perfil; tabelas de exemplos ausentes nos CAs de alto risco; contrato sem 30 operações. Corrigidos na v1.3 (CHG-002); lacunas de negócio viraram Q-005 a Q-011. |
 | REV-REQ-005 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 1.4 | 2 | 10 | 17 | 5 | Resolvido | Bloqueantes: lista de eliminações no mesmo banco restaurado; colunas NOT NULL da aplicação impossíveis na criação. Altos: FL-002 presa com origem pulada; vínculo sem assinatura; histórico de atributos sem entidade; entidades faltantes (exportação, página, sessão, token, idempotência, falha de login); e-mail de outro tenant; texto curto; linhas de matriz e 'nenhuma das anteriores'; reserva fixa × deslizante; pedido do titular sem estado de falha; dedução de célula oculta. Corrigidos na v1.5 (CHG-004); decisões de negócio viraram Q-012 a Q-018. |
 | REV-REQ-006 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 1.5 | 2 | 7 | 19 | 6 | Resolvido | Confirmou a correção dos achados da REV-REQ-005. Novos: identificação de páginas e conferência de assinatura sem acesso à imagem; CPF e dados do respondente em claro nos itens; matriz de autorização contraditória; cadastro existente não exposto para a escolha do CA-014; PedidoTitular sem transição para `falhou`; minimização dependente de configuração manual; dedução por diferença entre filtros; resolução de sessão sob RLS. Corrigidos na v1.6; Q-019 e Q-020 abertas. |
-| REV-REQ-007 | 28/10/2026 | Agente revisor-independente (nova rodada) | 1.6 | — | — | — | — | Pendente | Aguardando as respostas às Q-012 a Q-020 e a DEC-061. |
+| REV-REQ-007 | 28/10/2026 | Agente revisor-independente (nova rodada) | 1.7 | — | — | — | — | Pendente | Rodada 3. |
 
 Fim do documento `REQ.md`
