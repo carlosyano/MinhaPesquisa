@@ -3,11 +3,11 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.5 (CHG-004 aplicada, pendente de aceite) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v1.6 (CHG-004 aplicada, pendente de aceite) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.6
-**Status:** EM REVISÃO — REV-PLANO-008 pendente; Q-012 a Q-018 abertas; DEC-061 (revisão por IA) aguardando o responsável
+**Versão do plano:** 2.7
+**Status:** EM REVISÃO — REV-PLANO-009 pendente; Q-012 a Q-020 abertas; DEC-061 (revisão por IA) aguardando o responsável
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -68,12 +68,12 @@ recebe o recorte já normalizado.
 | CMP-Auth | sessão, MFA, reset de MFA, convites, perfis, vínculos, concessões | RF-001, RF-002 | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite, listUsers, createTenantUser, getUser, updateUser, inviteUser, resetMfa, grantIndividualAccess, listIndividualAccessGrants, revokeAccess |
 | CMP-Projects | projetos, parâmetros, ciclo de vida | RF-003 | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject |
 | CMP-Forms | versões imutáveis, perguntas, regras de salto, PDF e mapa de layout | RF-004 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf |
-| CMP-Upload | validação, antimalware, metadados, QR, registro da imagem, storage | RF-006 | uploadImages, identifyApplication, addApplicationPages |
+| CMP-Upload | validação, antimalware, metadados, QR, registro da imagem, storage | RF-006 | uploadImages, identifyApplication, addApplicationPages, getPageImage |
 | CMP-MotorIA | recorte, chamada ao provedor, confiança, cota | RF-007 | processAIReading (worker), getQuotaStatus |
 | CMP-Respondents | unicidade por CPF, vínculo, criação, reversão | RF-005 | linkRespondent (interno) |
 | CMP-Revisao | fila, reserva, revisão, conclusão, assinatura, descarte, reabertura | RF-008 | listReviewQueue, getApplication, openReview, getItemImage, saveReview, confirmApplication, attachSignaturePage, retryReading, discardApplication, reopenApplication |
 | CMP-Dashboard | agregação, grupos dinâmicos, k-anonimato, ficha | RF-009 | getDashboardAggregated, listGroups, createGroup, deleteGroup, findRespondent, getIndividualRecord |
-| CMP-LGPD | exportação, pedidos do titular, expurgo, portabilidade, auditoria | RF-010 | exportData, getExport, createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, listAuditEvents |
+| CMP-LGPD | exportação, pedidos do titular, expurgo, portabilidade, auditoria | RF-010 | exportData, getExport, createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, cancelDataSubjectRequest, listAuditEvents |
 | CMP-Infra | banco, storage, KMS, filas, observabilidade, CI | todos | — |
 
 ---
@@ -82,8 +82,9 @@ recebe o recorte já normalizado.
 
 ### 4.1 Upload → leitura → revisão → conclusão
 
-- API valida tipo/tamanho (JPEG/PNG/PDF, ≤ 20 MB, ≤ 50 páginas — DEC-029); recusa → ERR-029 com o motivo exato.
-- Antimalware (ClamAV sidecar) e remoção de metadados EXIF/GPS (sharp) antes do storage (DEC-042).
+- Ordem de validação de cada arquivo (DEC-042), parando no primeiro motivo: (1) tamanho ≤ 20 MB, verificado durante o recebimento; (2) antimalware (ClamAV sidecar) sobre todo arquivo; (3) tipo por assinatura de conteúdo (magic bytes), não pelo MIME declarado — JPEG, PNG ou PDF; (4) ≤ 50 páginas (DEC-029). Recusa → ERR-029 com o motivo exato.
+- Remoção de metadados EXIF/GPS (sharp) antes do storage (DEC-042).
+- Bucket de imagens privado, sem versionamento e fora do backup: o expurgo físico apaga a única cópia (RN-030).
 - QR validado contra tenant + projeto + versão + página; registro da imagem pelos marcadores (DEC-048). Estado inicial pela tabela de criação da FL-001 (ERR-004, ERR-039, ERR-003).
 - Imagem gravada em bucket privado; acesso apenas por link assinado de 5 min (DEC-034), entregue por `getItemImage`.
 - Outbox registra `leitura.solicitada` na mesma transação.
@@ -108,7 +109,7 @@ Timeout e retentativas conforme tabela abaixo. Após 3 falhas consecutivas em ch
 | Chamada ao provedor de IA (leitura de recorte) | 30 s | 1, 2, 4 s (só idempotente) | `erro_leitura` após 3 falhas (ERR-041) | RF-007, CA-041, P.7 |
 | Envio de e-mail transacional (convite, recuperação, aviso de cota) | 30 s | 1, 2, 4 s | auditoria registra falha; usuário notificado na tela | RF-001, RF-002, CA-030 |
 | Upload/download no storage de objetos | 30 s | 1, 2, 4 s | ERR-020; nada é gravado | RF-006, CA-029 |
-| Job de exportação (CSV/XLSX) e PedidoTitular | 60 s | sem retentativa automática (job enfileirado) | PedidoTitular em `em_andamento` com auditoria de falha | RF-010, CA-022, CA-024 |
+| Job de exportação (CSV/XLSX) e PedidoTitular | 60 s | sem retentativa automática (job enfileirado) | PedidoTitular em `falhou` (FL-003), com auditoria e alerta; exportação em `falhou` | RF-010, CA-022, CA-024 |
 | Geração de PDF imprimível | 30 s | 1, 2, 4 s | ERR-020; versão permanece como está | RF-004, CA-028 |
 
 ### 4.3 Eliminação (RF-010)
@@ -122,7 +123,8 @@ apagamento do histórico de atributos (ENT-023) → cancelamento e apagamento de
 Auditoria guarda só referências. Restauração de backup reaplica a eliminação lendo o
 registro externo, porque a tabela `lista_eliminacoes` restaurada é tão antiga quanto o
 backup (DEC-033, P.13). `executeDataSubjectRequest` responde 202 e
-executa em job; o pedido fica em `em_andamento` até concluir.
+executa em job; o pedido segue a FL-003 (falha → `falhou`, que pode ser executado de novo).
+As chaves de idempotência (ENT-029) guardam só status e ID; nunca o corpo da resposta.
 
 **Vínculo com continuidade (§9.2):** a reaplicação da eliminação após restore é obrigatória no runbook, sempre a partir do registro externo (DEC-062) e antes de reabrir o banco ao tráfego, cobrindo a janela de RPO de 24 h e a retenção de backup de 90 dias (DEC-033). O teste de restauração (TS-008 + restore) é executado a cada incremento, em staging, e mede o RTO alvo de 4 h.
 
@@ -157,7 +159,8 @@ entidade=Usuario, registro_id=<usuario_id>.
 
 | Contexto | Papel | Como obtém o tenant |
 | --- | --- | --- |
-| Requisição autenticada | `mp_app` (sujeito a RLS com FORCE) | sessão → `SET LOCAL app.tenant_id` na transação |
+| Resolução da sessão (toda requisição autenticada) | função `SECURITY DEFINER` `resolver_sessao(hash_do_cookie)` com `search_path` fixo, que devolve só `(tenant_id, usuario_id, tipo, expira)` e renova a atividade | a própria função |
+| Requisição autenticada | `mp_app` (sujeito a RLS com FORCE) | resultado de `resolver_sessao` → `SET LOCAL app.tenant_id` na transação; escritas em Sessao (logout, encerramento de sessões) seguem pela RLS |
 | Login e tokens públicos | função `SECURITY DEFINER` com `search_path` fixo, que só busca por HMAC de e-mail/token e devolve o mínimo | não precisa; a função devolve o tenant do usuário |
 | Job do worker por aplicação | `mp_app` | job carrega `tenant_id`; worker faz `SET LOCAL` antes de qualquer consulta |
 | Jobs entre tenants (expurgo, virada de cota, expiração de concessões, reaplicação de eliminações) | `mp_manutencao` (BYPASSRLS), só no processo de jobs agendados | itera tenants explicitamente; cada ação é auditada |
@@ -188,7 +191,7 @@ guardam dado pessoal; o payload carrega apenas IDs.
 - `auditoria` é imutável: `mp_app` só tem `INSERT` e `SELECT` (sem `UPDATE`/`DELETE`), e um trigger recusa alteração mesmo pelo dono; expurgo por retenção só por `mp_manutencao`.
 - `parametro_configuracao`: policy adicional que permite **ler** linhas com `tenant_id IS NULL` (nível plataforma); escrita nelas só por `mp_manutencao`.
 - `FORCE ROW LEVEL SECURITY`, inclusive para o dono da tabela.
-- Fora de escopo (outro tenant ou projeto não vinculado) → 404 ERR-002, sem revelar existência; tentativa auditada.
+- Fora de escopo (outro tenant ou projeto não vinculado) → 404 ERR-002, sem revelar existência; tentativa auditada. Vale para IDs no caminho, no corpo e para ID que não pertença ao recurso pai (ex.: `item_id` de outra aplicação, `imagem_id` de outra aplicação, `grupo_id` de outro dono).
 - Teste gerado do contrato cobre 100% das operações privadas (RN-023, TS-001), com IDs de outro tenant no caminho e no corpo (projetos, usuario_id, versao_id, projeto_ids, copiar_de_versao_id).
 
 ### 5.3 Constraints de unicidade
@@ -268,13 +271,14 @@ Toda operação com "não" em alguma coluna declara 403 no contrato (verificado 
 | createProject, updateProject, archiveProject, unarchiveProject | sim | não | não | não |
 | listForms, getVersion | sim | sim (leitura, para identificar páginas) | não | não |
 | createForm, createVersion, updateVersion, publishVersion, generatePdf | sim | não | não | não |
-| uploadImages, identifyApplication, addApplicationPages, RF-008 (revisão) | não | sim | não | não |
+| uploadImages, identifyApplication, addApplicationPages, getPageImage, listReviewQueue, getApplication, openReview, getItemImage, saveReview, confirmApplication, attachSignaturePage, retryReading, discardApplication | não | sim | não | não |
 | reopenApplication | sim | sim | não | não |
 | getQuotaStatus | sim | não | não | não |
 | getDashboardAggregated, listGroups, createGroup, deleteGroup | sim | não | sim | sim |
 | exportData (agregado) | sim | não | sim | sim |
+| getExport | sim, só as próprias | não | sim, só as próprias | sim, só as próprias |
 | exportData (linha a linha), findRespondent, getIndividualRecord | não | não | não | sim, com concessão vigente no projeto (DEC-060) |
-| RF-010 (pedidos do titular, auditoria) | sim | não | não | não |
+| createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, cancelDataSubjectRequest, listAuditEvents | sim | não | não | não |
 
 O perfil é cumulativo (RN-003): permissões efetivas são a união dos perfis do usuário.
 
@@ -328,7 +332,7 @@ deste projeto é criado no IMP-001 em `docs/decisions/`.
 
 - **RPO:** 24 h
 - **RTO:** 4 h
-- **Retenção de backup:** máxima de 90 dias (DEC-033)
+- **Retenção de backup:** máxima de 90 dias (DEC-033), só do banco; imagens não têm backup nem versionamento
 - **Restauração testada:** a cada incremento, em staging, com runbook que inclui a reaplicação obrigatória de eliminações a partir do registro externo (DEC-062)
 - **Métricas e alertas:** idade do último backup bem-sucedido, duração do restore, taxa de sucesso da reaplicação de eliminações
 - **Referências normativas:** P.13 (Bloco P), DEC-033, TS-008
@@ -409,10 +413,10 @@ incremento inteiro → Gate 2 (aceite do responsável).
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 46 CAs da REQ v1.5
+### 11.1 Cobertura dos 46 CAs da REQ v1.6
 
 A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 46 critérios
-de aceite da REQ v1.5 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
+de aceite da REQ v1.6 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
 confere que cada CA está no incremento do seu RF.
 
 **CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
@@ -449,7 +453,7 @@ validado pelo CI a cada merge.
 | CHG-002 — correções de consistência e lacunas | mudança normativa | aceita em 27/10/2026 (REQ v1.3) |
 | CHG-003 — respostas às Q-005 a Q-011 | mudança normativa | aceita em 27/10/2026 (REQ v1.4, DEC-054 a DEC-060) |
 | CHG-004 — achados da REV-REQ-005/REV-PLANO-007 | mudança normativa | aplicada na REQ v1.5; pendente de aceite |
-| Q-012 a Q-018 | lacunas de negócio | abertas; textos provisórios em uso |
+| Q-012 a Q-020 | lacunas de negócio | abertas; textos provisórios em uso |
 | DEC-061 — revisão independente por agente de IA | decisão de negócio | proposta, aguardando o responsável |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
@@ -472,7 +476,7 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-039 | 24/10/2026 | técnica | RPO e RTO da v1 | Valores menores; valores maiores | RPO 24h / RTO 4h | Compatível com volume de 500 formulários/mês | definitivo | | Médio | Bloco P P.13 |
 | DEC-040 | 24/10/2026 | técnica | Isolamento por tenant | RLS puro; schema por tenant; FK composta + RLS com SET LOCAL | SET LOCAL app.tenant_id por transação + RLS com FORCE | Defesa em camadas exigida pela RN-001 | definitivo | | Alto | RN-001, RN-023, TS-001 |
 | DEC-041 | 24/10/2026 | técnica | Cifragem do CPF | Ciframento no app; envelope KMS | AES-256-GCM com envelope no KMS + HMAC-SHA256 com chave por tenant derivada por HKDF | RNF-003 e RN-013 com rotação possível; sem correlação entre tenants (ajustada em 27/10/2026) | definitivo | | Alto | RNF-003, RN-013 |
-| DEC-042 | 24/10/2026 | técnica | Segurança de arquivos no ingresso | Só tipo/tamanho; pipeline completo | Tipo/tamanho + antimalware (ClamAV) + remoção de metadados (sharp) antes do storage | CA-029 e RN-040 sem ambiguidade | definitivo | | Alto | CA-029, RN-040, TS-002 |
+| DEC-042 | 24/10/2026 | técnica | Segurança de arquivos no ingresso | Só tipo/tamanho; pipeline completo | Tamanho, antimalware (ClamAV) sobre todo arquivo, tipo por magic bytes e páginas, nessa ordem; remoção de metadados (sharp) antes do storage | CA-029 e RN-040 sem ambiguidade | definitivo | | Alto | CA-029, RN-040, TS-002 |
 | DEC-043 | 24/10/2026 | técnica | Interface do motor de IA | Acoplado ao provedor; interface ReadEngine | Interface ReadEngine com adaptador por provedor | DEC-007: troca sem retrabalho | definitivo | | Alto | DEC-007, RF-007 |
 | DEC-044 | 24/10/2026 | técnica | Sessão e proteção de mutações | JWT stateless; sessão em banco | Sessão em banco + cookie httpOnly + CSRF double-submit | Bloco P P.2 | definitivo | | Alto | RF-002, CA-026 |
 | DEC-045 | 24/10/2026 | técnica | Camada do k-anonimato | Supressão no front; supressão na consulta | Supressão por célula na camada de consulta agregada | CA-010/CA-034 valem para tela e exportação | definitivo | | Alto | CA-010, CA-034, TS-004 |
@@ -493,13 +497,13 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.5
+- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.6
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
 - [x] CHG-002 e CHG-003 aceitas pelo responsável
-- [ ] Q-012 a Q-018 respondidas e CHG-004 aceita
-- [ ] Revisão independente (REV-PLANO-008) com 0 achados bloqueantes, altos e médios; forma de revisão definida na DEC-061
+- [ ] Q-012 a Q-020 respondidas e CHG-004 aceita
+- [ ] Revisão independente (REV-PLANO-009) com 0 achados bloqueantes, altos e médios; forma de revisão definida na DEC-061
 
 **Bloqueio de status:** este plano NÃO pode ser declarado PRONTO PARA IMPLEMENTAÇÃO
 enquanto os itens acima não estiverem marcados.
@@ -520,11 +524,11 @@ REQ §8.1; o CI falha se divergirem.
 | RF-003 | RN-027 | ENT-004, ENT-020, ENT-021 | FL-001 | US-006 | CA-027 | — | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject | CMP-Projects | IMP-002 |
 | RF-004 | RN-017, RN-018, RN-019, RN-021, RN-042, RN-047 | ENT-005, ENT-006, ENT-007, ENT-008, ENT-016, ENT-024 | FL-001 | US-007 | CA-001, CA-028, CA-036 | TS-006 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf | CMP-Forms | IMP-002 |
 | RF-005 | RN-011, RN-012, RN-014, RN-015 | ENT-009, ENT-010 | FL-001, FL-002 | US-003 | CA-002, CA-014, CA-014b, CA-032 | — | linkRespondent (interna) | CMP-Respondents | IMP-003 |
-| RF-006 | RN-040 | ENT-010, ENT-011, ENT-025, ENT-029 | FL-001 | US-001 | CA-003, CA-004, CA-013, CA-029, CA-039, CA-040 | TS-002 | uploadImages, identifyApplication, addApplicationPages | CMP-Upload | IMP-002 |
+| RF-006 | RN-040 | ENT-010, ENT-011, ENT-025, ENT-029 | FL-001 | US-001 | CA-003, CA-004, CA-013, CA-029, CA-039, CA-040 | TS-002 | uploadImages, identifyApplication, addApplicationPages, getPageImage | CMP-Upload | IMP-002 |
 | RF-007 | RN-021, RN-037, RN-038, RN-039 | ENT-011 | FL-001, FL-002 | US-002, US-007 | CA-005, CA-006, CA-015, CA-018, CA-019, CA-030, CA-041 | TS-003, TS-007 | processAIReading (interna), getQuotaStatus | CMP-MotorIA | IMP-003 |
 | RF-008 | RN-016, RN-043, RN-044 | ENT-009, ENT-010, ENT-011, ENT-017, ENT-023 | FL-001, FL-002 | US-002, US-003, US-007 | CA-007, CA-008, CA-020, CA-021, CA-033, CA-042, CA-043, CA-044 | — | listReviewQueue, getApplication, openReview, getItemImage, saveReview, confirmApplication, attachSignaturePage, retryReading, discardApplication, reopenApplication | CMP-Revisao | IMP-003 |
 | RF-009 | RN-026 | ENT-012, ENT-015 | FL-001 | US-004, US-007, US-008 | CA-009, CA-010, CA-011, CA-017, CA-021, CA-031, CA-034 | TS-004 | getDashboardAggregated, listGroups, createGroup, deleteGroup, findRespondent, getIndividualRecord | CMP-Dashboard | IMP-004 |
-| RF-010 | RN-027, RN-030, RN-031 | ENT-009, ENT-013, ENT-018, ENT-019, ENT-023, ENT-026 | FL-001 | US-005, US-009 | CA-021, CA-022, CA-023, CA-024 | TS-005, TS-008 | exportData, getExport, createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, listAuditEvents | CMP-LGPD | IMP-004 |
+| RF-010 | RN-027, RN-030, RN-031 | ENT-009, ENT-013, ENT-018, ENT-019, ENT-023, ENT-026 | FL-001, FL-003 | US-005, US-009 | CA-021, CA-022, CA-023, CA-024 | TS-005, TS-008 | exportData, getExport, createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, cancelDataSubjectRequest, listAuditEvents | CMP-LGPD | IMP-004 |
 
 ---
 
@@ -539,8 +543,9 @@ REQ §8.1; o CI falha se divergirem.
 | REV-PLANO-005 | 27/10/2026 | IA Revisora (Simulada) | 2.3 | 0 | 0 | 0 | 0 | Invalidado | O CSV registrava "Convergente" enquanto o plano dizia "Pendente"; a REV-PLANO-006 encontrou achados bloqueantes na mesma versão. |
 | REV-PLANO-006 | 27/10/2026 | Claude (assistente IA; não independente) | 2.3 | 4 | n/c | n/c | n/c | Resolvido | Bloqueantes: IDs de DEC colidindo entre REQ e CSV; status da REV-PLANO-005 divergente; CSV de incrementos desatualizado; rotas públicas exigindo sessão no contrato. Também: RLS sem desenho para login e jobs, confiança e recortes indefinidos, segredo MFA enviado pelo cliente, 30 operações ausentes no contrato, CSVs corrompidos e nomes de arquivo com caixa errada. Corrigidos na v2.4. |
 | REV-PLANO-007 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.5 | 2 | 10 | 17 | 5 | Resolvido | Achados em conjunto com a REV-REQ-005 (lista de eliminações no banco restaurado; nulidade na criação da aplicação; entidades faltantes; autorização sem 403; histórico de atributos sem entidade; oasdiff declarado e ausente; RLS sem WITH CHECK; imutabilidade da auditoria sem mecanismo). Corrigidos na v2.6. |
-| REV-PLANO-008 | 28/10/2026 | Agente revisor-independente (nova rodada) | 2.6 | — | — | — | — | Pendente | Verificar as correções da v2.6. |
+| REV-PLANO-008 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.6 | 2 | 7 | 19 | 6 | Resolvido | Em conjunto com a REV-REQ-006: matriz de autorização contraditória (linhas por RF); resolução de sessão sob RLS sem desenho; ordem de validação do upload; versionamento do bucket de imagens; corpo da resposta guardado na idempotência; IDs de outro recurso pai no corpo. Corrigidos na v2.7. |
+| REV-PLANO-009 | 28/10/2026 | Agente revisor-independente (nova rodada) | 2.7 | — | — | — | — | Pendente | Aguardando as respostas às Q-012 a Q-020 e a DEC-061. |
 
 ---
 
-**Fim do documento `PLANO.md` v2.6**
+**Fim do documento `PLANO.md` v2.7**

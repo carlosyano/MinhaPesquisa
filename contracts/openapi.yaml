@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.2.2
+  version: 0.2.3
   description: |
     API do SaaS MinhaPesquisa — digitalização de pesquisas em papel com leitura por IA,
     revisão humana e dashboards anonimizados, em conformidade com a LGPD.
-    Fonte normativa: REQ v1.5 e PLANO.md v2.6. Contract-first — este arquivo valida
+    Fonte normativa: REQ v1.6 e PLANO.md v2.7. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: rotas públicas declaram `security: []`; rotas de MFA usam a pré-sessão (DEC-050);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -351,7 +351,8 @@ paths:
       summary: Atualiza nome, perfis, vínculos ou situação do usuário
       description: |
         Desativar (`ativo: false`) encerra todas as sessões imediatamente. Mudanças de perfil
-        e de vínculo são auditadas (RN-027).
+        e de vínculo são auditadas (RN-027). Desativar ou retirar `admin_tenant` do último
+        administrador ativo → ERR-018.
       x-trace: [RF-001, CA-016, RN-003, RN-004]
       security:
         - sessionCookie: []
@@ -377,6 +378,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
@@ -982,6 +984,32 @@ paths:
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /applications/{applicationId}/pages/{pageId}/image:
+    get:
+      operationId: getPageImage
+      tags: [upload]
+      summary: Link assinado (5 min) da imagem de uma página, para identificação e conferência de assinatura
+      description: |
+        Usada para identificar páginas em `identificacao_pendente` e para conferir a assinatura
+        (RN-044). Na página 1 devolve a região da assinatura do mapa de layout (DEC-048).
+        Acesso auditado.
+      x-trace: [RF-006, CA-004, CA-013, CA-044, RN-044, DEC-034]
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/PageId'
+      responses:
+        '200':
+          description: Link assinado
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageImage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
   /tenant/quota:
     get:
       operationId: getQuotaStatus
@@ -1524,7 +1552,7 @@ paths:
       operationId: getExport
       tags: [lgpd]
       summary: Situação da exportação e link assinado para baixar
-      description: Situação da exportação e link assinado para baixar.
+      description: Só quem pediu a exportação; de outro usuário → 404 ERR-002 (PLANO §6.1).
       x-trace: [RF-010, CA-022]
       parameters:
         - $ref: '#/components/parameters/ExportId'
@@ -1647,6 +1675,39 @@ paths:
         '409': { $ref: '#/components/responses/InvalidState' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
+  /data-subject-requests/{requestId}/cancel:
+    post:
+      operationId: cancelDataSubjectRequest
+      tags: [lgpd]
+      summary: Cancela pedido do titular pendente ou com falha (FL-003)
+      x-trace: [RF-010, RN-031]
+      description: Cancelamento com motivo, auditado; em `em_andamento`, `concluido` ou `cancelado` → ERR-018.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReasonRequest' }
+      responses:
+        '200':
+          description: Pedido cancelado
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataSubjectRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
   /audit-events:
     get:
       operationId: listAuditEvents
@@ -1704,6 +1765,7 @@ components:
     RespondentId: { name: respondentId, in: path, required: true, schema: { type: string, format: uuid } }
     ExportId: { name: exportId, in: path, required: true, schema: { type: string, format: uuid } }
     RequestId: { name: requestId, in: path, required: true, schema: { type: string, format: uuid } }
+    PageId: { name: pageId, in: path, required: true, schema: { type: string, format: uuid } }
     Pagina: { name: pagina, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
     Limite: { name: limite, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
     IdempotencyKey:
@@ -1812,7 +1874,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-002', title: Não encontrado, status: 404, detail: O recurso solicitado não existe ou você não tem acesso., errorCode: ERR-002, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     InvalidState:
-      description: Ação não permitida no estado atual (ERR-018) ou chave de idempotência reutilizada (ERR-019)
+      description: Ação não permitida no estado atual (ERR-018), chave de idempotência reutilizada (ERR-019) ou aplicação reservada por outro digitalizador (ERR-043)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -2052,10 +2114,11 @@ components:
         email: { type: string, format: email, maxLength: 255 }
         nome: { type: string, minLength: 1, maxLength: 200 }
         perfis: { type: array, minItems: 1, uniqueItems: true, items: { $ref: '#/components/schemas/PerfilCodigo' } }
+        todos_projetos: { type: boolean, default: true, description: 'Vínculo dinâmico a todos os projetos (RN-004; provisório, Q-016)' }
         projetos:
           type: array
           uniqueItems: true
-          description: Ausente = todos os projetos do tenant (RN-004)
+          description: Usado quando todos_projetos = false
           items: { type: string, format: uuid }
 
     UserUpdate:
@@ -2066,19 +2129,21 @@ components:
       properties:
         nome: { type: string, minLength: 1, maxLength: 200 }
         perfis: { type: array, minItems: 1, uniqueItems: true, items: { $ref: '#/components/schemas/PerfilCodigo' } }
+        todos_projetos: { type: boolean }
         projetos: { type: array, uniqueItems: true, items: { type: string, format: uuid } }
         ativo: { type: boolean, description: 'false → situacao inativo e sessões encerradas; true → ativo. Usuário em pendente_convite → ERR-018' }
 
     User:
       type: object
       additionalProperties: false
-      required: [id, email, nome, perfis, projetos, mfa_ativo, situacao, criado_em]
+      required: [id, email, nome, perfis, todos_projetos, projetos, mfa_ativo, situacao, criado_em]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         nome: { type: string }
         perfis: { type: array, items: { $ref: '#/components/schemas/PerfilCodigo' } }
-        projetos: { type: array, items: { type: string, format: uuid } }
+        todos_projetos: { type: boolean }
+        projetos: { type: array, items: { type: string, format: uuid }, description: Projetos vinculados efetivos }
         mfa_ativo: { type: boolean }
         situacao: { type: string, enum: [pendente_convite, ativo, inativo] }
         criado_em: { type: string, format: date-time }
@@ -2200,7 +2265,7 @@ components:
         obrigatorio: { type: boolean, default: false }
         campo_respondente: { type: string, enum: [nome, data_nascimento, cpf, endereco], nullable: true }
         campo_aplicacao: { type: string, enum: [data_aplicacao, local_aplicacao, aplicador], nullable: true, description: Marca as perguntas de data e local exigidas pela RN-017 }
-        sensibilidade: { type: string, enum: [identificacao, saude, outro], default: saude, description: Grupo de envio à IA (RN-039) }
+        sensibilidade: { type: string, enum: [identificacao, saude, outro], default: saude, description: 'Grupo de envio à IA (RN-039); forçado a identificacao quando há campo_respondente ou campo_aplicacao = aplicador (RN-047)' }
         linhas:
           type: array
           description: Obrigatório para tipo matriz (RN-047)
@@ -2289,7 +2354,7 @@ components:
       properties:
         aplicacao_id: { type: string, format: uuid }
         estado: { $ref: '#/components/schemas/ApplicationState' }
-        paginas: { type: integer, minimum: 1 }
+        paginas: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PageRef' } }
         aviso:
           allOf:
             - $ref: '#/components/schemas/ErrorCode'
@@ -2299,6 +2364,7 @@ components:
     IdentifyRequest:
       type: object
       additionalProperties: false
+      description: Toda imagem do tipo formulario da aplicação deve constar uma vez; ausente, repetida ou com número repetido → 400 ERR-004
       required: [versao_id, paginas]
       properties:
         versao_id: { type: string, format: uuid }
@@ -2308,10 +2374,11 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [imagem_id, numero_pagina]
+            required: [imagem_id]
             properties:
               imagem_id: { type: string, format: uuid }
-              numero_pagina: { type: integer, minimum: 1 }
+              numero_pagina: { type: integer, minimum: 1, description: Obrigatório quando descartar = false }
+              descartar: { type: boolean, default: false, description: Remove a imagem (página repetida ou de outro formulário) }
 
     QuotaStatus:
       type: object
@@ -2345,7 +2412,45 @@ components:
           type: array
           description: Atributos em que o valor lido difere do cadastro existente (CA-014), calculado quando o item de CPF fica resolvido
           items: { type: string, enum: [nome, data_nascimento, endereco] }
+        paginas: { type: array, items: { $ref: '#/components/schemas/PageRef' } }
+        cadastro_existente:
+          type: object
+          nullable: true
+          additionalProperties: false
+          description: Valores atuais do respondente com o mesmo CPF, só para o titular da reserva, com auditoria (CA-014); CPF não é devolvido
+          properties:
+            nome: { type: string, nullable: true }
+            data_nascimento: { type: string, format: date, nullable: true }
+            endereco: { type: string, nullable: true }
         itens: { type: array, items: { $ref: '#/components/schemas/ReviewItem' } }
+
+    PageRef:
+      type: object
+      additionalProperties: false
+      required: [imagem_id, tipo, registro_ok]
+      properties:
+        imagem_id: { type: string, format: uuid }
+        numero_pagina: { type: integer, minimum: 1, nullable: true }
+        tipo: { type: string, enum: [formulario, assinatura] }
+        registro_ok: { type: boolean }
+
+    PageImage:
+      type: object
+      additionalProperties: false
+      required: [url, expira_em]
+      properties:
+        url: { type: string, format: uri, description: Link assinado de 5 min da página inteira (DEC-034) }
+        expira_em: { type: string, format: date-time }
+        regiao_assinatura:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [x, y, largura, altura]
+          properties:
+            x: { type: number, minimum: 0, maximum: 1 }
+            y: { type: number, minimum: 0, maximum: 1 }
+            largura: { type: number, minimum: 0, maximum: 1 }
+            altura: { type: number, minimum: 0, maximum: 1 }
 
     ApplicationList:
       type: object
@@ -2383,7 +2488,7 @@ components:
       additionalProperties: false
       required: [url, expira_em]
       properties:
-        url: { type: string, format: uri, description: Link assinado de 5 min (DEC-034) }
+        url: { type: string, format: uri, description: Link assinado de 5 min do recorte do campo (DEC-034) }
         expira_em: { type: string, format: date-time }
         regiao:
           type: object
@@ -2589,7 +2694,17 @@ components:
       properties:
         cpf: { type: string, pattern: '^[0-9]{11}$' }
         tipo: { type: string, enum: [acesso, correcao, eliminacao, portabilidade] }
-        descricao: { type: string, maxLength: 2000 }
+        descricao: { type: string, maxLength: 2000, description: Não incluir dado pessoal; sobrescrita na eliminação }
+        correcoes:
+          type: array
+          description: Obrigatório quando tipo = correcao (FL-003)
+          items:
+            type: object
+            additionalProperties: false
+            required: [atributo, valor]
+            properties:
+              atributo: { type: string, enum: [nome, data_nascimento, endereco] }
+              valor: { type: string, maxLength: 500 }
 
     DataSubjectRequest:
       type: object

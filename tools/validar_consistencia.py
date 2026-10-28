@@ -324,6 +324,9 @@ for nome, txt in (("PLANO.md", plano), ("openapi.yaml", api_txt), ("ARCHITECTURE
             if usos:
                 erro("C12", f"{nome} cita REQ v{v}; versão vigente é {v_req}: {usos[0][:90]}")
 v_plano = re.search(r"\*\*Versão do plano:\*\* ([\d.]+)", plano).group(1)
+for v in set(re.findall(r"PLANO\.md`? \(v([\d.]+)\)", docs_texto["ARCHITECTURE.md"])):
+    if v != v_plano:
+        erro("C12", f"ARCHITECTURE.md cita PLANO v{v}; versão vigente é {v_plano}")
 if f"PLANO.md v{v_plano}" not in api_txt:
     erro("C12", f"openapi.yaml não cita PLANO.md v{v_plano}")
 if f"REQ v{v_req}" not in api_txt:
@@ -406,9 +409,15 @@ for pnome, prm in api["components"]["parameters"].items():
 aut = tabela_apos(plano, "### 6.1 Autorização por perfil")
 rf_ops = {r["requisito"]: [x.strip().replace("(interna)", "").strip() for x in r["operation_id"].split(",")] for r in mat_csv}
 cobertas: set[str] = set()
+linha_de: dict[str, tuple] = {}
+qualificadas_global: set[str] = set()
 for l in aut[1:]:
     nomes: set[str] = set()
-    for item in re.split(r",\s*", re.sub(r"\s*\([^)]*\)", "", l[0])):
+    qualificadas: set[str] = set()
+    for item in re.split(r",\s*(?![^()]*\))", l[0]):
+        if "(" in item and not re.match(r"\s*RF-\d+", item):
+            qualificadas.add(re.sub(r"\s*\(.*\)", "", item).strip())
+        item = re.sub(r"\s*\([^)]*\)", "", item)
         m_rf = re.match(r"(RF-\d+)", item.strip())
         if m_rf:
             nomes |= set(rf_ops.get(m_rf.group(1), []))
@@ -420,6 +429,11 @@ for l in aut[1:]:
             erro("C15", f"PLANO §6.1 cita operação inexistente: {n}")
             continue
         if n in ops_api:
+            if n in linha_de and linha_de[n] != tuple(l[1:]) and n not in qualificadas and n not in qualificadas_global:
+                erro("C15", f"{n}: aparece em mais de uma linha do PLANO §6.1 com permissões diferentes")
+            linha_de[n] = tuple(l[1:])
+            if n in qualificadas:
+                qualificadas_global.add(n)
             cobertas.add(n)
             if restrita and "403" not in ops_api[n].get("responses", {}):
                 erro("C15", f"{n}: negada a algum perfil no PLANO §6.1, mas sem resposta 403 no contrato")

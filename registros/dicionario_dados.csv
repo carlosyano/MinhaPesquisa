@@ -13,6 +13,7 @@ ENT-002 Usuario,mfa_secret,segredo TOTP,varchar,não,64,base32,—,NULL,não,—
 ENT-002 Usuario,mfa_ativo,MFA habilitado,boolean,sim,—,—,true/false,false,não,—,não
 ENT-002 Usuario,ultimo_login,último login,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
 ENT-002 Usuario,situacao,situação do usuário,enum,sim,—,—,pendente_convite; ativo; inativo,pendente_convite,não,—,não
+ENT-002 Usuario,todos_projetos,"vínculo dinâmico a todos os projetos do tenant (RN-004; provisório, Q-016); true ignora VinculoUsuarioProjeto",boolean,sim,—,—,true/false,true,não,—,não
 ENT-002 Usuario,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-003 Perfil,id,identificador do perfil,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-003 Perfil,tenant_id,tenant do perfil,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
@@ -79,6 +80,7 @@ ENT-010 Aplicacao,estado,estado da aplicação,enum,sim,—,—,identificacao_pe
 ENT-010 Aplicacao,assinatura,status da assinatura,enum,não,—,—,presente; ausente; nao_conferida,nao_conferida,não,—,não
 ENT-010 Aplicacao,criada_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-010 Aplicacao,concluida_em,data de conclusão,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
+ENT-010 Aplicacao,cpf_hash,"HMAC do CPF lido, gravado quando o item de CPF fica resolvido (localiza aplicações em andamento na eliminação)",bytea,não,32,HMAC-SHA256 com chave do tenant,—,NULL,não,—,sensível
 ENT-010 Aplicacao,manter_cadastro,"escolha do digitalizador por atributo divergente (CA-014), gravada na conclusão e aplicada no vínculo",jsonb,não,—,JSON,nome; data_nascimento; endereco → existente; aplicacao,NULL,não,—,não
 ENT-010 Aplicacao,motivo_descarte,motivo informado no descarte (CA-033),text,não,2000,—,—,NULL,não,—,pessoal (indireto)
 ENT-010 Aplicacao,motivo_reabertura,motivo da última reabertura (CA-042),text,não,2000,—,—,NULL,não,—,pessoal (indireto)
@@ -87,9 +89,9 @@ ENT-011 ItemResposta,tenant_id,tenant do item,uuid,sim,36,UUID v4,—,—,não,T
 ENT-011 ItemResposta,aplicacao_id,aplicação do item,uuid,sim,36,UUID v4,—,—,não,Aplicacao.id,não
 ENT-011 ItemResposta,pergunta_id,pergunta do item,uuid,sim,36,UUID v4,—,—,não,Pergunta.id,não
 ENT-011 ItemResposta,linha_id,linha da matriz (só perguntas do tipo matriz),uuid,não,36,UUID v4,—,NULL,não,LinhaMatriz.id,não
-ENT-011 ItemResposta,valor_ia,valor lido pela IA,text,não,2000,—,—,NULL,não,—,sensível
+ENT-011 ItemResposta,valor_ia,"valor lido pela IA, no formato canônico (§5.4); cifrado (DEC-041) quando a pergunta tem `campo_respondente`",text,não,2000,—,—,NULL,não,—,sensível
 ENT-011 ItemResposta,confianca,"confiança da IA (valor bruto, sem arredondamento)",decimal,não,"5,4",—,0.0000..1.0000,NULL,não,—,não
-ENT-011 ItemResposta,valor_final,valor confirmado/corrigido,text,não,2000,—,—,NULL,não,—,sensível
+ENT-011 ItemResposta,valor_final,"valor confirmado/corrigido, no formato canônico (§5.4); cifrado (DEC-041) quando a pergunta tem `campo_respondente`",text,não,2000,—,—,NULL,não,—,sensível
 ENT-011 ItemResposta,estado,estado do item,enum,sim,—,—,pendente_leitura; aguardando_condicao; confirmado_automaticamente; a_revisar; confirmado; corrigido; em_branco; ilegivel; rasurado; nao_se_aplica,pendente_leitura,não,—,não
 ENT-011 ItemResposta,revisor_id,usuário que revisou,uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
 ENT-011 ItemResposta,revisado_em,data da revisão,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
@@ -162,7 +164,7 @@ ENT-020 ParametroConfiguracao,id,identificador do parâmetro,uuid,sim,36,UUID v4
 ENT-020 ParametroConfiguracao,tenant_id,tenant do parâmetro (NULL = plataforma),uuid,não,36,UUID v4,—,NULL,não,Tenant.id,não
 ENT-020 ParametroConfiguracao,projeto_id,projeto do parâmetro (NULL = tenant/plataforma),uuid,não,36,UUID v4,—,NULL,não,Projeto.id,não
 ENT-020 ParametroConfiguracao,chave,nome do parâmetro,varchar,sim,100,^[a-z_]+$,retencao_dias; custo_ia_teto; limite_confianca; grupo_minimo; cotacao_usd_brl; retencao_exportacao_dias,—,não,—,não
-ENT-020 ParametroConfiguracao,competencia,mês civil a que o valor se refere (só cotacao_usd_brl),date,não,—,YYYY-MM-01,—,NULL,não,—,não
+ENT-020 ParametroConfiguracao,competencia,"mês civil a que o valor se refere (obrigatório para cotacao_usd_brl, NULL nas demais)",date,não,—,YYYY-MM-01,—,NULL,não,—,não
 ENT-020 ParametroConfiguracao,valor,valor do parâmetro,text,sim,1000,—,—,—,não,—,sensível (depende da chave)
 ENT-020 ParametroConfiguracao,alterado_em,data da alteração,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-020 ParametroConfiguracao,alterado_por,usuário que alterou,uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
@@ -183,7 +185,7 @@ ENT-023 HistoricoAtributoRespondente,id,identificador do registro,uuid,sim,36,UU
 ENT-023 HistoricoAtributoRespondente,tenant_id,tenant,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-023 HistoricoAtributoRespondente,respondente_id,respondente alterado,uuid,sim,36,UUID v4,—,—,não,Respondente.id,pessoal (indireto)
 ENT-023 HistoricoAtributoRespondente,aplicacao_id,aplicação que alterou o atributo,uuid,sim,36,UUID v4,—,—,não,Aplicacao.id,não
-ENT-023 HistoricoAtributoRespondente,atributo,atributo alterado,enum,sim,—,—,nome; data_nascimento; endereco; cpf,—,não,—,não
+ENT-023 HistoricoAtributoRespondente,atributo,atributo alterado,enum,sim,—,—,nome; data_nascimento; endereco,—,não,—,não
 ENT-023 HistoricoAtributoRespondente,valor_anterior_cifrado,valor antes da alteração (NULL se não havia),bytea,não,variável,AES-256-GCM,—,NULL,não,—,sensível
 ENT-023 HistoricoAtributoRespondente,valor_gravado_hash,HMAC do valor gravado pela aplicação (reversão só se o atual ainda for este),bytea,sim,32,HMAC-SHA256 com chave do tenant,—,—,não,—,sensível
 ENT-023 HistoricoAtributoRespondente,criado_em,data da alteração,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
@@ -196,7 +198,7 @@ ENT-024 LinhaMatriz,ordem,ordem,int,sim,—,—,≥ 1,—,não,—,não
 ENT-025 PaginaAplicacao,id,identificador da imagem/página,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-025 PaginaAplicacao,tenant_id,tenant,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-025 PaginaAplicacao,aplicacao_id,aplicação,uuid,sim,36,UUID v4,—,—,não,Aplicacao.id,não
-ENT-025 PaginaAplicacao,tipo,finalidade da imagem,enum,sim,—,—,formulario; assinatura,formulario,não,—,não
+ENT-025 PaginaAplicacao,tipo,finalidade da imagem: `assinatura` é a página 1 assinada anexada em `sem_assinatura` (CA-044); a página 1 original é mantida,enum,sim,—,—,formulario; assinatura,formulario,não,—,não
 ENT-025 PaginaAplicacao,numero_pagina,página da versão (NULL até identificar),int,não,—,—,≥ 1,NULL,não,—,não
 ENT-025 PaginaAplicacao,chave_storage,chave do objeto no bucket privado,varchar,sim,500,—,—,—,sim,—,não
 ENT-025 PaginaAplicacao,sha256,hash do arquivo sem metadados,bytea,sim,32,SHA-256,—,—,não,—,não
@@ -236,7 +238,7 @@ ENT-029 ChaveIdempotencia,usuario_id,usuário,uuid,sim,36,UUID v4,—,—,não,U
 ENT-029 ChaveIdempotencia,chave,valor do header Idempotency-Key,varchar,sim,64,—,—,—,sim (por usuário e operação),—,não
 ENT-029 ChaveIdempotencia,operacao,operationId,varchar,sim,100,—,—,—,não,—,não
 ENT-029 ChaveIdempotencia,hash_requisicao,"HMAC do corpo (detecta reuso com outro conteúdo, ERR-019)",bytea,sim,32,HMAC-SHA256,—,—,não,—,não
-ENT-029 ChaveIdempotencia,resposta,status e corpo da primeira resposta,jsonb,sim,—,JSON,—,—,não,—,sensível
+ENT-029 ChaveIdempotencia,resposta,"status HTTP e ID do recurso criado ou alterado; nunca o corpo (o replay devolve o estado atual do recurso, já sujeito a eliminação e autorização)",jsonb,sim,—,JSON,—,—,não,—,não
 ENT-029 ChaveIdempotencia,expira_em,expiração,timestamp,sim,—,ISO 8601 UTC,—,criado_em + 24 h,não,—,não
 ENT-030 FalhaLogin,id,identificador,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-030 FalhaLogin,email_hmac,HMAC do e-mail normalizado (exista ou não a conta),bytea,sim,32,HMAC-SHA256,—,—,sim,—,pessoal (indireto)
