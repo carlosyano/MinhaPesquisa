@@ -6,7 +6,7 @@
 
 ## 1. Situação atual
 
-Fase 3 (arquitetura) concluída no papel; implementação ainda não começou. Existem hoje
+Fase 3 (arquitetura) em revisão (ver status do PLANO); implementação ainda não começou. Existem hoje
 apenas especificação, contrato, registros, ferramentas de validação e CI. As pastas
 `apps/`, `packages/`, `infra/` e `tests/` são criadas no IMP-001.
 

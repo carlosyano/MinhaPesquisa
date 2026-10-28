@@ -1,9 +1,9 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 e CHG-003 aceitas pelo responsável
-Versão: 1.4
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003)
+Status: APROVADO (Gate 1) · CHG-002 e CHG-003 aceitas · CHG-004 aplicada, pendente de aceite do responsável
+Versão: 1.5
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5, CHG-004)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado)
 Responsável: Carlos Yano
@@ -91,7 +91,8 @@ Um filtro estreito (ex.: projeto X, idade 91, viúva) pode identificar uma pesso
 | Impacto | Reidentificação de indivíduo por filtro estreito, expondo dados de saúde sem acesso individual |
 | Probabilidade | Baixa em projetos com muitos respondentes; alta em projetos pequenos ou filtros muito específicos |
 | Mitigação na v1 | Padrão 5; redução auditada; o projeto que precisar de anonimização mantém valor maior que 1 |
-| Fora da v1 | Proteção contra deduzir valores comparando dois filtros |
+| Mitigação adicional | Supressão complementar: além das células abaixo do mínimo, a consulta oculta outra célula da mesma linha e da mesma coluna (e o total marginal quando necessário), para que a célula oculta não possa ser deduzida por subtração no cruzamento (CA-017) nem pela consulta sem cruzamento (provisório, Q-015) |
+| Fora da v1 | Proteção contra deduzir valores comparando filtros diferentes ao longo do tempo |
 
 2.9 Parâmetros de configuração (RN-008)
 
@@ -101,6 +102,10 @@ Um filtro estreito (ex.: projeto X, idade 91, viúva) pode identificar uma pesso
 | limite_confianca | plataforma | 0,90 (provisório, DEC-028) | 0..1, calibrado no conjunto-ouro | Administrador da plataforma, por script, com auditoria | DEC-028, DEC-059 |
 | custo_ia_teto | tenant | R$ 500,00/mês | ≥ 0 | Administrador da plataforma, por script, com auditoria | DEC-035, DEC-058, DEC-059 |
 | retencao_dias | tenant | NULL (sem expurgo por tempo até GX-001) | 1..3650 | Administrador da plataforma, por script, com auditoria | RN-030, Q-002, DEC-059 |
+| cotacao_usd_brl | plataforma, por mês civil | — (obrigatória para o mês corrente; sem ela, nenhuma leitura é feita) | > 0 | Administrador da plataforma, por script, com auditoria | DEC-058 |
+| retencao_exportacao_dias | plataforma | 7 (provisório, Q-017) | 1..90 | Administrador da plataforma, por script, com auditoria | RN-030, Q-017 |
+
+Fonte única: todos os parâmetros vivem em ParametroConfiguracao (ENT-020). Ausente no nível mais específico, vale o nível acima (projeto → tenant → plataforma); ausente em todos, vale o padrão desta tabela.
 
 3. Tabela única de decisões (DEC)
 
@@ -151,12 +156,14 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-058 | 27/10/2026 | negócio | Período e moeda do teto de custo de IA | Mês civil e PTAX diária; janela móvel de 30 dias; mês civil e cotação fixa mensal | Mês civil no fuso America/Sao_Paulo; custo em dólar convertido por cotação fixa configurada pela plataforma a cada mês | Previsibilidade do teto (Q-009) | definitivo | Médio | DEC-035, RN-036, CA-030 |
 | DEC-059 | 27/10/2026 | negócio | Alteração de limite_confianca, custo_ia_teto e retencao_dias | Plataforma por script; administrador do tenant pela tela; misto | Administrador da plataforma, por script, com auditoria | Não há gestão de tenant por tela na v1 (DEC-017); Q-010 | definitivo | Médio | RN-008, DEC-017, DEC-018 |
 | DEC-060 | 27/10/2026 | negócio | Perfil analista_individual × concessão | Perfil e concessão; só concessão; só perfil | O acesso individual exige o perfil `analista_individual` e uma concessão vigente para o projeto | Defesa em duas camadas para dados individuais de saúde (Q-011) | definitivo | Alto | RF-001, RF-009, DEC-031, CA-025 |
+| DEC-061 | 28/10/2026 | negócio | Forma da revisão independente (nível Completo) | Revisor humano; agente de IA isolado | Agente de IA de outro modelo, com contexto isolado e somente leitura (`.claude/agents/revisor-independente.md`); o responsável lê e aprova os achados de cada rodada | Não há revisor humano disponível; risco aceito: IAs tendem a errar de forma parecida | proposto (aguardando o responsável) | Alto | REV-REQ-005, REV-PLANO-007 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
 | Tema | Tratamento |
 |---|---|
 | Retenção de dados de produção em ambiente ativo | Aguarda parecer jurídico (GX-001). Backups já decididos em 90 dias (DEC-033). |
+| Retenção da trilha de auditoria (inclui IP) | Aguarda parecer jurídico (GX-001); até lá, a auditoria é mantida e nunca contém valores pessoais (RN-027). |
 | Provedor de IA | Escolhido no conjunto-ouro; transferência internacional condicionada a GX-001. |
 | Parecer jurídico (DPA + LGPD Art. 33) | Registrado como GX-001; bloqueia piloto e produção (Fase 6), não o desenvolvimento com dados sintéticos. |
 
@@ -193,7 +200,7 @@ RN-003 — Perfis múltiplos
 Um usuário PODE ter mais de um perfil no mesmo tenant (ENT-022 UsuarioPerfil). As permissões efetivas são a união dos perfis.
 
 RN-004 — Vínculo a projetos
-Cada usuário DEVE ser vinculado aos projetos que pode ver; o padrão é "todos os projetos do tenant". O vínculo limita tudo: dashboards, relatórios, exportações, ficha individual e evolução. NÃO há permissão por linha na v1.
+Cada usuário DEVE ser vinculado aos projetos que pode ver; o padrão é "todos os projetos do tenant", inclusive os criados depois (vínculo dinâmico; provisório, Q-016). O vínculo limita tudo: dashboards, relatórios, exportações, ficha individual e evolução. NÃO há permissão por linha na v1.
 
 RN-005 — Sem acesso público
 NÃO existe acesso público nem envio sem login, como regra fixa da plataforma.
@@ -220,7 +227,7 @@ RN-012 — CPF validado
 O CPF DEVE ser validado na leitura (dígitos verificadores). CPF inválido, ilegível ou ausente vai para revisão, e a aplicação NÃO é concluída sem CPF válido.
 
 RN-013 — CPF cifrado e hash
-Para permitir busca com o CPF cifrado, o banco DEVE guardar também um hash com chave (HMAC). O CPF aparece mascarado, exceto na revisão, na portabilidade e na exportação linha a linha, e cada exibição completa DEVE ser auditada.
+Para permitir busca com o CPF cifrado, o banco DEVE guardar também um hash com chave (HMAC). O CPF aparece mascarado, exceto na revisão (só para o titular da reserva ativa: `openReview`, `getApplication` com reserva ativa e `getItemImage`), na portabilidade e na exportação linha a linha, e cada exibição completa DEVE ser auditada (acao=EXIBICAO_CPF). Na ficha individual o CPF é sempre mascarado.
 
 RN-014 — Correção de CPF
 Se o revisor corrigir um CPF já vinculado, o vínculo DEVE ser refeito: a aplicação passa ao respondente do CPF corrigido (ou a um novo), com auditoria.
@@ -271,7 +278,7 @@ RN-029 — Imagens privadas (RNF-007)
 Imagens em armazenamento privado, acesso só por link assinado válido por 5 minutos.
 
 RN-030 — Retenção configurável (RNF-008)
-Retenção configurável por tenant, com expurgo de imagens e dados; expurgo em até 30 dias após o pedido ou o fim da retenção.
+Retenção configurável por tenant, com expurgo de imagens e dados; expurgo em até 30 dias após o pedido ou o fim da retenção. Arquivos de exportação são apagados após `retencao_exportacao_dias` (seção 2.9).
 
 RN-031 — Direitos do titular (RNF-009)
 Direitos do titular: acesso, correção, eliminação e portabilidade, executados pelo tenant.
@@ -298,7 +305,7 @@ RN-038 — Minimização do que vai para a IA
 Só os recortes dos campos são enviados ao provedor, nunca a página inteira, e o cabeçalho de identificação NUNCA vai na mesma chamada que os campos de saúde.
 
 RN-039 — Chamadas separadas
-Os campos de identificação (nome, CPF, endereço) e os de saúde são enviados em chamadas separadas, sem o identificador do respondente.
+Os campos de identificação (nome, CPF, endereço) e os de saúde são enviados em chamadas separadas, sem o identificador do respondente. O agrupamento usa `Pergunta.sensibilidade`: `identificacao` vai sempre sozinha; `saude` e `outro` podem ir juntas.
 
 RN-040 — Metadados removidos
 Metadados das imagens, incluindo GPS das fotos de celular, são removidos no upload (CA-029).
@@ -310,7 +317,7 @@ RN-042 — Versão publicada imutável
 Versão publicada DEVE ser imutável; alterações criam nova versão em rascunho.
 
 RN-043 — Reservas de aplicação
-Quem abre uma aplicação a reserva por 30 minutos; outro digitalizador vê "em uso por" e o nome.
+Quem abre uma aplicação a reserva; a reserva expira após 30 minutos sem atividade e cada ação de revisão do titular da reserva a renova por mais 30 minutos. Outro digitalizador vê "em uso por" e o nome.
 
 RN-044 — Conferência de assinatura
 Na v1, a conferência da assinatura é sempre feita por uma pessoa, mesmo quando todos os campos foram confirmados automaticamente.
@@ -318,12 +325,18 @@ Na v1, a conferência da assinatura é sempre feita por uma pessoa, mesmo quando
 RN-045 — Contrato do motor de leitura
 O motor de leitura (DEC-007) DEVE receber uma imagem recortada e um schema dos campos esperados (tipo, opções, faixa), e DEVE devolver, por campo: o valor lido, a confiança e a região da imagem de onde veio (bounding box). O motor NÃO decide o que vai para revisão; quem chama é que decide. O motor NÃO conhece formulário, pesquisa, tenant nem receita.
 
+RN-047 — Estrutura de perguntas de matriz e múltipla escolha (DEC-010)
+Pergunta do tipo `matriz` DEVE ter linhas com código estável (ENT-024) e opções comuns; gera um item de resposta por linha (RN-009). Pergunta do tipo `multipla_escolha` DEVE ter a opção "nenhuma das anteriores" com código `nenhuma_das_anteriores`. Sem isso, a publicação é recusada (ERR-036).
+
+RN-048 — Autenticação e sessão (Bloco P P.2, DEC-025, DEC-054)
+Senha de 10 a 72 caracteres, com minúscula, maiúscula e dígito, fora da lista de senhas vazadas, guardada com Argon2id. Após 5 falhas em 15 minutos para o mesmo e-mail, exista ou não a conta, novas tentativas são bloqueadas por 15 minutos. Sessão expira após 30 minutos de inatividade ou 24 horas; no máximo 3 sessões ativas por usuário. Convite válido por 24 horas e recuperação de senha por 60 minutos, ambos de uso único. MFA obrigatório para todos os perfis.
+
 RN-046 — Conjunto-ouro e limites por domínio
 O conjunto-ouro e os limites de confiança SÃO por domínio. O conjunto-ouro do MinhaPesquisa (formulários de pesquisa, público 60+) NÃO serve para o MeuRemedio (receitas médicas). Cada domínio DEVE ter seu próprio gabarito humano e suas próprias metas de erro silencioso.
 
 5. Modelo e dicionário de dados
 
-5.1 Diagrama conceitual (13 entidades principais; 22 no total com as de apoio)
+5.1 Diagrama conceitual (13 entidades principais; 30 no total com as de apoio)
 
 ```
 Tenant 1──* Usuario *──* Perfil (via UsuarioPerfil)
@@ -343,7 +356,8 @@ Grupo (filtro salvo, sem dados copiados)      │
 ParametroConfiguracao (tenant, plataforma, projeto)
                                               │
 PedidoTitular, ListaEliminacoes, HistoricoStatusProjeto
-ConcessaoAcessoIndividual, Auditoria, UsuarioPerfil
+ConcessaoAcessoIndividual, Auditoria, UsuarioPerfil, HistoricoAtributoRespondente,
+LinhaMatriz, PaginaAplicacao, Exportacao, Sessao, TokenUsoUnico, ChaveIdempotencia, FalhaLogin
 ```
 
 5.2 Dicionário de dados completo (11 propriedades em 100% dos campos)
@@ -357,10 +371,8 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | id | identificador do tenant | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
 | nome | nome do tenant | varchar | sim | 200 | — | — | — | não | — | pessoal |
 | slug | identificador curto | varchar | sim | 50 | ^[a-z0-9-]+$ | — | — | sim | — | não |
-| custo_ia_teto | teto mensal de custo de IA (R$) | decimal | não | 10,2 | — | ≥ 0 | NULL | não | — | não |
-| retencao_dias | retenção de dados (dias) | int | não | — | — | 1..3650 | NULL | não | — | não |
 | criado_em | data de criação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
-| ativo | tenant ativo | boolean | sim | — | — | true/false | true | não | — | não |
+| ativo | tenant ativo (false: login recusado com ERR-013 e jobs do tenant suspensos, sem apagar dados; provisório, Q-018) | boolean | sim | — | — | true/false | true | não | — | não |
 
 **ENT-002 Usuario**
 
@@ -373,10 +385,8 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | senha_hash | hash Argon2id | varchar | sim | 255 | Argon2id | — | — | não | — | sensível |
 | mfa_secret | segredo TOTP | varchar | não | 64 | base32 | — | NULL | não | — | sensível |
 | mfa_ativo | MFA habilitado | boolean | sim | — | — | true/false | false | não | — | não |
-| falhas_login | falhas consecutivas | int | sim | — | — | 0..100 | 0 | não | — | não |
-| bloqueado_ate | bloqueio por falhas | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
 | ultimo_login | último login | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
-| ativo | usuário ativo | boolean | sim | — | — | true/false | true | não | — | não |
+| situacao | situação do usuário | enum | sim | — | — | pendente_convite; ativo; inativo | pendente_convite | não | — | não |
 | criado_em | data de criação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 
 **ENT-003 Perfil**
@@ -397,7 +407,6 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | nome | nome do projeto | varchar | sim | 200 | — | — | — | não | — | não |
 | descricao | descrição | text | não | 5000 | — | — | NULL | não | — | não |
 | status | status do projeto | enum | sim | — | — | ativo; arquivado | ativo | não | — | não |
-| grupo_minimo | tamanho mínimo de grupo | int | sim | — | — | 1..1000 | 5 | não | — | não |
 | criado_em | data de criação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 
 **ENT-005 Formulario**
@@ -420,6 +429,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | numero | número da versão | int | sim | — | — | ≥ 1 | auto | sim (por form) | — | não |
 | status | status da versão | enum | sim | — | — | rascunho; publicada | rascunho | não | — | não |
 | publicada_em | data de publicação | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
+| mapa_layout | coordenadas normalizadas de cada campo por página, gravadas na publicação (DEC-048) | jsonb | não | — | JSON | — | NULL | não | — | não |
 | criada_em | data de criação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 
 **ENT-007 Pergunta**
@@ -436,7 +446,8 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | pagina | número da página | int | sim | — | — | ≥ 1 | — | não | — | não |
 | obrigatorio | campo obrigatório | boolean | sim | — | — | true/false | false | não | — | não |
 | campo_respondente | alimenta atributo do respondente | varchar | não | 50 | — | nome; data_nascimento; cpf; endereco | NULL | não | — | não |
-| campo_aplicacao | marca a pergunta de data ou local da aplicação (RN-016, RN-017) | varchar | não | 50 | — | data_aplicacao; local_aplicacao | NULL | não | — | não |
+| campo_aplicacao | marca a pergunta de data, local ou aplicador da aplicação (RN-016, RN-017) | varchar | não | 50 | — | data_aplicacao; local_aplicacao; aplicador | NULL | não | — | não |
+| sensibilidade | grupo de envio à IA (RN-039): identificação nunca vai junto com saúde/outro | enum | sim | — | — | identificacao; saude; outro | saude | não | — | não |
 | valor_min | valor mínimo (escala/número) | decimal | não | 10,2 | — | — | NULL | não | — | não |
 | valor_max | valor máximo (escala/número) | decimal | não | 10,2 | — | — | NULL | não | — | não |
 | unidade | unidade (número) | varchar | não | 20 | — | — | NULL | não | — | não |
@@ -473,15 +484,18 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | id | identificador da aplicação | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
 | tenant_id | tenant da aplicação | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
 | projeto_id | projeto da aplicação | uuid | sim | 36 | UUID v4 | — | — | não | Projeto.id | não |
-| versao_id | versão do formulário | uuid | sim | 36 | UUID v4 | — | — | não | Versao.id | não |
+| versao_id | versão do formulário (NULL só em identificacao_pendente) | uuid | não | 36 | UUID v4 | — | NULL | não | Versao.id | não |
 | respondente_id | respondente (só na conclusão) | uuid | não | 36 | UUID v4 | — | NULL | não | Respondente.id | pessoal (indireto) |
-| data_aplicacao | data da aplicação | date | sim | — | YYYY-MM-DD | não futura | — | não | — | pessoal |
-| local_aplicacao | local da aplicação | varchar | sim | 200 | — | — | — | não | — | pessoal |
+| data_aplicacao | data da aplicação (obrigatória em sem_assinatura e concluida) | date | não | — | YYYY-MM-DD | não futura | NULL | não | — | pessoal |
+| local_aplicacao | local da aplicação (obrigatório em sem_assinatura e concluida) | varchar | não | 200 | — | — | NULL | não | — | pessoal |
 | aplicador | nome do aplicador | varchar | não | 200 | — | — | NULL | não | — | pessoal |
 | estado | estado da aplicação | enum | sim | — | — | identificacao_pendente; aguardando_cota; em_leitura; erro_leitura; em_revisao; aguardando_cpf; sem_assinatura; concluida; descartada | identificacao_pendente | não | — | não |
 | assinatura | status da assinatura | enum | não | — | — | presente; ausente; nao_conferida | nao_conferida | não | — | não |
 | criada_em | data de criação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 | concluida_em | data de conclusão | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
+| manter_cadastro | escolha do digitalizador por atributo divergente (CA-014), gravada na conclusão e aplicada no vínculo | jsonb | não | — | JSON | nome; data_nascimento; endereco → existente; aplicacao | NULL | não | — | não |
+| motivo_descarte | motivo informado no descarte (CA-033) | text | não | 2000 | — | — | NULL | não | — | pessoal (indireto) |
+| motivo_reabertura | motivo da última reabertura (CA-042) | text | não | 2000 | — | — | NULL | não | — | pessoal (indireto) |
 
 **ENT-011 ItemResposta**
 
@@ -491,6 +505,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | tenant_id | tenant do item | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
 | aplicacao_id | aplicação do item | uuid | sim | 36 | UUID v4 | — | — | não | Aplicacao.id | não |
 | pergunta_id | pergunta do item | uuid | sim | 36 | UUID v4 | — | — | não | Pergunta.id | não |
+| linha_id | linha da matriz (só perguntas do tipo matriz) | uuid | não | 36 | UUID v4 | — | NULL | não | LinhaMatriz.id | não |
 | valor_ia | valor lido pela IA | text | não | 2000 | — | — | NULL | não | — | sensível |
 | confianca | confiança da IA (valor bruto, sem arredondamento) | decimal | não | 5,4 | — | 0.0000..1.0000 | NULL | não | — | não |
 | valor_final | valor confirmado/corrigido | text | não | 2000 | — | — | NULL | não | — | sensível |
@@ -524,6 +539,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | campo | campo afetado | varchar | não | 100 | — | — | NULL | não | — | não |
 | ip | IP de origem | inet | não | — | IPv4/IPv6 | — | NULL | não | — | pessoal |
 | canal | canal (web; api; script) | enum | não | — | — | web; api; script | NULL | não | — | não |
+| detalhes | referências adicionais em lista fechada por ação (ex.: filtro_aplicado com códigos de pergunta e opção); nunca valores pessoais nem texto livre | jsonb | não | — | JSON | — | NULL | não | — | não |
 | criado_em | data do evento | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 
 5.3 Entidades de apoio (dicionário completo)
@@ -585,7 +601,8 @@ Constraint única: `(versao_id, pergunta_destino_id)` — uma pergunta destino s
 | aplicacao_id | aplicação reservada | uuid | sim | 36 | UUID v4 | — | — | não | Aplicacao.id | não |
 | usuario_id | usuário que reservou | uuid | sim | 36 | UUID v4 | — | — | não | Usuario.id | não |
 | reservado_em | data da reserva | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
-| expira_em | data de expiração | timestamp | sim | — | ISO 8601 UTC | — | reservado_em + 30 min | não | — | não |
+| ultima_atividade_em | última ação de revisão do titular da reserva | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
+| expira_em | data de expiração (deslizante) | timestamp | sim | — | ISO 8601 UTC | — | ultima_atividade_em + 30 min | não | — | não |
 | ativa | reserva ativa | boolean | sim | — | — | true/false | true | não | — | não |
 
 Constraint única: `(aplicacao_id)` onde `ativa = true` — impede reservas simultâneas.
@@ -602,7 +619,7 @@ Constraint única: `(aplicacao_id)` onde `ativa = true` — impede reservas simu
 | solicitado_em | data da solicitação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 | executado_em | data da execução | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
 | executado_por | usuário que executou | uuid | não | 36 | UUID v4 | — | NULL | não | Usuario.id | não |
-| status | status do pedido | enum | sim | — | — | pendente; em_andamento; concluido; cancelado | pendente | não | — | não |
+| status | status do pedido | enum | sim | — | — | pendente; em_andamento; concluido; falhou; cancelado | pendente | não | — | não |
 | resultado | resultado da execução | text | não | 5000 | — | — | NULL | não | — | não |
 
 **ENT-019 ListaEliminacoes**
@@ -626,7 +643,8 @@ Nota: Esta entidade não tem FK para `Respondente` porque o respondente foi anon
 | id | identificador do parâmetro | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
 | tenant_id | tenant do parâmetro (NULL = plataforma) | uuid | não | 36 | UUID v4 | — | NULL | não | Tenant.id | não |
 | projeto_id | projeto do parâmetro (NULL = tenant/plataforma) | uuid | não | 36 | UUID v4 | — | NULL | não | Projeto.id | não |
-| chave | nome do parâmetro | varchar | sim | 100 | ^[a-z_]+$ | retencao_dias; custo_ia_teto; limite_confianca; grupo_minimo | — | não | — | não |
+| chave | nome do parâmetro | varchar | sim | 100 | ^[a-z_]+$ | retencao_dias; custo_ia_teto; limite_confianca; grupo_minimo; cotacao_usd_brl; retencao_exportacao_dias | — | não | — | não |
+| competencia | mês civil a que o valor se refere (só cotacao_usd_brl) | date | não | — | YYYY-MM-01 | — | NULL | não | — | não |
 | valor | valor do parâmetro | text | sim | 1000 | — | — | — | não | — | sensível (depende da chave) |
 | alterado_em | data da alteração | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 | alterado_por | usuário que alterou | uuid | não | 36 | UUID v4 | — | NULL | não | Usuario.id | não |
@@ -660,6 +678,130 @@ Nota: A sensibilidade LGPD depende da chave. Exemplo: `custo_ia_teto` é não se
 
 Constraint única: `(tenant_id, usuario_id, perfil_id)` — impede atribuição duplicada (RN-003).
 
+**ENT-023 HistoricoAtributoRespondente**
+
+| campo | significado | tipo | obrig | tamanho | formato | valores | padrão | único | FK | LGPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| id | identificador do registro | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
+| tenant_id | tenant | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
+| respondente_id | respondente alterado | uuid | sim | 36 | UUID v4 | — | — | não | Respondente.id | pessoal (indireto) |
+| aplicacao_id | aplicação que alterou o atributo | uuid | sim | 36 | UUID v4 | — | — | não | Aplicacao.id | não |
+| atributo | atributo alterado | enum | sim | — | — | nome; data_nascimento; endereco; cpf | — | não | — | não |
+| valor_anterior_cifrado | valor antes da alteração (NULL se não havia) | bytea | não | variável | AES-256-GCM | — | NULL | não | — | sensível |
+| valor_gravado_hash | HMAC do valor gravado pela aplicação (reversão só se o atual ainda for este) | bytea | sim | 32 | HMAC-SHA256 com chave do tenant | — | — | não | — | sensível |
+| criado_em | data da alteração | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
+
+Apagado integralmente na eliminação do titular (CA-023).
+
+**ENT-024 LinhaMatriz**
+
+| campo | significado | tipo | obrig | tamanho | formato | valores | padrão | único | FK | LGPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| id | identificador da linha | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
+| tenant_id | tenant | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
+| pergunta_id | pergunta do tipo matriz | uuid | sim | 36 | UUID v4 | — | — | não | Pergunta.id | não |
+| codigo | código estável da linha | varchar | sim | 50 | ^[a-z0-9_]+$ | — | — | sim (por pergunta) | — | não |
+| rotulo | texto impresso | varchar | sim | 200 | — | — | — | não | — | não |
+| ordem | ordem | int | sim | — | — | ≥ 1 | — | não | — | não |
+
+**ENT-025 PaginaAplicacao**
+
+| campo | significado | tipo | obrig | tamanho | formato | valores | padrão | único | FK | LGPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| id | identificador da imagem/página | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
+| tenant_id | tenant | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
+| aplicacao_id | aplicação | uuid | sim | 36 | UUID v4 | — | — | não | Aplicacao.id | não |
+| tipo | finalidade da imagem | enum | sim | — | — | formulario; assinatura | formulario | não | — | não |
+| numero_pagina | página da versão (NULL até identificar) | int | não | — | — | ≥ 1 | NULL | não | — | não |
+| chave_storage | chave do objeto no bucket privado | varchar | sim | 500 | — | — | — | sim | — | não |
+| sha256 | hash do arquivo sem metadados | bytea | sim | 32 | SHA-256 | — | — | não | — | não |
+| registro_ok | registro da imagem pelos marcadores (DEC-048) | boolean | sim | — | — | true/false | false | não | — | não |
+| criado_em | data do upload | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
+| expurgada_em | data do expurgo físico | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
+
+**ENT-026 Exportacao**
+
+| campo | significado | tipo | obrig | tamanho | formato | valores | padrão | único | FK | LGPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| id | identificador da exportação | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
+| tenant_id | tenant | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
+| usuario_id | quem pediu | uuid | sim | 36 | UUID v4 | — | — | não | Usuario.id | não |
+| projeto_ids | projetos incluídos | uuid[] | sim | — | UUID v4 | — | — | não | — | não |
+| formato | formato | enum | sim | — | — | csv; xlsx | — | não | — | não |
+| escopo | escopo | enum | sim | — | — | agregado; linha_a_linha | — | não | — | não |
+| status | situação | enum | sim | — | — | enfileirada; em_andamento; concluida; falhou; cancelada | enfileirada | não | — | não |
+| chave_storage | objeto gerado (NULL até concluir ou após expurgo) | varchar | não | 500 | — | — | NULL | não | — | não |
+| criado_em | data do pedido | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
+| expira_em | data de expurgo do arquivo | timestamp | não | — | ISO 8601 UTC | — | concluida + retencao_exportacao_dias | não | — | não |
+
+Linha a linha contém dados pessoais em repouso: cancelada e apagada na eliminação do titular (CA-023).
+
+**ENT-027 Sessao**
+
+| campo | significado | tipo | obrig | tamanho | formato | valores | padrão | único | FK | LGPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| id | identificador da sessão | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
+| tenant_id | tenant do usuário | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
+| usuario_id | usuário | uuid | sim | 36 | UUID v4 | — | — | não | Usuario.id | não |
+| tipo | tipo | enum | sim | — | — | pre_sessao; plena | pre_sessao | não | — | não |
+| segredo_hash | hash do segredo do cookie | bytea | sim | 32 | SHA-256 | — | — | sim | — | sensível |
+| criada_em | criação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
+| ultima_atividade_em | última atividade | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
+| expira_absoluta_em | expiração absoluta (24 h; pré-sessão 5 min) | timestamp | sim | — | ISO 8601 UTC | — | — | não | — | não |
+| revogada_em | encerramento | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
+| ip | IP de criação | inet | não | — | IPv4/IPv6 | — | NULL | não | — | pessoal |
+
+**ENT-028 TokenUsoUnico**
+
+| campo | significado | tipo | obrig | tamanho | formato | valores | padrão | único | FK | LGPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| id | identificador do token | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
+| tenant_id | tenant do usuário | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
+| usuario_id | usuário | uuid | sim | 36 | UUID v4 | — | — | não | Usuario.id | não |
+| tipo | finalidade | enum | sim | — | — | convite; recuperacao_senha | — | não | — | não |
+| token_hash | hash do token enviado por e-mail | bytea | sim | 32 | SHA-256 | — | — | sim | — | sensível |
+| expira_em | expiração (convite 24 h; recuperação 60 min) | timestamp | sim | — | ISO 8601 UTC | — | — | não | — | não |
+| usado_em | uso (uso único) | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
+
+**ENT-029 ChaveIdempotencia**
+
+| campo | significado | tipo | obrig | tamanho | formato | valores | padrão | único | FK | LGPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| id | identificador | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
+| tenant_id | tenant | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
+| usuario_id | usuário | uuid | sim | 36 | UUID v4 | — | — | não | Usuario.id | não |
+| chave | valor do header Idempotency-Key | varchar | sim | 64 | — | — | — | sim (por usuário e operação) | — | não |
+| operacao | operationId | varchar | sim | 100 | — | — | — | não | — | não |
+| hash_requisicao | HMAC do corpo (detecta reuso com outro conteúdo, ERR-019) | bytea | sim | 32 | HMAC-SHA256 | — | — | não | — | não |
+| resposta | status e corpo da primeira resposta | jsonb | sim | — | JSON | — | — | não | — | sensível |
+| expira_em | expiração | timestamp | sim | — | ISO 8601 UTC | — | criado_em + 24 h | não | — | não |
+
+**ENT-030 FalhaLogin**
+
+| campo | significado | tipo | obrig | tamanho | formato | valores | padrão | único | FK | LGPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| id | identificador | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
+| email_hmac | HMAC do e-mail normalizado (exista ou não a conta) | bytea | sim | 32 | HMAC-SHA256 | — | — | sim | — | pessoal (indireto) |
+| tentativas | falhas na janela | int | sim | — | — | 0..100 | 0 | não | — | não |
+| janela_inicio | início da janela de 15 min | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
+| bloqueado_ate | fim do bloqueio | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
+
+Sem `tenant_id`: o login acontece antes de conhecer o tenant (DEC-054). ENT-027, ENT-028 e ENT-030 só são acessadas pela função de login e tokens (PLANO, DEC-046).
+
+5.4 Formato canônico de valores (valor_ia e valor_final)
+
+| Tipo de pergunta | Formato | Exemplo |
+|---|---|---|
+| escolha_unica, sim_nao | código da opção | `viuvo`, `sim` |
+| multipla_escolha | códigos das opções em ordem alfabética, separados por `;` | `diabetes;hipertensao` |
+| matriz | código da opção (um item por linha) | `satisfeito` |
+| escala, numero | decimal com ponto, sem separador de milhar | `3`, `72.5` |
+| data | ISO 8601 `YYYY-MM-DD` | `1951-01-01` |
+| cpf | 11 dígitos, sem máscara | `12345678909` |
+| texto_curto, texto_livre | texto UTF-8 normalizado (NFC), sem espaços nas pontas | `Rua A, 10` |
+
+Filtros e comparações entre versões (RN-018) usam este formato.
+
 6. Requisitos funcionais, não funcionais, telas, fluxos e estados
 
 6.1 Requisitos funcionais (RF)
@@ -682,7 +824,7 @@ Quando não pode: Após 5 falhas em 15 min (bloqueio de 15 min), ou sessão expi
 Entradas: e-mail, senha, código MFA; token de convite ou de recuperação (uso único).
 Sucesso: sessão criada, MFA verificado, no máximo 3 sessões ativas.
 Erro e timeout: ERR-013 (credenciais inválidas), ERR-014 (bloqueio por tentativas, aplicado por e-mail exista ou não a conta), ERR-012 (código MFA inválido), ERR-011 (link inválido ou expirado), ERR-015 (sessão expirada), ERR-021 (limite de 3 sessões ativas).
-Registros alterados: Usuario (falhas_login, bloqueado_ate, ultimo_login), Auditoria.
+Registros alterados: Usuario (ultimo_login, situacao), Sessao, TokenUsoUnico, FalhaLogin, Auditoria.
 Mensagens: exatamente as do catálogo para ERR-011 a ERR-015 e ERR-021 (genéricas, sem revelar se a conta existe).
 Estado final: autenticado ou bloqueado.
 
@@ -766,7 +908,7 @@ Estado final: dashboard exibido.
 **RF-010 — Exportação em CSV/XLSX, auditoria e direitos do titular (LGPD)**
 Quem executa: Analista (agregados) ou Analista com acesso individual (linha a linha); Administrador do tenant (direitos do titular).
 Quando pode: Quando está vinculado ao projeto.
-Quando não pode: Quando o analista não tem acesso individual (só agregados); quando o grupo é menor que o mínimo (ocultação na exportação também).
+Quando não pode: Quando o analista não tem acesso individual (só agregados); na exportação linha a linha, falta de concessão vigente em qualquer um dos projetos incluídos; quando o grupo é menor que o mínimo (ocultação na exportação também).
 Entradas: formato (CSV/XLSX), rótulos ou códigos, filtros; para direitos do titular, CPF do titular e tipo do pedido. Consulta da trilha de auditoria (TL-011) pelo administrador do tenant.
 Sucesso: arquivo gerado, auditoria registrada.
 Erro e timeout: ERR-008 (linha a linha sem concessão), ERR-018 (pedido em estado que não permite execução), timeout de 60 s no job.
@@ -848,18 +990,39 @@ Transições:
 | erro_leitura | digitalizador manda ler de novo | teto não atingido | dispara leitura | em_leitura | digitalizador |
 | erro_leitura | digitalizador manda ler de novo | teto atingido | enfileira | aguardando_cota | digitalizador |
 | erro_leitura | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
-| em_revisao | digitalizador conclui | todos os itens resolvidos; nome, data de nascimento, CPF válido, data e local informados (DEC-020); assinatura presente | vincula respondente, audita | concluida | digitalizador |
+| em_revisao | digitalizador conclui | todos os itens resolvidos (FL-002); nome, data de nascimento, CPF válido, data e local informados (DEC-020); assinatura presente | grava manter_cadastro, vincula respondente, audita | concluida | digitalizador |
 | em_revisao | digitalizador conclui | CPF ausente, ilegível ou inválido | audita; ERR-006 | aguardando_cpf | digitalizador |
-| em_revisao | digitalizador conclui | assinatura marcada como ausente; demais condições atendidas | audita | sem_assinatura | digitalizador |
+| em_revisao | digitalizador conclui | assinatura marcada como ausente; demais condições atendidas | grava manter_cadastro; NÃO vincula respondente (provisório, Q-012); audita | sem_assinatura | digitalizador |
 | em_revisao | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
 | aguardando_cpf | digitalizador informa CPF válido | — | volta para revisão | em_revisao | digitalizador |
 | aguardando_cpf | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
-| sem_assinatura | digitalizador envia página 1 assinada | QR confere versão e página | confere assinatura sem reler os outros campos | concluida | digitalizador |
+| sem_assinatura | digitalizador envia página 1 assinada e confirma a assinatura como presente (RN-044) | QR confere versão e página | substitui a imagem da página 1; confere assinatura sem reler os outros campos; vincula respondente com o manter_cadastro gravado; audita | concluida | digitalizador |
+| sem_assinatura | digitalizador corrige a conferência (assinatura marcada como ausente por engano) | — | volta para revisão, preservando os itens | em_revisao | digitalizador |
 | sem_assinatura | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
 | concluida | digitalizador ou admin reabre com motivo | — | sai dos relatórios, audita | em_revisao | digitalizador/admin |
 | descartada | — | estado final | — | — | — |
 
-Na conclusão com outros campos obrigatórios ausentes (nome, data de nascimento, data ou local) e CPF válido, a aplicação permanece em `em_revisao` e a resposta é ERR-006.
+Precedência na conclusão (a primeira que se aplica decide):
+
+1. Algum item fora dos estados resolvidos (FL-002) → ERR-022; nada é gravado.
+2. CPF ausente, ilegível ou inválido → resposta de sucesso com aviso ERR-006 e estado `aguardando_cpf` (a transição é gravada).
+3. Nome, data de nascimento, data ou local ausentes → ERR-006; nada é gravado; permanece em `em_revisao`.
+4. Assinatura ausente → `sem_assinatura`; presente → `concluida`.
+
+Operações por estado (fora destas combinações → ERR-018):
+
+| Operação | Estados permitidos |
+|---|---|
+| identifyApplication, addApplicationPages | identificacao_pendente |
+| openReview, saveReview, getItemImage | em_revisao, aguardando_cpf |
+| confirmApplication | em_revisao, aguardando_cpf |
+| attachSignaturePage | sem_assinatura |
+| retryReading | erro_leitura |
+| discardApplication | todos, exceto concluida e descartada |
+| reopenApplication | concluida; e sem_assinatura (corrige a conferência) |
+| getApplication | todos |
+
+Em `aguardando_cpf`, `saveReview` sobre o item de CPF com valor válido devolve a aplicação a `em_revisao`.
 
 Timeout e retentativa:
 - Reserva de aplicação: 30 minutos sem atividade → expira, outro pode abrir.
@@ -874,21 +1037,24 @@ Ordem de avaliação ao fim da leitura de um item (a primeira regra que se aplic
 | 1 | Item é destino de regra de salto e a pergunta de origem ainda não está resolvida (CA-018) | aguardando_condicao |
 | 2 | Origem resolvida, a regra manda pular e o item está em branco (CA-015) | nao_se_aplica |
 | 3 | Origem resolvida, a regra manda pular e o item está preenchido (CA-019) | a_revisar |
-| 4 | Origem em `em_branco`, `ilegivel` ou `rasurado` (condição indeterminada) | a_revisar |
+| 4 | Origem em `nao_se_aplica` (origem pulada por outra regra): destino em branco → `nao_se_aplica`; destino preenchido → `a_revisar` | nao_se_aplica ou a_revisar |
+| 4a | Origem em `em_branco`, `ilegivel` ou `rasurado` (condição indeterminada) | a_revisar |
 | 5 | Pergunta do tipo `cpf` (RN-012) | a_revisar |
-| 6 | Pergunta do tipo `texto_livre` (DEC-057) | a_revisar |
+| 6 | Pergunta do tipo `texto_livre` (DEC-057) ou `texto_curto` (provisório, Q-014) | a_revisar |
 | 7 | Valor fora do schema: tipo, faixa, opção inexistente ou mais de uma marcação em escolha única (CA-006) | a_revisar |
 | 8 | Confiança > limite_confianca (DEC-028) | confirmado_automaticamente |
 | 9 | Demais casos (confiança ≤ limite) | a_revisar |
 
 "Origem resolvida" significa origem em `confirmado_automaticamente`, `confirmado` ou `corrigido`.
 
+"Item resolvido" (usado na conclusão, FL-001) significa item em `confirmado_automaticamente`, `confirmado`, `corrigido`, `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica`. Itens em `pendente_leitura`, `aguardando_condicao` ou `a_revisar` impedem a conclusão (ERR-022).
+
 | Estado atual | Evento | Condição | Ação | Próximo estado | Quem dispara |
 |---|---|---|---|---|---|
 | pendente_leitura | leitura concluída | regra 8 | — | confirmado_automaticamente | worker |
-| pendente_leitura | leitura concluída | regras 3, 4, 5, 6, 7 ou 9 | — | a_revisar | worker |
+| pendente_leitura | leitura concluída | regras 3, 4 (destino preenchido), 4a, 5, 6, 7 ou 9 | — | a_revisar | worker |
 | pendente_leitura | leitura concluída | regra 1 | — | aguardando_condicao | worker |
-| pendente_leitura | leitura concluída | regra 2 | — | nao_se_aplica | worker |
+| pendente_leitura | leitura concluída | regra 2 ou 4 (destino em branco) | — | nao_se_aplica | worker |
 | aguardando_condicao | condição de salto resolvida | regra 2 | — | nao_se_aplica | worker |
 | aguardando_condicao | condição de salto resolvida | demais regras | avalia pelas regras 3 a 9 | confirmado_automaticamente ou a_revisar | worker |
 | a_revisar | revisor confirma | — | valor_final = valor_ia | confirmado | digitalizador |
@@ -902,6 +1068,7 @@ Ordem de avaliação ao fim da leitura de um item (a primeira regra que se aplic
 | confirmado / corrigido | condição de salto muda | — | reavalia | a_revisar ou nao_se_aplica | worker |
 | confirmado / corrigido | aplicação reaberta | — | reavalia | a_revisar | digitalizador |
 | em_branco / ilegivel / rasurado / nao_se_aplica | revisor altera | — | valor_final atualizado | confirmado ou corrigido | digitalizador |
+| confirmado / corrigido / em_branco / ilegivel / rasurado / nao_se_aplica | revisor aplica outra ação de revisão | aplicação em `em_revisao` ou `aguardando_cpf` | aplica a ação | estado da ação (em_branco, ilegivel, rasurado, nao_se_aplica, confirmado ou corrigido) | digitalizador |
 | nao_se_aplica | condição de salto muda para "mostrar" (CA-020) | — | reavalia | a_revisar | worker |
 
 Timeout e retentativa: não aplicável (estados finais de revisão são ações humanas).
@@ -959,7 +1126,7 @@ E nenhum dado é gravado no banco
 | 1 | formulario.pdf | 15 MB | 4 | Aceito | — |
 | 2 | foto.jpg | 25 MB | 1 | Recusado | ERR-029 — Arquivo recusado: excede o limite de 20 MB. |
 | 3 | dados.exe | 2 MB | — | Recusado | ERR-029 — Arquivo recusado: tipo de arquivo não permitido. |
-| 4 | scan.png (arquivo de teste EICAR) | 5 MB | 1 | Recusado | ERR-029 — Arquivo recusado: risco de segurança detectado. |
+| 4 | scan.png (conteúdo EICAR puro, MIME image/png) | 68 bytes | 1 | Recusado | ERR-029 — Arquivo recusado: risco de segurança detectado. |
 | 5 | lote.pdf | 18 MB | 51 | Recusado | ERR-029 — Arquivo recusado: excede o limite de 50 páginas. |
 
 **US-002 — Como revisor, quero corrigir campos com baixa confiança para garantir a qualidade dos dados antes da conclusão.**
@@ -1015,7 +1182,7 @@ E a divergência de nome é registrada na auditoria para ciência do revisor
 
 CA-032 — Campos obrigatórios de aplicação bloqueiam a conclusão
 Dado que uma aplicação está em revisão
-Quando o revisor tenta concluir sem informar a "data_da_aplicacao" ou o "local_da_aplicacao"
+Quando o revisor tenta concluir sem informar a "data_aplicacao" ou o "local_aplicacao"
 Então o sistema bloqueia a ação
 E exibe a mensagem exata do catálogo (ERR-006): "A aplicação não pode ser concluída sem nome, data de nascimento, CPF válido, data e local da aplicação."
 
@@ -1057,6 +1224,8 @@ E os dados da entidade `Respondente` são anonimizados (`nome` = "ANONIMIZADO", 
 E o `cpf_hash` é apagado do banco
 E os itens de resposta têm `valor_ia` e `valor_final` sobrescritos
 E os arquivos de exportação ainda disponíveis são apagados
+E o histórico de atributos do respondente (ENT-023) é apagado
+E `motivo_descarte`, `motivo_reabertura` das suas aplicações e a `descricao` do pedido são sobrescritos
 E as aplicações em andamento do titular são descartadas
 E um registro é inserido na `ListaEliminacoes` com o ID interno do respondente, válido por 180 dias
 E a auditoria registra a execução sem conter o CPF original
@@ -1090,7 +1259,7 @@ Então o sistema aplica o mínimo 5 para todos os grupos do relatório
 E a exportação agregada também respeita o mínimo 5
 
 **US-007 — Como administrador do tenant, quero cadastrar formulários com versões e perguntas para gerar o PDF imprimível.**
-Relacionado a: RF-004, CA-001, CA-015, CA-017, CA-018, CA-019, CA-020, CA-028, CA-036
+Relacionado a: RF-004, RF-007, RF-008, RF-009, CA-001, CA-015, CA-017, CA-018, CA-019, CA-020, CA-028, CA-036
 
 CA-001 — Versão publicada é imutável
 Dado que o formulário "Demografia" tem a versão 1 publicada
@@ -1137,10 +1306,11 @@ E a primeira página traz o termo de consentimento com campo de assinatura
 E versão em rascunho não gera PDF
 
 CA-036 — Publicação exige campos obrigatórios
-Dado que a versão 1 do formulário não tem a pergunta "data_da_aplicacao"
+Dado que a versão 1 do formulário não tem pergunta marcada como "data_aplicacao"
 Quando o administrador tenta publicar
 Então a publicação é recusada com ERR-036
-E a mensagem exibe: "Publicação recusada: faltam [data_da_aplicacao]"
+E a mensagem exibe: "Publicação recusada: faltam [data_aplicacao]"
+E o campo `campos` do erro contém `data_aplicacao` (identificadores do enum `campo_respondente`/`campo_aplicacao`)
 
 **US-008 — Como analista, quero visualizar dashboards e relatórios agregados para analisar os dados das pesquisas.**
 Relacionado a: RF-009, CA-009, CA-011, CA-031
@@ -1271,7 +1441,7 @@ Quando o primeiro administrador abre o convite dentro de 24 horas
 Então define a senha e cadastra o MFA
 E convite vencido ou já usado é recusado com ERR-011
 
-CA-037 — Recuperação de senha e de MFA
+CA-037 — Recuperação de senha
 Dado que o usuário esqueceu a senha
 Quando ele pede a recuperação
 Então recebe por e-mail um link de uso único válido por 60 minutos
@@ -1349,15 +1519,15 @@ A matriz completa é mantida em `registros/matriz_rastreabilidade.csv`, idêntic
 | Requisito | Regra | Entidade | Fluxo | História | Critério | Teste Sentinela | Operation ID | Componente | Incremento |
 |---|---|---|---|---|---|---|---|---|---|
 | RF-001 | RN-001, RN-003, RN-004 | ENT-002, ENT-003, ENT-014, ENT-015, ENT-022 | FL-001 | US-010 | CA-012, CA-016, CA-025, CA-035, CA-037, CA-037b, CA-038 | TS-001 | listUsers, createTenantUser, getUser, updateUser, inviteUser, resetMfa, grantIndividualAccess, listIndividualAccessGrants, revokeAccess | CMP-Auth | IMP-001 |
-| RF-002 | RN-025 | ENT-002 | FL-001 | US-010 | CA-026, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite | CMP-Auth | IMP-001 |
+| RF-002 | RN-048 | ENT-002, ENT-027, ENT-028, ENT-030 | FL-001 | US-010 | CA-026, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite | CMP-Auth | IMP-001 |
 | RF-003 | RN-027 | ENT-004, ENT-020, ENT-021 | FL-001 | US-006 | CA-027 | — | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject | CMP-Projects | IMP-002 |
-| RF-004 | RN-017, RN-018, RN-019, RN-021, RN-042 | ENT-005, ENT-006, ENT-007, ENT-008, ENT-016 | FL-001 | US-007 | CA-001, CA-015, CA-017, CA-018, CA-019, CA-020, CA-028, CA-036 | TS-006 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf | CMP-Forms | IMP-002 |
+| RF-004 | RN-017, RN-018, RN-019, RN-021, RN-042, RN-047 | ENT-005, ENT-006, ENT-007, ENT-008, ENT-016, ENT-024 | FL-001 | US-007 | CA-001, CA-028, CA-036 | TS-006 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf | CMP-Forms | IMP-002 |
 | RF-005 | RN-011, RN-012, RN-014, RN-015 | ENT-009, ENT-010 | FL-001, FL-002 | US-003 | CA-002, CA-014, CA-014b, CA-032 | — | linkRespondent (interna) | CMP-Respondents | IMP-003 |
-| RF-006 | RN-040 | ENT-010, ENT-011 | FL-001 | US-001 | CA-003, CA-004, CA-013, CA-029, CA-039, CA-040 | TS-002 | uploadImages, identifyApplication | CMP-Upload | IMP-002 |
-| RF-007 | RN-037, RN-038, RN-039 | ENT-011 | FL-001, FL-002 | US-002 | CA-005, CA-006, CA-018, CA-019, CA-030, CA-041 | TS-003, TS-007 | processAIReading (interna), getQuotaStatus | CMP-MotorIA | IMP-003 |
-| RF-008 | RN-016, RN-043, RN-044 | ENT-009, ENT-010, ENT-011, ENT-017 | FL-001, FL-002 | US-002, US-003 | CA-007, CA-008, CA-021, CA-033, CA-042, CA-043, CA-044 | — | listReviewQueue, getApplication, openReview, getItemImage, saveReview, confirmApplication, attachSignaturePage, retryReading, discardApplication, reopenApplication | CMP-Revisao | IMP-003 |
-| RF-009 | RN-026 | ENT-012, ENT-015 | FL-001 | US-004, US-008 | CA-009, CA-010, CA-011, CA-017, CA-021, CA-031, CA-034 | TS-004 | getDashboardAggregated, listGroups, createGroup, deleteGroup, findRespondent, getIndividualRecord | CMP-Dashboard | IMP-004 |
-| RF-010 | RN-027, RN-030, RN-031 | ENT-009, ENT-013, ENT-018, ENT-019 | FL-001 | US-005, US-009 | CA-021, CA-022, CA-023, CA-024 | TS-005, TS-008 | exportData, getExport, createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, listAuditEvents | CMP-LGPD | IMP-004 |
+| RF-006 | RN-040 | ENT-010, ENT-011, ENT-025, ENT-029 | FL-001 | US-001 | CA-003, CA-004, CA-013, CA-029, CA-039, CA-040 | TS-002 | uploadImages, identifyApplication, addApplicationPages | CMP-Upload | IMP-002 |
+| RF-007 | RN-021, RN-037, RN-038, RN-039 | ENT-011 | FL-001, FL-002 | US-002, US-007 | CA-005, CA-006, CA-015, CA-018, CA-019, CA-030, CA-041 | TS-003, TS-007 | processAIReading (interna), getQuotaStatus | CMP-MotorIA | IMP-003 |
+| RF-008 | RN-016, RN-043, RN-044 | ENT-009, ENT-010, ENT-011, ENT-017, ENT-023 | FL-001, FL-002 | US-002, US-003, US-007 | CA-007, CA-008, CA-020, CA-021, CA-033, CA-042, CA-043, CA-044 | — | listReviewQueue, getApplication, openReview, getItemImage, saveReview, confirmApplication, attachSignaturePage, retryReading, discardApplication, reopenApplication | CMP-Revisao | IMP-003 |
+| RF-009 | RN-026 | ENT-012, ENT-015 | FL-001 | US-004, US-007, US-008 | CA-009, CA-010, CA-011, CA-017, CA-021, CA-031, CA-034 | TS-004 | getDashboardAggregated, listGroups, createGroup, deleteGroup, findRespondent, getIndividualRecord | CMP-Dashboard | IMP-004 |
+| RF-010 | RN-027, RN-030, RN-031 | ENT-009, ENT-013, ENT-018, ENT-019, ENT-023, ENT-026 | FL-001 | US-005, US-009 | CA-021, CA-022, CA-023, CA-024 | TS-005, TS-008 | exportData, getExport, createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, listAuditEvents | CMP-LGPD | IMP-004 |
 
 8.2 Catálogo de Erros (ERR)
 
@@ -1370,14 +1540,14 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 | ERR-003 | AI_QUOTA_EXCEEDED | — | Teto de custo de IA do tenant atingido; aviso exibido na tela e enviado por e-mail (estado assíncrono, não é resposta HTTP de erro). | O processamento deste tenant está pausado. Contate o administrador. | info: ai_quota_exceeded (tenant_id) | Aplicação em `aguardando_cota` | RF-007, CA-030, DEC-035 | ativo |
 | ERR-004 | INVALID_QR_CODE | 400 | QR ilegível ou ausente, registro da imagem impossível, ou páginas faltantes, repetidas ou excedentes. | Não foi possível identificar o formulário nesta página. Informe manualmente. | warn: qr_invalid_or_missing | Aplicação em `identificacao_pendente` | RF-006, CA-004, CA-013, CA-040 | ativo |
 | ERR-005 | RESERVATION_EXPIRED | 409 | Descontinuado pela CHG-002: duplicava o ERR-043. | Descontinuado; usar ERR-043. | — | — | CHG-002 | descontinuado |
-| ERR-006 | MISSING_MANDATORY_FIELDS | 400 | Tentativa de concluir aplicação sem nome, data de nascimento, CPF válido, data ou local (DEC-020). | A aplicação não pode ser concluída sem nome, data de nascimento, CPF válido, data e local da aplicação. | warn: missing_mandatory_fields | `aguardando_cpf` se o CPF estiver ausente ou inválido; caso contrário permanece em `em_revisao` | RF-005, RF-008, CA-032 | ativo |
+| ERR-006 | MISSING_MANDATORY_FIELDS | 400 | Tentativa de concluir aplicação sem nome, data de nascimento, CPF válido, data ou local (DEC-020). | A aplicação não pode ser concluída sem nome, data de nascimento, CPF válido, data e local da aplicação. | warn: missing_mandatory_fields | CPF ausente ou inválido: sucesso com este aviso e estado `aguardando_cpf`; demais campos: nada é gravado, permanece em `em_revisao` | RF-005, RF-008, CA-032 | ativo |
 | ERR-007 | FILE_REJECTED | 400 | Descontinuado pela CHG-002: duplicava o ERR-029. | Descontinuado; usar ERR-029. | — | — | CHG-002 | descontinuado |
 | ERR-008 | ACCESS_DENIED_INDIVIDUAL | 403 | Usuário sem concessão ativa de acesso individual tenta ver ficha ou exportar linha a linha em projeto vinculado. | Você não tem permissão para acessar dados individuais neste projeto. | warn: unauthorized_individual_access | Nada é gravado | RF-009, RF-010, CA-022, CA-025 | ativo |
 | ERR-009 | VERSION_IMMUTABLE | 409 | Tentativa de alterar perguntas de uma versão já publicada. | Versões publicadas são imutáveis. Crie uma nova versão em rascunho. | info: immutable_version_attempt | Nada é gravado | RF-004, CA-001, RN-042 | ativo |
 | ERR-010 | RATE_LIMIT_EXCEEDED | 429 | Mais de 100 req/min por usuário ou 20 req/min por IP em rotas públicas. | Muitas tentativas. Aguarde alguns minutos antes de tentar novamente. | warn: rate_limit_exceeded (ip/user) | Nada é gravado | RF-002, Bloco P.7 | ativo |
 | ERR-011 | TOKEN_INVALID | 400 | Link de convite ou de recuperação de senha inválido, expirado ou já usado. | Este link é inválido ou expirou. Solicite um novo. | warn: token_invalid | Nada é gravado | RF-002, CA-035, CA-037 | ativo |
 | ERR-012 | MFA_INVALID | 400 | Código MFA incorreto ou fora da janela de tempo. | Código de verificação inválido. Tente novamente. | warn: mfa_invalid (conta como falha de login) | Nada é gravado | RF-002, CA-026, CA-035 | ativo |
-| ERR-013 | INVALID_CREDENTIALS | 401 | E-mail ou senha incorretos, ou conta inexistente ou inativa (mesma resposta). | Credenciais inválidas. | warn: login_failed (HMAC do e-mail) | Contagem de falhas atualizada | RF-002, CA-026 | ativo |
+| ERR-013 | INVALID_CREDENTIALS | 401 | E-mail ou senha incorretos, conta inexistente, inativa ou com convite pendente, ou tenant inativo (provisório, Q-018) — mesma resposta. | Credenciais inválidas. | warn: login_failed (HMAC do e-mail) | Contagem de falhas atualizada | RF-002, CA-026 | ativo |
 | ERR-014 | LOGIN_THROTTLED | 429 | 5 falhas em 15 minutos para o mesmo e-mail, exista ou não a conta. | Muitas tentativas. Tente novamente em 15 minutos. | warn: login_throttled (HMAC do e-mail) | Bloqueio de 15 minutos | RF-002, CA-026 | ativo |
 | ERR-015 | SESSION_REQUIRED | 401 | Sessão ausente, expirada (30 min de inatividade ou 24 h) ou encerrada. | Sua sessão expirou. Entre novamente. | info: session_required | Nada é gravado | RF-002, CA-026 | ativo |
 | ERR-016 | FORBIDDEN | 403 | Perfil sem permissão para a ação, ou token CSRF ausente ou inválido. | Você não tem permissão para realizar esta ação. | warn: forbidden_action | Nada é gravado | RF-001, RF-002 | ativo |
@@ -1385,7 +1555,9 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 | ERR-018 | INVALID_STATE | 409 | Ação não permitida no estado atual do recurso (FL-001, pedido do titular já executado). | Esta ação não é permitida no estado atual. | info: invalid_state_transition | Nada é gravado | RF-008, RF-010 | ativo |
 | ERR-019 | IDEMPOTENCY_CONFLICT | 409 | Chave de idempotência reutilizada com conteúdo diferente. | Esta solicitação já foi enviada com outros dados. Gere uma nova solicitação. | warn: idempotency_conflict | Nada é gravado | RF-006, Bloco P.8 | ativo |
 | ERR-020 | DEPENDENCY_UNAVAILABLE | 503 | Storage, e-mail ou outro serviço interno indisponível após as retentativas. | Serviço temporariamente indisponível. Tente novamente em instantes. | error: dependency_unavailable (serviço) | Nada é gravado | RF-004, RF-006 | ativo |
-| ERR-021 | SESSION_LIMIT_REACHED | 409 | Usuário já tem 3 sessões ativas (Bloco P P.2). | Você já tem 3 sessões ativas. Encerre uma delas para entrar. | info: session_limit_reached | Nenhuma sessão nova | RF-002 | ativo |
+| ERR-021 | SESSION_LIMIT_REACHED | 409 | Usuário já tem 3 sessões ativas (Bloco P P.2). | Você já tem 3 sessões ativas. Saia em outro dispositivo ou aguarde até 30 minutos sem uso para entrar. | info: session_limit_reached | Nenhuma sessão nova | RF-002 | ativo |
+| ERR-022 | ITEMS_UNRESOLVED | 400 | Tentativa de concluir com itens em `pendente_leitura`, `aguardando_condicao` ou `a_revisar`. | Ainda há campos a revisar nesta aplicação. | info: items_unresolved | Nada é gravado | RF-008, FL-002 | ativo |
+| ERR-023 | EMAIL_UNAVAILABLE | 400 | E-mail informado na criação de usuário já pertence a um usuário da plataforma (DEC-054); a mesma resposta vale para qualquer tenant (provisório, Q-013). | Este e-mail não pode ser usado. Informe outro e-mail. | warn: email_unavailable (auditado) | Nada é gravado | RF-001, DEC-054 | ativo |
 | ERR-029 | FILE_REJECTED_LIMIT | 400 | Upload recusado. Motivos exatos: "excede o limite de 20 MB"; "excede o limite de 50 páginas"; "tipo de arquivo não permitido"; "risco de segurança detectado". | Arquivo recusado: [motivo]. | warn: file_rejected (motivo) | Nada é gravado | RF-006, CA-029, RN-040 | ativo |
 | ERR-036 | MISSING_PUBLISH_FIELDS | 400 | Tentativa de publicar versão sem campos obrigatórios (nome, nascimento, CPF, data, local). | Publicação recusada: faltam [lista dos campos]. | warn: missing_publish_fields | Versão permanece em `rascunho` | RF-004, CA-036, RN-017 | ativo |
 | ERR-039 | QR_INVALID_CONTEXT | 400 | QR aponta para versão inexistente, de outro tenant ou de projeto diferente do envio. | QR code inválido para o contexto atual. Informe manualmente. | warn: qr_invalid_context | Aplicação em `identificacao_pendente` | RF-006, CA-039 | ativo |
@@ -1394,7 +1566,7 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 
 9. Questões em aberto (Q)
 
-Todas as questões foram respondidas. Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, foram respondidas em 27/10/2026 (recomendações aceitas) e incorporadas na v1.4 como DEC-054 a DEC-060 (CHG-003).
+Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, foram respondidas em 27/10/2026 e incorporadas na v1.4 como DEC-054 a DEC-060 (CHG-003). Q-012 a Q-018 foram abertas pela CHG-004 (REV-REQ-005); até a resposta, vale o texto provisório.
 
 | id | data | pergunta | por_que_importa | opcao_a | opcao_b | opcao_c | recomendacao | texto_provisorio (agora definitivo) | resposta | status | relacionados |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1403,12 +1575,19 @@ Todas as questões foram respondidas. Q-001 a Q-004 foram incorporadas na v1.2. 
 | Q-003 | 24/10/2026 | Teto de Custo de IA na v1 | Impacto direto em custo operacional e comportamento da fila de processamento | A: Sem teto | B: R$ 500/mês | C: R$ 1.000/mês | B | O teto provisório de custo de IA é de R$ 500,00/mês por tenant para a v1, acionando a fila de espera (CA-030) ao ser atingido. | Aceito sua sugestão. | respondida | RF-007, CA-030, DEC-035 |
 | Q-004 | 24/10/2026 | Ambiente de Nuvem | Impacto em arquitetura, custo e soberania de dados | A: AWS sa-east-1 | B: Azure Brazil South | C: Deixar para a Fase 3 | C | A definição da nuvem (AWS sa-east-1 ou Azure Brazil South) será formalizada via ADR na Fase 3, garantindo a soberania de dados no Brasil. | Aceito sua sugestão. | respondida | RNF-011, DEC-036 |
 | Q-005 | 27/10/2026 | Identificação do usuário no login | O e-mail é único por tenant, mas o login não informa o tenant: o mesmo e-mail em dois tenants torna o login ambíguo | A: e-mail único global (um e-mail pertence a um único tenant) | B: e-mail único por tenant, com identificador do tenant no login | — | A | O e-mail do usuário é único em toda a plataforma; um e-mail pertence a um único tenant. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | RF-001, RF-002, ENT-002 |
-| Q-006 | 27/10/2026 | Valor padrão de grupo_minimo | Com padrão 1, filtros estreitos expõem dados de saúde de idosos a analistas sem acesso individual (Risco 2, seção 2.8) | A: manter padrão 1 (DEC-023) | B: padrão 5, podendo ser reduzido por projeto com auditoria | C: padrão 5 com piso de 3 | B | Mantém-se a DEC-023 (padrão 1) até a resposta. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | DEC-023, RN-026, CA-010 |
+| Q-006 | 27/10/2026 | Valor padrão de grupo_minimo | Com padrão 1, filtros estreitos expõem dados de saúde de idosos a analistas sem acesso individual (Risco 2, seção 2.8) | A: manter padrão 1 (DEC-023) | B: padrão 5, podendo ser reduzido por projeto com auditoria | C: padrão 5 com piso de 3 | B | O padrão de grupo_minimo é 5, podendo ser reduzido por projeto com auditoria. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | DEC-023, RN-026, CA-010 |
 | Q-007 | 27/10/2026 | Origem do conjunto-ouro | Caligrafia real de pessoas 60+ é dado pessoal (bloqueado por GX-001); caligrafia sintética não representa o público; sem conjunto-ouro não há como escolher provedor nem medir a DEC-004 | A: voluntários 60+ preenchem formulários com dados fictícios, com termo próprio | B: usar dados reais só após GX-001 | C: formulários preenchidos digitalmente (sintéticos) | A | O conjunto-ouro é formado por formulários preenchidos à mão por voluntários 60+ com dados fictícios, sob termo de participação próprio, sem dado pessoal real. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | DEC-004, DEC-028, RN-046, GX-001 |
 | Q-008 | 27/10/2026 | Leitura de texto livre | Texto livre não tem schema que permita validar o valor, então a regra "valor dentro do schema" não protege contra erro silencioso | A: texto_livre sempre vai para revisão | B: segue a regra geral de confiança | C: texto_livre não é lido por IA; o digitalizador digita | A | Itens do tipo `texto_livre` sempre vão para `a_revisar`. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | RF-007, FL-002, DEC-010 |
 | Q-009 | 27/10/2026 | Período e moeda do teto de custo de IA | O teto é em reais e o provedor cobra em dólar; "mês" pode ser civil ou janela móvel | A: mês civil (America/Sao_Paulo) e cotação PTAX do dia | B: janela móvel de 30 dias | C: mês civil (America/Sao_Paulo) e cotação fixa configurada pela plataforma a cada mês | C | O teto vale por mês civil no fuso America/Sao_Paulo; o custo em dólar é convertido por cotação fixa configurada pela plataforma a cada mês. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | DEC-035, RN-036, CA-030 |
 | Q-010 | 27/10/2026 | Quem altera limite_confianca, custo_ia_teto e retencao_dias | RN-008 exige forma de alteração definida; na v1 não há gestão de tenant por tela (DEC-017) | A: administrador da plataforma, por script, com auditoria | B: administrador do tenant, pela tela | C: teto e retenção pelo administrador do tenant; limite pela plataforma | A | Os três parâmetros são alterados pelo administrador da plataforma, por script, com auditoria (seção 2.9). | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | RN-008, DEC-017, DEC-018 |
 | Q-011 | 27/10/2026 | Perfil analista_individual × concessão de acesso individual | A REQ tem o perfil `analista_individual` (ENT-003) e a concessão por projeto com 90 dias (ENT-015, DEC-031), sem dizer se ambos são exigidos | A: exige o perfil e uma concessão vigente no projeto | B: basta a concessão vigente (o perfil deixa de existir) | C: basta o perfil | A | O acesso individual exige o perfil `analista_individual` e uma concessão vigente para o projeto. | Aceito a recomendação (Carlos Yano, 27/10/2026). | respondida | RF-001, RF-009, DEC-031, CA-025 |
+| Q-012 | 28/10/2026 | Vínculo do respondente quando a assinatura está ausente | DEC-006 tira do relatório a aplicação sem assinatura; criar ou alterar cadastro do respondente sem evidência de consentimento conflita com RN-041 | A: vincular e alterar cadastro só ao chegar em `concluida` (inclusive depois de anexar a assinatura) | B: vincular já ao entrar em `sem_assinatura` | — | A | O respondente só é criado ou vinculado, e o cadastro só é alterado, quando a aplicação chega a `concluida`. | — | aberta | RF-005, RF-008, DEC-006, RN-041 |
+| Q-013 | 28/10/2026 | Criação de usuário com e-mail já usado em outro tenant | Com e-mail único global (DEC-054), qualquer resposta diferente do sucesso revela que o e-mail é usuário de outro cliente | A: erro genérico (ERR-023), igual para qualquer tenant, auditado e sujeito a rate limit (risco residual aceito) | B: resposta igual ao sucesso, sem enviar convite | — | A | A criação com e-mail já existente na plataforma devolve ERR-023, com a mesma resposta para qualquer tenant, auditada e limitada por rate limit. | — | aberta | RF-001, DEC-054, RN-002 |
+| Q-014 | 28/10/2026 | Leitura de texto curto | `texto_curto` também não tem schema que valide o conteúdo, além do tamanho; pode ser confirmado automaticamente com erro ou instrução injetada | A: `texto_curto` sempre vai para revisão (como DEC-057) | B: segue a regra geral de confiança | — | A | Itens do tipo `texto_curto` sempre vão para `a_revisar`. | — | aberta | RF-007, FL-002, DEC-057 |
+| Q-015 | 28/10/2026 | Dedução de célula oculta por subtração | No gráfico cruzado (CA-017), a célula oculta pode ser obtida subtraindo as visíveis da linha ou do total sem cruzamento | A: supressão complementar na consulta (ocultar outra célula da linha e da coluna e o marginal quando necessário) | B: aceitar formalmente o risco e ampliar o Risco 2 | — | A | A consulta agregada aplica supressão complementar para que nenhuma célula oculta possa ser deduzida por subtração dentro da mesma consulta ou pela consulta sem cruzamento. | — | aberta | RF-009, DEC-045, DEC-055, CA-010, CA-017 |
+| Q-016 | 28/10/2026 | "Todos os projetos" é vínculo dinâmico? | RN-004: o padrão é "todos os projetos"; não diz se inclui projetos criados depois | A: dinâmico (inclui projetos futuros) | B: fixado na criação do usuário | — | A | O vínculo padrão "todos os projetos do tenant" inclui os projetos criados depois. | — | aberta | RN-004, RF-001, CA-016 |
+| Q-017 | 28/10/2026 | Retenção dos arquivos de exportação | Exportação linha a linha guarda dados pessoais e de saúde em repouso, sem prazo | A: 7 dias | B: 30 dias | C: 24 horas | A | Arquivos de exportação são apagados 7 dias após a geração. | — | aberta | RN-030, RF-010 |
+| Q-018 | 28/10/2026 | Efeito de tenant inativo | `Tenant.ativo` existe, mas sem regra; a gestão é por script (DEC-017) | A: login recusado (ERR-013), jobs do tenant suspensos, dados preservados e expurgos legais mantidos | B: só login recusado | — | A | Tenant inativo: login recusado com ERR-013, jobs do tenant suspensos, dados preservados e expurgos por eliminação e retenção mantidos. | — | aberta | DEC-017, ENT-001 |
 
 10. Gates externos (GX)
 
@@ -1424,31 +1603,31 @@ Testes sentinela são casos de teste de alto nível que validam os riscos críti
 
 | id | nome_do_teste | cenario | resultado_esperado | requisitos |
 |---|---|---|---|---|
-| TS-001 | Isolamento de Tenant (Segurança) | Usuário do Tenant A tenta acessar via API, em todas as operações privadas do contrato, um recurso (ex: `GET /projects/{id}`) que pertence ao Tenant B. | O sistema retorna 404 Not Found (não 403) e registra uma tentativa de violação de isolamento na auditoria. Nenhum dado do Tenant B é retornado. | RNF-001, RN-002, CA-012 |
+| TS-001 | Isolamento de Tenant (Segurança) | Usuário do Tenant A tenta acessar via API, em todas as operações privadas do contrato, um recurso (ex: `GET /projects/{id}`), no caminho ou no corpo da requisição, que pertence ao Tenant B. | O sistema retorna 404 Not Found (não 403) e registra uma tentativa de violação de isolamento na auditoria. Nenhum dado do Tenant B é retornado. | RNF-001, RN-002, CA-012 |
 | TS-002 | Validação de Upload (Limite e Segurança) | Usuário tenta fazer upload de um arquivo `.exe` de 5MB e, em seguida, um `.pdf` de 25MB. | Ambos são rejeitados imediatamente com ERR-029 (motivos "tipo de arquivo não permitido" e "excede o limite de 20 MB"). O sistema não processa o arquivo nem grava metadados no banco. | RF-006, CA-029, RN-040 |
-| TS-003 | Fila de Revisão por Confiança (Negócio) | A IA lê um campo de texto com confiança de 0.85 (limite é 0.90). | O ItemResposta é criado com estado `a_revisar`. A Aplicacao não pode ser concluída até que este item seja resolvido por um humano. | RF-007, CA-005, DEC-028 |
+| TS-003 | Fila de Revisão por Confiança (Negócio) | A IA lê um campo de escolha única com confiança de 0.85 (limite é 0.90). | O ItemResposta é criado com estado `a_revisar`. A Aplicacao não pode ser concluída até que este item seja resolvido por um humano. | RF-007, CA-005, DEC-028 |
 | TS-004 | Anonimização de Grupos Pequenos (LGPD/Negócio) | Analista gera um dashboard filtrando por um grupo que retorna apenas 2 respondentes (o `grupo_minimo` do projeto é 5). | As células numéricas do gráfico/tabela correspondentes a esse grupo exibem "Oculto", sem indicar a contagem. A exportação CSV agregada também omite esses valores. | RF-009, CA-010, CA-034, RNF-004 |
-| TS-005 | Direito de Eliminação (LGPD) | Administrador executa o pedido de eliminação para um respondente específico. | As imagens são marcadas para expurgo. O registro do Respondente tem `nome` sobrescrito, `cpf_cifrado`, `cpf_hash`, `data_nascimento` e `endereco` apagados, e `anonimizado` = true. O ID do respondente vai para a ListaEliminacoes. A auditoria registra a ação sem o CPF. | RF-010, CA-023, RN-026, DEC-026 |
+| TS-005 | Direito de Eliminação (LGPD) | Administrador executa o pedido de eliminação para um respondente específico. | As imagens são marcadas para expurgo. O registro do Respondente tem `nome` sobrescrito, `cpf_cifrado`, `cpf_hash`, `data_nascimento` e `endereco` apagados, e `anonimizado` = true. O ID do respondente vai para a ListaEliminacoes. A auditoria registra a ação sem o CPF. | RF-010, CA-023, RN-030, RN-031, DEC-026 |
 | TS-006 | Bloqueio de Edição de Versão Publicada (Integridade) | Administrador tenta adicionar uma nova pergunta a uma Versao que já tem o status `publicada`. | O sistema rejeita a operação com ERR-009 (Versão imutável). O administrador deve criar uma nova versão em rascunho. | RF-004, CA-001, RN-042 |
 | TS-007 | Teto de Custo de IA (Operação) | O tenant atinge o teto de R$ 500,00 de custo de IA no mês. Uma nova aplicação é enviada para leitura. | A aplicação entra no estado `aguardando_cota`. O administrador do tenant recebe um alerta (e-mail/tela). Nenhuma chamada é feita ao provedor de IA até que a cota seja renovada ou o teto aumentado. | RF-007, CA-030, DEC-035, RNF-014 |
-| TS-008 | Direito de Eliminação Completo (LGPD) | Administrador executa eliminação de respondente com aplicações concluídas, aplicações em revisão e exportações pendentes. | Todas as imagens são marcadas para expurgo. Os ItemResposta têm `valor_ia` e `valor_final` sobrescritos. O Respondente é anonimizado. Aplicações em andamento são descartadas. Exportações pendentes são canceladas. O ID vai para ListaEliminacoes com validade de 180 dias. A auditoria registra a ação sem CPF. O expurgo físico ocorre em até 30 dias. | RF-010, CA-023, RN-026, RN-030, DEC-026 |
+| TS-008 | Direito de Eliminação Completo (LGPD) | Administrador executa eliminação de respondente com aplicações concluídas, aplicações em revisão e exportações pendentes. | Todas as imagens são marcadas para expurgo. Os ItemResposta têm `valor_ia` e `valor_final` sobrescritos. O Respondente é anonimizado. Aplicações em andamento são descartadas. Exportações pendentes são canceladas. O ID vai para ListaEliminacoes com validade de 180 dias. A auditoria registra a ação sem CPF. O expurgo físico ocorre em até 30 dias. | RF-010, CA-023, RN-030, RN-031, DEC-026 |
 
 12. Checklist de pronto (nível Completo)
 
 Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tools/validar_consistencia.py`; o resultado do script prevalece sobre este texto.
 
-- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-046, ENT-001 a ENT-022, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 46 CAs (CA-001 a CA-044, CA-014b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-060 (negócio; DEC-037 a DEC-053 são técnicas, no PLANO), Q-001 a Q-011 e GX-001. Verificado por script (IDs citados existem nos registros).
+- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-048, ENT-001 a ENT-030, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 46 CAs (CA-001 a CA-044, CA-014b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), Q-001 a Q-018 e GX-001. Verificado por script (IDs citados existem nos registros).
 - [x] 2. BDD com dados concretos: tabelas de exemplos nos CAs de alto risco CA-002, CA-008, CA-010, CA-012, CA-023, CA-029, CA-030, CA-032 e CA-043 (adicionadas na v1.3; na v1.2 só o CA-029 tinha tabela).
 - [x] 3. Estados e fluxos fechados: FL-001 com tabela de criação e entradas em `aguardando_cota`; FL-002 com ordem de avaliação explícita. Estados verificados por script contra o dicionário e o contrato.
-- [x] 4. Dicionário de dados completo: 22 entidades com as 11 propriedades; `registros/dicionario_dados.csv` idêntico, verificado por script.
+- [x] 4. Dicionário de dados completo: 30 entidades com as 11 propriedades; `registros/dicionario_dados.csv` idêntico, verificado por script.
 - [x] 5. Concorrência e duplicidade definidas (seção 6.5), com idempotência e If-Match obrigatórios nas operações listadas.
 - [x] 6. Resiliência em chamadas externas (seção 6.6), incluindo PDF e jobs.
 - [x] 7. Zero contradições com a tabela de decisões: DEC-020 × ERR-006 e DEC-026 × dicionário corrigidos na v1.3.
 - [x] 8. Toda escolha técnica é DEC; lacuna de negócio é Q, e Q respondida vira DEC (Q-005 a Q-011 → DEC-054 a DEC-060). DEC-036 foi resolvida pela DEC-038 (PLANO); DEC-023 substituída pela DEC-055.
 - [x] 9. Testes sentinela cobrindo riscos: TS-001 a TS-008.
 - [x] 10. Gates externos registrados: GX-001 (bloqueia piloto e produção).
-- [x] 11. Nenhum trecho exige "bom senso": lacunas resolvidas pelas DEC-054 a DEC-060.
-- [x] 12. Toda Q respondida: Q-001 a Q-011.
+- [ ] 11. Nenhum trecho exige "bom senso": depende das respostas a Q-012 a Q-018.
+- [ ] 12. Toda Q respondida: Q-012 a Q-018 abertas pela CHG-004.
 - [ ] 13. Consenso DEV/TEST sem divergência bloqueante: depende da REV-REQ-005.
 - [x] 14. REQ autocontida: referências externas (MeuRemedio, Kit v3) são informativas; o Bloco P está em `docs/spec/BLOCO_P.md`.
 - [ ] 15. Última revisão independente sem achado bloqueante ou alto: REV-REQ-005 (humana) pendente. As REV anteriores foram feitas por IA (simulada ou não independente).
@@ -1476,6 +1655,7 @@ A revisão independente é obrigatória no nível Completo. O revisor não pode 
 | REV-REQ-002 | 24/10/2026 | IA Revisora (Simulada) | 1.1 | 0 | 0 | 0 | 0 | Resolvido | Verificação cruzada declarada sem achados; a REV-REQ-004 mostrou que a verificação não foi efetiva. |
 | REV-REQ-003 | 24/10/2026 | Carlos Yano (CHG-001) | 1.2 | 0 | 0 | 0 | 0 | Resolvido | CHG-001 aplicada: CA-032 de ERR-036 para ERR-006. CA-014b e CA-037b adicionados. |
 | REV-REQ-004 | 27/10/2026 | Claude (assistente IA; não independente) | 1.2 | 4 | n/c | n/c | n/c | Resolvido | Bloqueantes: ERR duplicados; DEC-020 × ERR-006; eliminação × NOT NULL; CPF de exemplo inválido. Demais achados não classificados por severidade. Validação mecânica (`tools/validar_consistencia.py`) e leitura cruzada: ERR duplicados (005/043, 007/029); DEC-020 × ERR-006; eliminação × NOT NULL; CPF de exemplo inválido; FL-001 sem entradas em `aguardando_cota`; FL-002 sem precedência; RN-008 citando tabela inexistente; regex de Perfil; tabelas de exemplos ausentes nos CAs de alto risco; contrato sem 30 operações. Corrigidos na v1.3 (CHG-002); lacunas de negócio viraram Q-005 a Q-011. |
-| REV-REQ-005 | 27/10/2026 | Revisor humano independente (a designar) | 1.4 | — | — | — | — | Pendente | Exigida pelo nível Completo: o revisor não pode ser o autor nem a mesma IA que corrigiu. |
+| REV-REQ-005 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 1.4 | 2 | 10 | 17 | 5 | Resolvido | Bloqueantes: lista de eliminações no mesmo banco restaurado; colunas NOT NULL da aplicação impossíveis na criação. Altos: FL-002 presa com origem pulada; vínculo sem assinatura; histórico de atributos sem entidade; entidades faltantes (exportação, página, sessão, token, idempotência, falha de login); e-mail de outro tenant; texto curto; linhas de matriz e 'nenhuma das anteriores'; reserva fixa × deslizante; pedido do titular sem estado de falha; dedução de célula oculta. Corrigidos na v1.5 (CHG-004); decisões de negócio viraram Q-012 a Q-018. |
+| REV-REQ-006 | 28/10/2026 | Agente revisor-independente (nova rodada) | 1.5 | — | — | — | — | Pendente | Verificar as correções da CHG-004. |
 
 Fim do documento `REQ.md`

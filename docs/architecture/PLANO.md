@@ -3,11 +3,11 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.4 (CHG-002 e CHG-003 aceitas) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v1.5 (CHG-004 aplicada, pendente de aceite) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.5
-**Status:** EM REVISÃO — REV-PLANO-007 (humana) pendente
+**Versão do plano:** 2.6
+**Status:** EM REVISÃO — REV-PLANO-008 pendente; Q-012 a Q-018 abertas; DEC-061 (revisão por IA) aguardando o responsável
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -68,7 +68,7 @@ recebe o recorte já normalizado.
 | CMP-Auth | sessão, MFA, reset de MFA, convites, perfis, vínculos, concessões | RF-001, RF-002 | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite, listUsers, createTenantUser, getUser, updateUser, inviteUser, resetMfa, grantIndividualAccess, listIndividualAccessGrants, revokeAccess |
 | CMP-Projects | projetos, parâmetros, ciclo de vida | RF-003 | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject |
 | CMP-Forms | versões imutáveis, perguntas, regras de salto, PDF e mapa de layout | RF-004 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf |
-| CMP-Upload | validação, antimalware, metadados, QR, registro da imagem, storage | RF-006 | uploadImages, identifyApplication |
+| CMP-Upload | validação, antimalware, metadados, QR, registro da imagem, storage | RF-006 | uploadImages, identifyApplication, addApplicationPages |
 | CMP-MotorIA | recorte, chamada ao provedor, confiança, cota | RF-007 | processAIReading (worker), getQuotaStatus |
 | CMP-Respondents | unicidade por CPF, vínculo, criação, reversão | RF-005 | linkRespondent (interno) |
 | CMP-Revisao | fila, reserva, revisão, conclusão, assinatura, descarte, reabertura | RF-008 | listReviewQueue, getApplication, openReview, getItemImage, saveReview, confirmApplication, attachSignaturePage, retryReading, discardApplication, reopenApplication |
@@ -115,13 +115,16 @@ Timeout e retentativas conforme tabela abaixo. Após 3 falhas consecutivas em ch
 
 Bloqueio imediato do acesso → anonimização do respondente (`nome` = "ANONIMIZADO";
 `cpf_cifrado`, `cpf_hash`, `data_nascimento` e `endereco` = NULL) e sobrescrita dos
-valores de resposta → apagamento de exportações pendentes → descarte de aplicações em
-andamento → registro em `lista_eliminacoes` (180 dias) → expurgo físico em até
-30 dias. Auditoria guarda só referências. Restauração de backup reaplica a
-eliminação via lista (DEC-033, P.13). `executeDataSubjectRequest` responde 202 e
+valores de resposta, de `motivo_descarte`/`motivo_reabertura` e da descrição do pedido →
+apagamento do histórico de atributos (ENT-023) → cancelamento e apagamento de exportações
+(ENT-026) → descarte de aplicações em andamento → registro em `lista_eliminacoes` (180 dias)
+**e** no registro externo de eliminações (DEC-062) → expurgo físico em até 30 dias.
+Auditoria guarda só referências. Restauração de backup reaplica a eliminação lendo o
+registro externo, porque a tabela `lista_eliminacoes` restaurada é tão antiga quanto o
+backup (DEC-033, P.13). `executeDataSubjectRequest` responde 202 e
 executa em job; o pedido fica em `em_andamento` até concluir.
 
-**Vínculo com continuidade (§9.2):** a reaplicação da eliminação após restore é obrigatória no runbook, cobrindo a janela de RPO de 24 h e a retenção de backup de 90 dias (DEC-033). O teste de restauração (TS-008 + restore) é executado a cada incremento, em staging, e mede o RTO alvo de 4 h.
+**Vínculo com continuidade (§9.2):** a reaplicação da eliminação após restore é obrigatória no runbook, sempre a partir do registro externo (DEC-062) e antes de reabrir o banco ao tráfego, cobrindo a janela de RPO de 24 h e a retenção de backup de 90 dias (DEC-033). O teste de restauração (TS-008 + restore) é executado a cada incremento, em staging, e mede o RTO alvo de 4 h.
 
 ### 4.4 Reabertura com reversão de cadastro (CA-042)
 
@@ -130,8 +133,10 @@ vínculo é refeito e as alterações de cadastro feitas por essa aplicação s�
 revertidas, com registro em auditoria. Implementação: job transacional único que
 (i) muda estado da aplicação, (ii) desfaz atributos de Respondente alimentados pela
 aplicação retornando ao valor anterior ou a NULL se não havia valor prévio,
-(iii) preserva auditoria da reversão. O valor anterior fica guardado em tabela
-própria de histórico de atributos (cifrada como o original), nunca na auditoria.
+(iii) preserva auditoria da reversão. O valor anterior fica em HistoricoAtributoRespondente
+(ENT-023, cifrado como o original, DEC-063), nunca na auditoria. A reversão de um atributo só
+acontece se o valor atual ainda for o gravado por essa aplicação (`valor_gravado_hash`); se
+outra aplicação posterior já o alterou, o atributo é mantido e a divergência auditada.
 
 ### 4.5 Reset de MFA pelo administrador (CA-037b)
 
@@ -168,7 +173,7 @@ guardam dado pessoal; o payload carrega apenas IDs.
 
 ### 5.1 Convenções
 
-- Tabelas correspondem a ENT-001 a ENT-022, em `snake_case`.
+- Tabelas correspondem a ENT-001 a ENT-030, em `snake_case`.
 - Toda tabela com dado de tenant carrega `tenant_id`; filhas usam FK composta `(id, tenant_id)`.
 - Constraints nomeadas: `pk_`, `fk_`, `uq_`, `ck_` + contexto.
 - Instantes `timestamptz` UTC; datas civis (`data_nascimento`, `data_aplicacao`) como `date`.
@@ -179,11 +184,12 @@ guardam dado pessoal; o payload carrega apenas IDs.
 - Autenticação extrai `tenant_id` da sessão.
 - `SET LOCAL app.tenant_id = '<uuid>'` dentro da transação da requisição.
 - Policy em toda tabela com tenant:
-  `USING (tenant_id = current_setting('app.tenant_id', true)::uuid)`.
+  `FOR ALL USING (tenant_id = current_setting('app.tenant_id', true)::uuid) WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid)`.
+- `auditoria` é imutável: `mp_app` só tem `INSERT` e `SELECT` (sem `UPDATE`/`DELETE`), e um trigger recusa alteração mesmo pelo dono; expurgo por retenção só por `mp_manutencao`.
 - `parametro_configuracao`: policy adicional que permite **ler** linhas com `tenant_id IS NULL` (nível plataforma); escrita nelas só por `mp_manutencao`.
 - `FORCE ROW LEVEL SECURITY`, inclusive para o dono da tabela.
 - Fora de escopo (outro tenant ou projeto não vinculado) → 404 ERR-002, sem revelar existência; tentativa auditada.
-- Teste gerado do contrato cobre 100% das operações privadas (RN-023, TS-001).
+- Teste gerado do contrato cobre 100% das operações privadas (RN-023, TS-001), com IDs de outro tenant no caminho e no corpo (projetos, usuario_id, versao_id, projeto_ids, copiar_de_versao_id).
 
 ### 5.3 Constraints de unicidade
 
@@ -198,6 +204,12 @@ guardam dado pessoal; o payload carrega apenas IDs.
 | lista_eliminacoes | (tenant_id, respondente_id_original) |
 | parametro_configuracao | (tenant_id, projeto_id, chave) NULLS NOT DISTINCT |
 | respondente | (tenant_id, cpf_hash) WHERE cpf_hash IS NOT NULL |
+| linha_matriz | (pergunta_id, codigo) |
+| pagina_aplicacao | (chave_storage) |
+| chave_idempotencia | (usuario_id, operacao, chave) |
+| falha_login | (email_hmac) |
+
+Checks de aplicação (ENT-010): `estado = 'identificacao_pendente' OR versao_id IS NOT NULL`; `estado NOT IN ('sem_assinatura','concluida') OR (data_aplicacao IS NOT NULL AND local_aplicacao IS NOT NULL)`.
 
 Checks: `ck_respondente_anonimizacao`: `anonimizado OR (cpf_cifrado IS NOT NULL AND cpf_hash IS NOT NULL AND data_nascimento IS NOT NULL)`.
 Concessão: autorização exige `ativo AND valido_ate > now()`; o job de expiração só mantém o flag coerente.
@@ -238,12 +250,15 @@ Rate limit: 100 req/min/usuário; 20 req/min/IP em rotas públicas (ERR-010); 42
 Rotas públicas (sem sessão): `login`, `resetPassword`, `confirmPasswordReset`, `acceptInvite`.
 Sessão em banco, cookie httpOnly + SameSite, CSRF double-submit em toda mutação autenticada; MFA obrigatório (§4.6).
 Rotas e operationIds conforme §3; operações internas do worker não são endpoints.
-Paths em inglês; campos e mensagens em português. Lint (Spectral) e quebra de compatibilidade (oasdiff) no CI.
+Paths em inglês; campos e mensagens em português. Lint (Spectral) no CI desde a fundação; quebra de compatibilidade (oasdiff) entra no CI no IMP-001, junto com o primeiro código.
 
 ### 6.1 Autorização por perfil
 
-Derivada de "Quem executa" de cada RF e dos atores da REQ §2.2. Perfil sem permissão → 403 ERR-016;
-recurso de projeto não vinculado → 404 ERR-002 (RN-004). Todas as rotas abaixo também exigem vínculo ao projeto do recurso.
+Derivada de "Quem executa" de cada RF e dos atores da REQ §2.2. Ordem de verificação:
+1. Recurso de outro tenant ou de projeto não vinculado (inclusive IDs no corpo) → 404 ERR-002 (RN-002, RN-004).
+2. Nenhum perfil do usuário permite a operação → 403 ERR-016.
+3. Perfil `analista_individual` sem concessão vigente em cada projeto envolvido → 403 ERR-008 (DEC-060).
+Toda operação com "não" em alguma coluna declara 403 no contrato (verificado pelo validador).
 
 | Operações | admin_tenant | digitalizador | analista | analista_individual |
 | --- | --- | --- | --- | --- |
@@ -253,7 +268,7 @@ recurso de projeto não vinculado → 404 ERR-002 (RN-004). Todas as rotas abaix
 | createProject, updateProject, archiveProject, unarchiveProject | sim | não | não | não |
 | listForms, getVersion | sim | sim (leitura, para identificar páginas) | não | não |
 | createForm, createVersion, updateVersion, publishVersion, generatePdf | sim | não | não | não |
-| uploadImages, identifyApplication, RF-008 (revisão) | não | sim | não | não |
+| uploadImages, identifyApplication, addApplicationPages, RF-008 (revisão) | não | sim | não | não |
 | reopenApplication | sim | sim | não | não |
 | getQuotaStatus | sim | não | não | não |
 | getDashboardAggregated, listGroups, createGroup, deleteGroup | sim | não | sim | sim |
@@ -291,7 +306,7 @@ Medidor de custo de IA por página/tenant com reserva atômica de orçamento (DE
 | T-09 | Reidentificação por filtro | k-anon por célula, também na exportação; célula oculta sem contagem | TS-004 + fast-check |
 | T-10 | Replay / clique duplo | Idempotência obrigatória + dedupe | Testes de concorrência |
 | T-11 | Cadeia de suprimentos | SBOM, gitleaks, CodeQL, deps | CI bloqueante |
-| T-12 | Backup ressuscita eliminados | Lista de eliminações + reaplicação | TS-008 + restore |
+| T-12 | Backup ressuscita eliminados | Registro externo de eliminações (DEC-062) + reaplicação antes de reabrir o banco | TS-008 + restore com backup anterior à eliminação |
 | T-13 | Esgotamento de cota | Teto + reserva atômica + fila sem descarte | TS-007 |
 | T-14 | QR forjado / de outro tenant | Validação tenant+projeto+versão; QR com identificador opaco | Teste de integração do upload (IMP-002) |
 | T-15 | Correlação de CPF entre tenants | HMAC com chave por tenant (DEC-041) | Teste unitário: mesmo CPF, tenants distintos, hashes distintos |
@@ -314,7 +329,7 @@ deste projeto é criado no IMP-001 em `docs/decisions/`.
 - **RPO:** 24 h
 - **RTO:** 4 h
 - **Retenção de backup:** máxima de 90 dias (DEC-033)
-- **Restauração testada:** a cada incremento, em staging, com runbook que inclui a reaplicação obrigatória de eliminações via `lista_eliminacoes`
+- **Restauração testada:** a cada incremento, em staging, com runbook que inclui a reaplicação obrigatória de eliminações a partir do registro externo (DEC-062)
 - **Métricas e alertas:** idade do último backup bem-sucedido, duração do restore, taxa de sucesso da reaplicação de eliminações
 - **Referências normativas:** P.13 (Bloco P), DEC-033, TS-008
 
@@ -366,7 +381,7 @@ fundação (`.github/workflows/ci.yml`).
 - Relógio e gerador de IDs injetáveis (reserva de 30 min, convite de 24 h, concessão de 90 dias, sessão).
 - Gerador de CPF válido e lista de CPFs inválidos de referência.
 - Semente TOTP conhecida para o E2E com MFA.
-- Arquivo de teste EICAR para o ClamAV.
+- Arquivo de teste EICAR puro (68 bytes) enviado com extensão .png e MIME image/png; EICAR embutido num PNG válido não é detectado.
 - Mock do ReadEngine com fixtures: confiança abaixo, igual (0,90) e acima do limite; saída malformada; valor fora do schema; imagem com instrução injetada; timeout e erro.
 - Dados 100% sintéticos (Q-001).
 
@@ -384,8 +399,8 @@ validada a cada merge.
 | IMP | Escopo | CAs cobertos | Entrada | Saída / evidência esperada |
 | --- | --- | --- | --- | --- |
 | IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA |
-| IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-015, CA-017, CA-018, CA-019, CA-020, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada |
-| IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-018, CA-019, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 aceito | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` |
+| IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada |
+| IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-015, CA-018, CA-019, CA-020, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 aceito | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` |
 | IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-010, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031, CA-034 | IMP-003 aceito | TS-004/TS-005/TS-008; k-anon por célula; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações; grupo mínimo entre projetos |
 
 Cada IMP: IA-TEST escreve testes vermelhos → IA-DEV implementa → verificações
@@ -394,23 +409,19 @@ incremento inteiro → Gate 2 (aceite do responsável).
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 46 CAs da REQ v1.4
+### 11.1 Cobertura dos 46 CAs da REQ v1.5
 
 A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 46 critérios
-de aceite da REQ v1.4 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
+de aceite da REQ v1.5 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
 confere que cada CA está no incremento do seu RF.
 
-**CA-017** e **CA-021** aparecem em mais de um incremento porque a REQ os
-associa a mais de um RF:
+**CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
+marcado na revisão (RF-008/IMP-003) e excluído de relatórios/exportações (RF-009 e RF-010/IMP-004).
 
-- **CA-017**: gráfico cruzado — preparado no formulário (RF-004/IMP-002) e efetivado no dashboard (RF-009/IMP-004).
-- **CA-021**: assinatura ausente — marcada na revisão (RF-008/IMP-003) e excluída de relatórios/exportações (RF-009 e RF-010/IMP-004).
-
-**CA-018** e **CA-019** aparecem em IMP-002 e IMP-003 porque a REQ os associa
-a RF-004 (IMP-002) e RF-007 (IMP-003):
-
-- **CA-018**: condição de salto não resolvida — definida na estrutura do formulário (RF-004/IMP-002) e avaliada durante a leitura (RF-007/IMP-003).
-- **CA-019**: resposta em pergunta que deveria ser pulada — definida na estrutura do formulário (RF-004/IMP-002) e avaliada durante a leitura (RF-007/IMP-003).
+Na v1.5 (CHG-004), CA-015, CA-018, CA-019 e CA-020 passaram a pertencer só aos RF que os
+tornam observáveis (leitura e revisão, IMP-003) e CA-017 só ao RF-009 (IMP-004); o IMP-002
+entrega a estrutura (regras de salto e perguntas de cruzamento), verificada pelos testes de
+RF-004, sem declarar esses CAs.
 
 **CA-034** é coberto no IMP-004 porque o comportamento exigido é a aplicação do
 maior `grupo_minimo` entre projetos em relatórios/exportações (RF-009).
@@ -437,6 +448,9 @@ validado pelo CI a cada merge.
 | CHG-001 — CA-032 × catálogo ERR | mudança normativa | aplicada na REQ v1.2 |
 | CHG-002 — correções de consistência e lacunas | mudança normativa | aceita em 27/10/2026 (REQ v1.3) |
 | CHG-003 — respostas às Q-005 a Q-011 | mudança normativa | aceita em 27/10/2026 (REQ v1.4, DEC-054 a DEC-060) |
+| CHG-004 — achados da REV-REQ-005/REV-PLANO-007 | mudança normativa | aplicada na REQ v1.5; pendente de aceite |
+| Q-012 a Q-018 | lacunas de negócio | abertas; textos provisórios em uso |
+| DEC-061 — revisão independente por agente de IA | decisão de negócio | proposta, aguardando o responsável |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
@@ -470,6 +484,8 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-051 | 27/10/2026 | técnica | Controle do teto de custo de IA | Checagem após a chamada; reserva prévia | Reserva atômica de orçamento com custo estimado antes de cada chamada e ajuste pelo custo real | Workers em paralelo ultrapassariam o teto | definitivo | | Médio | DEC-035, CA-030, TS-007 |
 | DEC-052 | 27/10/2026 | técnica | Escopo do teste de mutação | Mutação ≥ 80% em todo o código; escopo crítico | Mutação ≥ 80% em motor-leitura, regras de FL-001/FL-002, k-anonimato, CPF e autorização; demais com cobertura de linhas ≥ 80% | Mutação em todo o repositório é lenta e cara sem ganho proporcional; desvio do Bloco P P.1 registrado | definitivo | | Médio | Bloco P P.1 |
 | DEC-053 | 27/10/2026 | técnica | Separação IA-TEST e IA-DEV | Mesmo PR; PRs separados com testes congelados | Testes vermelhos em PR próprio aprovado pelo responsável; PR de implementação não altera testes aprovados (CI + CODEOWNERS) | Evita que a mesma IA ajuste o teste ao código | definitivo | | Alto | Bloco P P.14 |
+| DEC-062 | 28/10/2026 | técnica | Onde guardar a lista de eliminações | Tabela no mesmo banco; registro externo | Registro append-only em bucket S3 separado, com Object Lock (retenção 180 dias), gravado na mesma execução da eliminação; o runbook de restore lê dele e reaplica antes de reabrir o banco | A tabela no banco restaurado é tão antiga quanto o backup e não contém eliminações posteriores (achado B-01 da REV-PLANO-007) | definitivo | | Alto | DEC-033, T-12, TS-008 |
+| DEC-063 | 28/10/2026 | técnica | Guarda do valor anterior para reversão (CA-042) | Na auditoria; tabela própria cifrada | Tabela HistoricoAtributoRespondente (ENT-023), cifrada como o original, apagada na eliminação; reversão condicionada ao valor atual | A auditoria não pode guardar valores (RN-027) | definitivo | | Alto | CA-042, CA-023, RN-027 |
 
 ---
 
@@ -477,12 +493,13 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.4
+- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.5
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
 - [x] CHG-002 e CHG-003 aceitas pelo responsável
-- [ ] Revisão independente humana (REV-PLANO-007) com 0 achados bloqueantes, altos e médios
+- [ ] Q-012 a Q-018 respondidas e CHG-004 aceita
+- [ ] Revisão independente (REV-PLANO-008) com 0 achados bloqueantes, altos e médios; forma de revisão definida na DEC-061
 
 **Bloqueio de status:** este plano NÃO pode ser declarado PRONTO PARA IMPLEMENTAÇÃO
 enquanto os itens acima não estiverem marcados.
@@ -499,15 +516,15 @@ REQ §8.1; o CI falha se divergirem.
 | Requisito | Regra | Entidade | Fluxo | História | Critério | Teste Sentinela | Operation ID | Componente | Incremento |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | RF-001 | RN-001, RN-003, RN-004 | ENT-002, ENT-003, ENT-014, ENT-015, ENT-022 | FL-001 | US-010 | CA-012, CA-016, CA-025, CA-035, CA-037, CA-037b, CA-038 | TS-001 | listUsers, createTenantUser, getUser, updateUser, inviteUser, resetMfa, grantIndividualAccess, listIndividualAccessGrants, revokeAccess | CMP-Auth | IMP-001 |
-| RF-002 | RN-025 | ENT-002 | FL-001 | US-010 | CA-026, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite | CMP-Auth | IMP-001 |
+| RF-002 | RN-048 | ENT-002, ENT-027, ENT-028, ENT-030 | FL-001 | US-010 | CA-026, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite | CMP-Auth | IMP-001 |
 | RF-003 | RN-027 | ENT-004, ENT-020, ENT-021 | FL-001 | US-006 | CA-027 | — | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject | CMP-Projects | IMP-002 |
-| RF-004 | RN-017, RN-018, RN-019, RN-021, RN-042 | ENT-005, ENT-006, ENT-007, ENT-008, ENT-016 | FL-001 | US-007 | CA-001, CA-015, CA-017, CA-018, CA-019, CA-020, CA-028, CA-036 | TS-006 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf | CMP-Forms | IMP-002 |
+| RF-004 | RN-017, RN-018, RN-019, RN-021, RN-042, RN-047 | ENT-005, ENT-006, ENT-007, ENT-008, ENT-016, ENT-024 | FL-001 | US-007 | CA-001, CA-028, CA-036 | TS-006 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf | CMP-Forms | IMP-002 |
 | RF-005 | RN-011, RN-012, RN-014, RN-015 | ENT-009, ENT-010 | FL-001, FL-002 | US-003 | CA-002, CA-014, CA-014b, CA-032 | — | linkRespondent (interna) | CMP-Respondents | IMP-003 |
-| RF-006 | RN-040 | ENT-010, ENT-011 | FL-001 | US-001 | CA-003, CA-004, CA-013, CA-029, CA-039, CA-040 | TS-002 | uploadImages, identifyApplication | CMP-Upload | IMP-002 |
-| RF-007 | RN-037, RN-038, RN-039 | ENT-011 | FL-001, FL-002 | US-002 | CA-005, CA-006, CA-018, CA-019, CA-030, CA-041 | TS-003, TS-007 | processAIReading (interna), getQuotaStatus | CMP-MotorIA | IMP-003 |
-| RF-008 | RN-016, RN-043, RN-044 | ENT-009, ENT-010, ENT-011, ENT-017 | FL-001, FL-002 | US-002, US-003 | CA-007, CA-008, CA-021, CA-033, CA-042, CA-043, CA-044 | — | listReviewQueue, getApplication, openReview, getItemImage, saveReview, confirmApplication, attachSignaturePage, retryReading, discardApplication, reopenApplication | CMP-Revisao | IMP-003 |
-| RF-009 | RN-026 | ENT-012, ENT-015 | FL-001 | US-004, US-008 | CA-009, CA-010, CA-011, CA-017, CA-021, CA-031, CA-034 | TS-004 | getDashboardAggregated, listGroups, createGroup, deleteGroup, findRespondent, getIndividualRecord | CMP-Dashboard | IMP-004 |
-| RF-010 | RN-027, RN-030, RN-031 | ENT-009, ENT-013, ENT-018, ENT-019 | FL-001 | US-005, US-009 | CA-021, CA-022, CA-023, CA-024 | TS-005, TS-008 | exportData, getExport, createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, listAuditEvents | CMP-LGPD | IMP-004 |
+| RF-006 | RN-040 | ENT-010, ENT-011, ENT-025, ENT-029 | FL-001 | US-001 | CA-003, CA-004, CA-013, CA-029, CA-039, CA-040 | TS-002 | uploadImages, identifyApplication, addApplicationPages | CMP-Upload | IMP-002 |
+| RF-007 | RN-021, RN-037, RN-038, RN-039 | ENT-011 | FL-001, FL-002 | US-002, US-007 | CA-005, CA-006, CA-015, CA-018, CA-019, CA-030, CA-041 | TS-003, TS-007 | processAIReading (interna), getQuotaStatus | CMP-MotorIA | IMP-003 |
+| RF-008 | RN-016, RN-043, RN-044 | ENT-009, ENT-010, ENT-011, ENT-017, ENT-023 | FL-001, FL-002 | US-002, US-003, US-007 | CA-007, CA-008, CA-020, CA-021, CA-033, CA-042, CA-043, CA-044 | — | listReviewQueue, getApplication, openReview, getItemImage, saveReview, confirmApplication, attachSignaturePage, retryReading, discardApplication, reopenApplication | CMP-Revisao | IMP-003 |
+| RF-009 | RN-026 | ENT-012, ENT-015 | FL-001 | US-004, US-007, US-008 | CA-009, CA-010, CA-011, CA-017, CA-021, CA-031, CA-034 | TS-004 | getDashboardAggregated, listGroups, createGroup, deleteGroup, findRespondent, getIndividualRecord | CMP-Dashboard | IMP-004 |
+| RF-010 | RN-027, RN-030, RN-031 | ENT-009, ENT-013, ENT-018, ENT-019, ENT-023, ENT-026 | FL-001 | US-005, US-009 | CA-021, CA-022, CA-023, CA-024 | TS-005, TS-008 | exportData, getExport, createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, listAuditEvents | CMP-LGPD | IMP-004 |
 
 ---
 
@@ -521,8 +538,9 @@ REQ §8.1; o CI falha se divergirem.
 | REV-PLANO-004 | 27/10/2026 | IA Revisora (Simulada) | 2.2 | 0 | 1 | 0 | 0 | Resolvido | Alocação de CA-017, CA-021 e CA-034 divergia da matriz canônica. Corrigido na v2.3 (o CSV de incrementos não foi atualizado; ver REV-PLANO-006). |
 | REV-PLANO-005 | 27/10/2026 | IA Revisora (Simulada) | 2.3 | 0 | 0 | 0 | 0 | Invalidado | O CSV registrava "Convergente" enquanto o plano dizia "Pendente"; a REV-PLANO-006 encontrou achados bloqueantes na mesma versão. |
 | REV-PLANO-006 | 27/10/2026 | Claude (assistente IA; não independente) | 2.3 | 4 | n/c | n/c | n/c | Resolvido | Bloqueantes: IDs de DEC colidindo entre REQ e CSV; status da REV-PLANO-005 divergente; CSV de incrementos desatualizado; rotas públicas exigindo sessão no contrato. Também: RLS sem desenho para login e jobs, confiança e recortes indefinidos, segredo MFA enviado pelo cliente, 30 operações ausentes no contrato, CSVs corrompidos e nomes de arquivo com caixa errada. Corrigidos na v2.4. |
-| REV-PLANO-007 | 27/10/2026 | Revisor humano independente (a designar) | 2.5 | — | — | — | — | Pendente | Exigida pelo nível Completo. |
+| REV-PLANO-007 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.5 | 2 | 10 | 17 | 5 | Resolvido | Achados em conjunto com a REV-REQ-005 (lista de eliminações no banco restaurado; nulidade na criação da aplicação; entidades faltantes; autorização sem 403; histórico de atributos sem entidade; oasdiff declarado e ausente; RLS sem WITH CHECK; imutabilidade da auditoria sem mecanismo). Corrigidos na v2.6. |
+| REV-PLANO-008 | 28/10/2026 | Agente revisor-independente (nova rodada) | 2.6 | — | — | — | — | Pendente | Verificar as correções da v2.6. |
 
 ---
 
-**Fim do documento `PLANO.md` v2.5**
+**Fim do documento `PLANO.md` v2.6**

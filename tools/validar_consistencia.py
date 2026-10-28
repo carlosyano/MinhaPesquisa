@@ -402,6 +402,30 @@ for pnome, prm in api["components"]["parameters"].items():
     if pnome in ("IdempotencyKey", "IfMatch") and not prm.get("required"):
         erro("C14", f"parâmetro {pnome} deveria ser obrigatório (P.8)")
 
+# ───────────────────────── C15 autorização (PLANO §6.1) × 403 ─────────────────────────
+aut = tabela_apos(plano, "### 6.1 Autorização por perfil")
+rf_ops = {r["requisito"]: [x.strip().replace("(interna)", "").strip() for x in r["operation_id"].split(",")] for r in mat_csv}
+cobertas: set[str] = set()
+for l in aut[1:]:
+    nomes: set[str] = set()
+    for item in re.split(r",\s*", re.sub(r"\s*\([^)]*\)", "", l[0])):
+        m_rf = re.match(r"(RF-\d+)", item.strip())
+        if m_rf:
+            nomes |= set(rf_ops.get(m_rf.group(1), []))
+        else:
+            nomes.add(re.sub(r"\s*\(.*\)", "", item).strip())
+    restrita = any(c.lower().startswith("não") or c.lower().startswith("sim,") for c in l[1:])
+    for n in nomes:
+        if n not in ops_api and n not in internas:
+            erro("C15", f"PLANO §6.1 cita operação inexistente: {n}")
+            continue
+        if n in ops_api:
+            cobertas.add(n)
+            if restrita and "403" not in ops_api[n].get("responses", {}):
+                erro("C15", f"{n}: negada a algum perfil no PLANO §6.1, mas sem resposta 403 no contrato")
+for oid in set(ops_api) - cobertas:
+    erro("C15", f"{oid}: operação sem linha na matriz de autorização do PLANO §6.1")
+
 # ───────────────────────── resultado ─────────────────────────
 if achados:
     print(f"{len(achados)} achado(s):")

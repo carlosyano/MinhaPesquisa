@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.2.1
+  version: 0.2.2
   description: |
     API do SaaS MinhaPesquisa — digitalização de pesquisas em papel com leitura por IA,
     revisão humana e dashboards anonimizados, em conformidade com a LGPD.
-    Fonte normativa: REQ v1.4 e PLANO.md v2.5. Contract-first — este arquivo valida
+    Fonte normativa: REQ v1.5 e PLANO.md v2.6. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: rotas públicas declaram `security: []`; rotas de MFA usam a pré-sessão (DEC-050);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -293,8 +293,10 @@ paths:
       description: |
         Cria o usuário (inativo até aceitar o convite), atribui um ou mais perfis (RN-003) e
         vincula aos projetos informados; sem projetos, vincula a todos (RN-004). Envia convite
-        de 24 h (DEC-032).
-      x-trace: [RF-001, CA-012, CA-035, RN-003, RN-004]
+        de 24 h (DEC-032). E-mail já existente na plataforma → 400 ERR-023, mesma resposta
+        para qualquer tenant (DEC-054; provisório, Q-013). Projeto de outro tenant em
+        `projetos` → 404 ERR-002.
+      x-trace: [RF-001, CA-012, CA-035, RN-003, RN-004, DEC-054]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -317,6 +319,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/InvalidState' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
@@ -683,6 +686,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/FormList' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
@@ -772,6 +776,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Version' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
     put:
@@ -941,6 +946,42 @@ paths:
         '409': { $ref: '#/components/responses/InvalidState' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
+  /applications/{applicationId}/pages:
+    post:
+      operationId: addApplicationPages
+      tags: [upload]
+      summary: Acrescenta páginas a uma aplicação em identificacao_pendente (CA-013)
+      description: |
+        Corrige página faltante: mesmas validações do upload (ERR-029, RN-040, DEC-042) e
+        reavaliação da tabela de criação da FL-001.
+      x-trace: [RF-006, CA-013, CA-040, RN-040]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/UploadRequest' }
+      responses:
+        '200':
+          description: Páginas acrescentadas
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Application' }
+        '400': { $ref: '#/components/responses/FileRejected' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /tenant/quota:
     get:
       operationId: getQuotaStatus
@@ -994,8 +1035,8 @@ paths:
       operationId: getApplication
       tags: [review]
       summary: Consulta aplicação sem reservá-la
-      description: Consulta aplicação sem reservá-la.
-      x-trace: [RF-008]
+      description: CPF mascarado, exceto para o titular da reserva ativa; exibição completa auditada (RN-013).
+      x-trace: [RF-008, RN-013]
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
       responses:
@@ -1017,7 +1058,9 @@ paths:
       operationId: openReview
       tags: [review]
       summary: Abre a aplicação e a reserva por 30 min
-      description: Em uso por outro → 409 ERR-043 com `reservado_por` (RN-043, CA-043).
+      description: |
+        Em uso por outro → 409 ERR-043 com `reservado_por` (RN-043, CA-043). Exibe o CPF completo
+        ao titular da reserva, com auditoria EXIBICAO_CPF (RN-013).
       x-trace: [RF-008, CA-043, RN-043]
       security:
         - sessionCookie: []
@@ -1071,6 +1114,7 @@ paths:
       description: |
         Ações: confirmar, corrigir, em branco, ilegível, rasurado, não se aplica (CA-007).
         Correções são auditadas sem valores (CA-008). Reavalia regras de salto (CA-020).
+        Cada chamada renova a reserva por 30 minutos (RN-043).
       x-trace: [RF-008, CA-007, CA-008, CA-020]
       security:
         - sessionCookie: []
@@ -1106,8 +1150,10 @@ paths:
       tags: [review]
       summary: Conclui a aplicação e vincula o respondente
       description: |
-        Exige itens resolvidos e nome, data de nascimento, CPF válido, data e local (DEC-020);
-        faltando → 400 ERR-006 (CA-032). Assinatura ausente → `sem_assinatura` (RN-044).
+        Precedência (REQ FL-001): item não resolvido → 400 ERR-022; CPF ausente ou inválido →
+        200 com `aviso: ERR-006` e estado `aguardando_cpf`; nome, nascimento, data ou local
+        ausentes → 400 ERR-006 (CA-032). Assinatura ausente → `sem_assinatura`, sem vincular
+        o respondente (provisório, Q-012).
         Vínculo por CPF: existente vincula, novo cria (CA-002, CA-014b); divergência de cadastro
         resolvida pelo digitalizador (CA-014).
       x-trace: [RF-008, CA-002, CA-014, CA-014b, CA-021, CA-032, RN-016, RN-044, DEC-020]
@@ -1144,7 +1190,9 @@ paths:
       operationId: attachSignaturePage
       tags: [review]
       summary: Anexa a página 1 assinada (aplicação em sem_assinatura)
-      description: Confere QR da versão e da página sem reler os outros campos (CA-044).
+      description: |
+        Confere QR da versão e da página sem reler os outros campos; exige a confirmação humana
+        da assinatura (RN-044); vincula o respondente com o `manter_cadastro` gravado (CA-044).
       x-trace: [RF-008, CA-044, RN-044]
       security:
         - sessionCookie: []
@@ -1237,7 +1285,10 @@ paths:
       operationId: reopenApplication
       tags: [review]
       summary: Reabre aplicação concluída (sai dos relatórios)
-      description: Se o CPF for corrigido, o vínculo é refeito e o cadastro revertido, com auditoria (CA-042).
+      description: |
+        A partir de `concluida`: se o CPF for corrigido, o vínculo é refeito e o cadastro revertido,
+        com auditoria (CA-042). A partir de `sem_assinatura`: corrige a conferência e volta a
+        `em_revisao`, preservando os itens.
       x-trace: [RF-008, CA-042]
       security:
         - sessionCookie: []
@@ -1276,7 +1327,8 @@ paths:
         grupo_minimo vêm ocultas, sem contagem (CA-010, DEC-045). Com vários projetos vale o
         maior grupo_minimo (CA-034). Cruzamento por uma segunda pergunta (CA-017). Grupos
         contam respondentes pela aplicação mais recente do período; padrão de 12 meses
-        (CA-031, DEC-024). Aplicações sem assinatura ficam fora (CA-021).
+        (CA-031, DEC-024). Aplicações sem assinatura ficam fora (CA-021). Supressão
+        complementar impede deduzir célula oculta por subtração (provisório, Q-015).
       x-trace: [RF-009, CA-009, CA-010, CA-016, CA-017, CA-021, CA-031, CA-034, DEC-024, DEC-045, DEC-055]
       security:
         - sessionCookie: []
@@ -1296,6 +1348,7 @@ paths:
               schema: { $ref: '#/components/schemas/AggregatedResult' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
@@ -1319,6 +1372,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/GroupList' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
     post:
@@ -1347,6 +1401,7 @@ paths:
               schema: { $ref: '#/components/schemas/Group' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/IdempotencyConflict' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
@@ -1366,6 +1421,7 @@ paths:
       responses:
         '204': { description: Grupo apagado }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
@@ -1375,10 +1431,10 @@ paths:
       tags: [dashboard]
       summary: Localiza respondente pelo CPF (acesso individual)
       description: |
-        Exige perfil analista_individual e concessão vigente em projeto vinculado (ERR-008;
-        DEC-060). CPF no corpo, nunca na URL. Busca auditada. Pedidos do titular
+        Exige perfil analista_individual (senão ERR-016) e concessão vigente em projeto
+        vinculado (senão ERR-008; DEC-060). CPF no corpo, nunca na URL. Busca auditada. Pedidos do titular
         usam o CPF diretamente (createDataSubjectRequest).
-      x-trace: [RF-009, CA-011, CA-025, RN-013]
+      x-trace: [RF-009, CA-011, CA-016, CA-025, RN-013, DEC-060]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1407,9 +1463,10 @@ paths:
       tags: [dashboard]
       summary: Ficha individual (evolução no tempo)
       description: |
-        Exige concessão vigente (90 dias, CA-025); sem ela → ERR-008. Só projetos vinculados
-        (CA-011). Cada abertura é auditada.
-      x-trace: [RF-009, CA-011, CA-025]
+        Exige perfil analista_individual (senão ERR-016) e concessão vigente (90 dias, CA-025;
+        senão ERR-008). Só projetos vinculados (CA-011). CPF sempre mascarado. Cada abertura
+        é auditada.
+      x-trace: [RF-009, CA-011, CA-025, DEC-060]
       parameters:
         - $ref: '#/components/parameters/RespondentId'
       responses:
@@ -1432,7 +1489,9 @@ paths:
       tags: [lgpd]
       summary: Gera exportação CSV/XLSX (job assíncrono)
       description: |
-        Analista exporta só agregados; linha a linha exige concessão vigente (CA-022, ERR-008).
+        Analista exporta só agregados; linha a linha exige perfil analista_individual (ERR-016)
+        e concessão vigente em cada projeto incluído (CA-022, ERR-008). O arquivo é apagado
+        após `retencao_exportacao_dias` (RN-030).
         k-anonimato também na exportação (CA-010, CA-034). Sem assinatura fica fora (CA-021).
       x-trace: [RF-010, CA-010, CA-021, CA-022, CA-034, DEC-014]
       security:
@@ -1478,6 +1537,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ExportStatus' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
@@ -1564,7 +1624,8 @@ paths:
         Eliminação: bloqueio imediato, anonimização (nome, CPF, data de nascimento e endereço),
         sobrescrita das respostas, expurgo de imagens e exportações, descarte das aplicações em
         andamento e registro na ListaEliminacoes por 180 dias (CA-023, DEC-026). Acesso e
-        portabilidade geram CSV ou JSON (CA-024). Pedido já executado ou cancelado → ERR-018.
+        portabilidade geram CSV ou JSON (CA-024). Pedido em `falhou` pode ser executado de
+        novo; já concluído ou cancelado → ERR-018.
       x-trace: [RF-010, CA-023, CA-024, DEC-026]
       security:
         - sessionCookie: []
@@ -1668,7 +1729,7 @@ components:
 
   responses:
     BadRequest:
-      description: Validação falhou (ERR-001)
+      description: Validação falhou (ERR-001); em createTenantUser também ERR-023
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -1733,7 +1794,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-016', title: Sem permissão, status: 403, detail: Você não tem permissão para realizar esta ação., errorCode: ERR-016, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     ForbiddenIndividual:
-      description: Sem concessão vigente de acesso individual (ERR-008)
+      description: Sem perfil analista_individual (ERR-016) ou sem concessão vigente no projeto (ERR-008)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -1807,7 +1868,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-010', title: Muitas tentativas, status: 429, detail: Muitas tentativas. Aguarde alguns minutos antes de tentar novamente., errorCode: ERR-010, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     MissingMandatoryFields:
-      description: Conclusão sem os campos obrigatórios da DEC-020 (ERR-006)
+      description: Item não resolvido (ERR-022) ou campos obrigatórios da DEC-020 ausentes (ERR-006)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -1850,7 +1911,7 @@ components:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-021', title: Limite de sessões, status: 409, detail: Você já tem 3 sessões ativas. Encerre uma delas para entrar., errorCode: ERR-021, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-021', title: Limite de sessões, status: 409, detail: Você já tem 3 sessões ativas. Saia em outro dispositivo ou aguarde até 30 minutos sem uso para entrar., errorCode: ERR-021, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     ServiceUnavailable:
       description: Dependência indisponível após retentativas (ERR-020)
       headers:
@@ -1887,7 +1948,7 @@ components:
     ErrorCode:
       type: string
       description: Catálogo fechado de erros ativos (REQ §8.2)
-      enum: [ERR-001, ERR-002, ERR-003, ERR-004, ERR-006, ERR-008, ERR-009, ERR-010, ERR-011, ERR-012, ERR-013, ERR-014, ERR-015, ERR-016, ERR-017, ERR-018, ERR-019, ERR-020, ERR-021, ERR-029, ERR-036, ERR-039, ERR-041, ERR-043]
+      enum: [ERR-001, ERR-002, ERR-003, ERR-004, ERR-006, ERR-008, ERR-009, ERR-010, ERR-011, ERR-012, ERR-013, ERR-014, ERR-015, ERR-016, ERR-017, ERR-018, ERR-019, ERR-020, ERR-021, ERR-022, ERR-023, ERR-029, ERR-036, ERR-039, ERR-041, ERR-043]
 
     PerfilCodigo:
       type: string
@@ -2006,12 +2067,12 @@ components:
         nome: { type: string, minLength: 1, maxLength: 200 }
         perfis: { type: array, minItems: 1, uniqueItems: true, items: { $ref: '#/components/schemas/PerfilCodigo' } }
         projetos: { type: array, uniqueItems: true, items: { type: string, format: uuid } }
-        ativo: { type: boolean }
+        ativo: { type: boolean, description: 'false → situacao inativo e sessões encerradas; true → ativo. Usuário em pendente_convite → ERR-018' }
 
     User:
       type: object
       additionalProperties: false
-      required: [id, email, nome, perfis, projetos, mfa_ativo, ativo, criado_em]
+      required: [id, email, nome, perfis, projetos, mfa_ativo, situacao, criado_em]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
@@ -2019,7 +2080,7 @@ components:
         perfis: { type: array, items: { $ref: '#/components/schemas/PerfilCodigo' } }
         projetos: { type: array, items: { type: string, format: uuid } }
         mfa_ativo: { type: boolean }
-        ativo: { type: boolean }
+        situacao: { type: string, enum: [pendente_convite, ativo, inativo] }
         criado_em: { type: string, format: date-time }
 
     UserList:
@@ -2138,7 +2199,19 @@ components:
         pagina: { type: integer, minimum: 1 }
         obrigatorio: { type: boolean, default: false }
         campo_respondente: { type: string, enum: [nome, data_nascimento, cpf, endereco], nullable: true }
-        campo_aplicacao: { type: string, enum: [data_aplicacao, local_aplicacao], nullable: true, description: Marca as perguntas de data e local exigidas pela RN-017 }
+        campo_aplicacao: { type: string, enum: [data_aplicacao, local_aplicacao, aplicador], nullable: true, description: Marca as perguntas de data e local exigidas pela RN-017 }
+        sensibilidade: { type: string, enum: [identificacao, saude, outro], default: saude, description: Grupo de envio à IA (RN-039) }
+        linhas:
+          type: array
+          description: Obrigatório para tipo matriz (RN-047)
+          items:
+            type: object
+            additionalProperties: false
+            required: [codigo, rotulo, ordem]
+            properties:
+              codigo: { type: string, pattern: '^[a-z0-9_]+$', maxLength: 50 }
+              rotulo: { type: string, maxLength: 200 }
+              ordem: { type: integer, minimum: 1 }
         valor_min: { type: number, nullable: true }
         valor_max: { type: number, nullable: true }
         unidade: { type: string, maxLength: 20, nullable: true }
@@ -2205,8 +2278,9 @@ components:
         arquivos:
           type: array
           minItems: 1
+          maxItems: 50
           items: { type: string, format: binary }
-          description: JPEG/PNG/PDF, até 20 MB e 50 páginas por arquivo; todos da mesma pessoa (DEC-008)
+          description: JPEG/PNG/PDF, até 20 MB e 50 páginas por arquivo; todos da mesma pessoa (DEC-008); o total de páginas não pode passar o da versão (CA-040)
 
     UploadResponse:
       type: object
@@ -2269,7 +2343,7 @@ components:
         reservado_por: { type: string, nullable: true }
         divergencias_cadastro:
           type: array
-          description: Atributos em que o valor lido difere do cadastro existente (CA-014)
+          description: Atributos em que o valor lido difere do cadastro existente (CA-014), calculado quando o item de CPF fica resolvido
           items: { type: string, enum: [nome, data_nascimento, endereco] }
         itens: { type: array, items: { $ref: '#/components/schemas/ReviewItem' } }
 
@@ -2298,7 +2372,8 @@ components:
       properties:
         id: { type: string, format: uuid }
         pergunta_codigo: { type: string }
-        valor_ia: { type: string, nullable: true, description: CPF mascarado fora da revisão (RN-013) }
+        linha_codigo: { type: string, nullable: true, description: Linha da matriz (RN-009) }
+        valor_ia: { type: string, nullable: true, description: 'Formato canônico (REQ §5.4); CPF mascarado salvo para o titular da reserva ativa (RN-013)' }
         confianca: { type: number, minimum: 0, maximum: 1, nullable: true, description: Valor bruto (até 4 casas) }
         valor_final: { type: string, nullable: true }
         estado: { $ref: '#/components/schemas/ItemState' }
@@ -2355,9 +2430,10 @@ components:
     SignatureUpload:
       type: object
       additionalProperties: false
-      required: [arquivo]
+      required: [arquivo, assinatura]
       properties:
         arquivo: { type: string, format: binary, description: Imagem da página 1 assinada (JPEG/PNG/PDF) }
+        assinatura: { type: string, enum: [presente], description: Confirmação humana da conferência (RN-044) }
 
     ReasonRequest:
       type: object
@@ -2522,7 +2598,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         tipo: { type: string, enum: [acesso, correcao, eliminacao, portabilidade] }
-        status: { type: string, enum: [pendente, em_andamento, concluido, cancelado] }
+        status: { type: string, enum: [pendente, em_andamento, concluido, falhou, cancelado] }
         solicitado_em: { type: string, format: date-time }
         executado_em: { type: string, format: date-time, nullable: true }
         url_resultado: { type: string, format: uri, nullable: true, description: 'Acesso/portabilidade (CSV ou JSON), link assinado de 5 min' }
