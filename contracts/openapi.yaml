@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.2.4
+  version: 0.2.5
   description: |
     API do SaaS MinhaPesquisa — digitalização de pesquisas em papel com leitura por IA,
     revisão humana e dashboards anonimizados, em conformidade com a LGPD.
-    Fonte normativa: REQ v1.7 e PLANO.md v2.8. Contract-first — este arquivo valida
+    Fonte normativa: REQ v1.8 e PLANO.md v2.9. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: rotas públicas declaram `security: []`; rotas de MFA usam a pré-sessão (DEC-050);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -1356,8 +1356,9 @@ paths:
         maior grupo_minimo (CA-034). Cruzamento por uma segunda pergunta (CA-017). Grupos
         contam respondentes pela aplicação mais recente do período; padrão de 12 meses
         (CA-031, DEC-024). Aplicações sem assinatura ficam fora (CA-021). Supressão
-        complementar impede deduzir célula oculta por subtração (DEC-067).
-      x-trace: [RF-009, CA-009, CA-010, CA-016, CA-017, CA-021, CA-031, CA-034, DEC-024, DEC-045, DEC-055]
+        complementar impede deduzir célula oculta por subtração (DEC-067). Complemento do
+        filtro no projeto abaixo do mínimo → 400 ERR-024 (DEC-071).
+      x-trace: [RF-009, CA-009, CA-010, CA-016, CA-017, CA-021, CA-031, CA-034, DEC-024, DEC-045, DEC-055, DEC-067, DEC-071]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1791,7 +1792,7 @@ components:
 
   responses:
     BadRequest:
-      description: Validação falhou (ERR-001); em createTenantUser também ERR-023
+      description: Validação falhou (ERR-001); em createTenantUser também ERR-023; em consultas, grupos e exportações agregadas também ERR-024 (DEC-071)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -1946,7 +1947,7 @@ components:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-036', title: Campos obrigatórios ausentes, status: 400, detail: 'Publicação recusada: faltam [lista dos campos].', errorCode: ERR-036, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, campos: [data_da_aplicacao] }
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-036', title: Campos obrigatórios ausentes, status: 400, detail: 'Publicação recusada: faltam [lista dos campos].', errorCode: ERR-036, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, campos: [data_aplicacao] }
     FileRejected:
       description: Arquivo recusado (ERR-029, com motivo) ou projeto arquivado (ERR-001)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
@@ -2010,7 +2011,7 @@ components:
     ErrorCode:
       type: string
       description: Catálogo fechado de erros ativos (REQ §8.2)
-      enum: [ERR-001, ERR-002, ERR-003, ERR-004, ERR-006, ERR-008, ERR-009, ERR-010, ERR-011, ERR-012, ERR-013, ERR-014, ERR-015, ERR-016, ERR-017, ERR-018, ERR-019, ERR-020, ERR-021, ERR-022, ERR-023, ERR-029, ERR-036, ERR-039, ERR-041, ERR-043]
+      enum: [ERR-001, ERR-002, ERR-003, ERR-004, ERR-006, ERR-008, ERR-009, ERR-010, ERR-011, ERR-012, ERR-013, ERR-014, ERR-015, ERR-016, ERR-017, ERR-018, ERR-019, ERR-020, ERR-021, ERR-022, ERR-023, ERR-024, ERR-029, ERR-036, ERR-039, ERR-041, ERR-043]
 
     PerfilCodigo:
       type: string
@@ -2552,17 +2553,20 @@ components:
       additionalProperties: false
       required: [tipo, operador, valores]
       description: |
-        tipo `idade`: idade na data da aplicação mais recente do período (CA-009).
-        tipo `resposta`: valor final de `pergunta_codigo` na aplicação mais recente do período que contenha a pergunta (CA-031).
+        DEC-071: sem intervalos livres.
+        tipo `idade`: faixa de idade na data da aplicação mais recente do período (CA-009); `valores` são faixas fixas.
+        tipo `resposta`: códigos de opção do valor final de `pergunta_codigo` (só perguntas categóricas: escolha_unica, multipla_escolha, sim_nao, escala, matriz com `linha_codigo`) na aplicação mais recente do período que contenha a pergunta (CA-031). Outro tipo → 400 ERR-001.
       properties:
         tipo: { type: string, enum: [idade, resposta] }
         pergunta_codigo: { type: string, pattern: '^[A-Z0-9_]+$', description: Obrigatório quando tipo = resposta }
-        operador: { type: string, enum: [igual, diferente, maior, maior_igual, menor, menor_igual, entre, em] }
+        linha_codigo: { type: string, pattern: '^[a-z0-9_]+$', nullable: true, description: Obrigatório para pergunta do tipo matriz }
+        operador: { type: string, enum: [igual, diferente, em] }
         valores:
           type: array
           minItems: 1
           maxItems: 50
-          items: { type: string, maxLength: 200 }
+          description: 'idade: faixas <60, 60-64, 65-69, 70-74, 75-79, 80-84, 85-89, 90+; resposta: códigos de opção'
+          items: { type: string, maxLength: 50 }
 
     Period:
       type: object

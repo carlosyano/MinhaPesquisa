@@ -1,9 +1,9 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-005 aceitas
-Versão: 1.7
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-005 aceitas · CHG-006 aplicada, pendente de aceite
+Versão: 1.8
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado)
 Responsável: Carlos Yano
@@ -912,7 +912,8 @@ Quando pode: Quando está vinculado ao projeto.
 Quando não pode: Quando o grupo é menor que o mínimo configurado (números ocultados célula por célula); ficha individual sem concessão ativa (ERR-008).
 Entradas: filtros (idade, estado civil, resposta a pergunta, período).
 Sucesso: dashboard com gráficos por pergunta e cruzamento por uma segunda pergunta, respeitando o tamanho mínimo de grupo.
-Erro e timeout: ERR-008 (ficha sem concessão), ERR-002 (projeto não vinculado), timeout de 30 s.
+Erro e timeout: ERR-008 (ficha sem concessão), ERR-002 (projeto não vinculado), ERR-024 (consulta recusada pelo complemento do filtro, DEC-071), ERR-001 (filtro fora das regras abaixo), timeout de 30 s.
+Regras de filtro (DEC-071): idade só por faixas fixas `<60`, `60-64`, `65-69`, `70-74`, `75-79`, `80-84`, `85-89`, `90+`; filtro por resposta só em perguntas categóricas (`escolha_unica`, `multipla_escolha`, `sim_nao`, `escala`, `matriz` por linha), com operadores `igual`, `diferente` ou `em` sobre códigos de opção. Não há filtro por intervalo livre.
 Registros alterados: Auditoria (abertura de ficha, ocultação de grupo pequeno); Grupo (ao salvar grupo).
 Mensagens: "Grupo pequeno demais para ser anonimizado".
 Estado final: dashboard exibido.
@@ -1193,7 +1194,7 @@ E o log de aplicação NÃO contém os valores "1950" ou "1951"
 | Exemplo | Campo | valor_ia | Ação | valor_final | Auditoria (ação, campo) | Texto proibido no log e na auditoria |
 |---|---|---|---|---|---|---|
 | 1 | data_nascimento | "1950-01-01" | corrigir para "1951-01-01" | "1951-01-01" | CORRECAO_CAMPO, data_nascimento | "1950", "1951" |
-| 2 | cpf | "123.456.789-00" (lido errado, inválido) | corrigir para "123.456.789-09" | "12345678909" | CORRECAO_CAMPO, cpf | "123456789", "12345678909" |
+| 2 | cpf | "12345678900" (lido errado, inválido) | corrigir para "12345678909" | "12345678909" | CORRECAO_CAMPO, cpf | "123456789", "12345678909" |
 
 **US-003 — Como sistema, quero vincular a aplicação ao respondente correto pelo CPF para manter a evolução individual.**
 Relacionado a: RF-005, RF-008, CA-002, CA-014, CA-032
@@ -1232,11 +1233,11 @@ Relacionado a: RF-009, CA-009, CA-010, CA-031, CA-034
 
 CA-010 — Grupo pequeno é ocultado (k-anonimato)
 Dado que o projeto "Demografia" tem `grupo_minimo` configurado como 5
-Quando o analista filtra por "idade > 90" e "ESTADO_CIVIL = viuvo"
+Quando o analista filtra pela faixa de idade "90+" e "ESTADO_CIVIL = viuvo"
 E o resultado da consulta retorna apenas 3 respondentes
 Então o dashboard exibe a célula de resultado como "Oculto", sem indicar a contagem
 E a exportação agregada também omite essa linha
-E o sistema registra na auditoria: ação="OCULTACAO_GRUPO_PEQUENO", filtro_aplicado="idade>90;ESTADO_CIVIL=viuvo"
+E o sistema registra na auditoria: ação="OCULTACAO_GRUPO_PEQUENO", filtro_aplicado="idade=90+;ESTADO_CIVIL=viuvo"
 
 | Exemplo | grupo_minimo | Respondentes na célula | Exibição no dashboard e na exportação |
 |---|---|---|---|
@@ -1350,9 +1351,17 @@ Relacionado a: RF-009, CA-009, CA-011, CA-031
 
 CA-009 — Grupo dinâmico
 Dado que o projeto "Saúde Idoso" tem respondentes de 62 a 91 anos
-Quando o analista filtra "idade entre 65 e 90" e "pressão_alta = sim"
+Quando o analista filtra as faixas de idade "65-69" a "85-89" e "PRESSAO_ALTA = sim"
 Então o dashboard mostra só esse grupo
 E a idade é calculada na data da aplicação mais recente
+E, se o complemento do filtro no projeto (respondentes que não atendem ao filtro) tiver menos respondentes que o `grupo_minimo`, a consulta é recusada com ERR-024 (DEC-071)
+
+| Exemplo | grupo_minimo | Respondentes no filtro | Respondentes no complemento | Resultado esperado |
+|---|---|---|---|---|
+| 1 | 5 | 40 | 12 | Dashboard exibido |
+| 2 | 5 | 50 | 3 | ERR-024; nada exibido |
+| 3 | 5 | 2 | 50 | Dashboard exibido com células ocultas (CA-010) |
+| 4 | 5 | filtro "idade > 70" (intervalo livre) | — | ERR-001 |
 
 CA-011 — Evolução individual
 Dado que o respondente "resp-001" tem três aplicações do mesmo código de pergunta em datas diferentes
@@ -1593,6 +1602,7 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 | ERR-021 | SESSION_LIMIT_REACHED | 409 | Usuário já tem 3 sessões ativas (Bloco P P.2). | Você já tem 3 sessões ativas. Saia em outro dispositivo ou aguarde até 30 minutos sem uso para entrar. | info: session_limit_reached | Nenhuma sessão nova | RF-002 | ativo |
 | ERR-022 | ITEMS_UNRESOLVED | 400 | Tentativa de concluir com itens em `pendente_leitura`, `aguardando_condicao` ou `a_revisar`. | Ainda há campos a revisar nesta aplicação. | info: items_unresolved | Nada é gravado | RF-008, FL-002 | ativo |
 | ERR-023 | EMAIL_UNAVAILABLE | 400 | E-mail informado na criação de usuário já pertence a um usuário da plataforma (DEC-054); a mesma resposta vale para qualquer tenant (DEC-065). | Este e-mail não pode ser usado. Informe outro e-mail. | warn: email_unavailable (auditado) | Nada é gravado | RF-001, DEC-054 | ativo |
+| ERR-024 | QUERY_REFUSED | 400 | Consulta agregada, exportação agregada ou grupo cujo complemento do filtro no projeto tem menos respondentes que o mínimo (DEC-071). | Esta combinação de filtros identificaria poucas pessoas e não pode ser exibida. | info: query_refused_small_complement (auditado) | Nada é gravado | RF-009, RF-010, DEC-071 | ativo |
 | ERR-029 | FILE_REJECTED_LIMIT | 400 | Upload recusado. Motivos exatos: "excede o limite de 20 MB"; "excede o limite de 50 páginas"; "tipo de arquivo não permitido"; "risco de segurança detectado". | Arquivo recusado: [motivo]. | warn: file_rejected (motivo) | Nada é gravado | RF-006, CA-029, RN-040 | ativo |
 | ERR-036 | MISSING_PUBLISH_FIELDS | 400 | Tentativa de publicar versão sem campos obrigatórios (nome, nascimento, CPF, data, local). | Publicação recusada: faltam [lista dos campos]. | warn: missing_publish_fields | Versão permanece em `rascunho` | RF-004, CA-036, RN-017 | ativo |
 | ERR-039 | QR_INVALID_CONTEXT | 400 | QR aponta para versão inexistente, de outro tenant ou de projeto diferente do envio. | QR code inválido para o contexto atual. Informe manualmente. | warn: qr_invalid_context | Aplicação em `identificacao_pendente` | RF-006, CA-039 | ativo |
@@ -1694,6 +1704,7 @@ A revisão independente é obrigatória no nível Completo. O revisor não pode 
 | REV-REQ-004 | 27/10/2026 | Claude (assistente IA; não independente) | 1.2 | 4 | n/c | n/c | n/c | Resolvido | Bloqueantes: ERR duplicados; DEC-020 × ERR-006; eliminação × NOT NULL; CPF de exemplo inválido. Demais achados não classificados por severidade. Validação mecânica (`tools/validar_consistencia.py`) e leitura cruzada: ERR duplicados (005/043, 007/029); DEC-020 × ERR-006; eliminação × NOT NULL; CPF de exemplo inválido; FL-001 sem entradas em `aguardando_cota`; FL-002 sem precedência; RN-008 citando tabela inexistente; regex de Perfil; tabelas de exemplos ausentes nos CAs de alto risco; contrato sem 30 operações. Corrigidos na v1.3 (CHG-002); lacunas de negócio viraram Q-005 a Q-011. |
 | REV-REQ-005 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 1.4 | 2 | 10 | 17 | 5 | Resolvido | Bloqueantes: lista de eliminações no mesmo banco restaurado; colunas NOT NULL da aplicação impossíveis na criação. Altos: FL-002 presa com origem pulada; vínculo sem assinatura; histórico de atributos sem entidade; entidades faltantes (exportação, página, sessão, token, idempotência, falha de login); e-mail de outro tenant; texto curto; linhas de matriz e 'nenhuma das anteriores'; reserva fixa × deslizante; pedido do titular sem estado de falha; dedução de célula oculta. Corrigidos na v1.5 (CHG-004); decisões de negócio viraram Q-012 a Q-018. |
 | REV-REQ-006 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 1.5 | 2 | 7 | 19 | 6 | Resolvido | Confirmou a correção dos achados da REV-REQ-005. Novos: identificação de páginas e conferência de assinatura sem acesso à imagem; CPF e dados do respondente em claro nos itens; matriz de autorização contraditória; cadastro existente não exposto para a escolha do CA-014; PedidoTitular sem transição para `falhou`; minimização dependente de configuração manual; dedução por diferença entre filtros; resolução de sessão sob RLS. Corrigidos na v1.6; Q-019 e Q-020 abertas. |
-| REV-REQ-007 | 28/10/2026 | Agente revisor-independente (nova rodada) | 1.7 | — | — | — | — | Pendente | Rodada 3. |
+| REV-REQ-007 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 1.7 | 0 | 1 | 22 | 11 | Resolvido | Alto: DEC-071 (faixas de idade e recusa pelo complemento) ausente do contrato e dos CAs; corrigido na v1.8 (ERR-024, CA-009, CA-010, Filter). Médios e baixos registrados no PLANO §12.3 com incremento (DEC-073). |
+| REV-REQ-008 | 28/10/2026 | Agente revisor-independente (verificação) | 1.8 | — | — | — | — | Pendente | Verificar a correção do alto da REV-REQ-007. |
 
 Fim do documento `REQ.md`

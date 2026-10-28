@@ -3,11 +3,11 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.7 (CHG-002 a CHG-005 aceitas) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v1.8 (CHG-006 aplicada, pendente de aceite) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.8
-**Status:** EM REVISÃO — REV-PLANO-009 pendente (critério da DEC-073)
+**Versão do plano:** 2.9
+**Status:** EM REVISÃO — REV-PLANO-010 (verificação) pendente (critério da DEC-073)
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -205,7 +205,7 @@ guardam dado pessoal; o payload carrega apenas IDs.
 | regra_salto | (versao_id, pergunta_destino_id) |
 | reserva_aplicacao | (aplicacao_id) WHERE ativa |
 | lista_eliminacoes | (tenant_id, respondente_id_original) |
-| parametro_configuracao | (tenant_id, projeto_id, chave) NULLS NOT DISTINCT |
+| parametro_configuracao | (tenant_id, projeto_id, chave, competencia) NULLS NOT DISTINCT |
 | respondente | (tenant_id, cpf_hash) WHERE cpf_hash IS NOT NULL |
 | linha_matriz | (pergunta_id, codigo) |
 | pagina_aplicacao | (chave_storage) |
@@ -307,7 +307,7 @@ Medidor de custo de IA por página/tenant com reserva atômica de orçamento (DE
 | T-06 | Transferência internacional sem base | GX-001; sintéticos até aprovação | Evidência contratual |
 | T-07 | Sequestro de sessão / CSRF | MFA, pré-sessão restrita, cookie, double-submit, bloqueio | TS + testes de autenticação |
 | T-08 | Elevação para ficha individual | Concessão com justificativa, 90 dias, expiração por data | Teste por perfil |
-| T-09 | Reidentificação por filtro | k-anon por célula, também na exportação; célula oculta sem contagem | TS-004 + fast-check |
+| T-09 | Reidentificação por filtro | k-anon por célula, também na exportação; célula oculta sem contagem; supressão complementar (DEC-067); faixas fixas de idade, filtros só categóricos e recusa pelo complemento (DEC-071, ERR-024) | TS-004 + fast-check (propriedade: nenhuma célula oculta é recuperável por subtração; complemento < mínimo sempre recusa) |
 | T-10 | Replay / clique duplo | Idempotência obrigatória + dedupe | Testes de concorrência |
 | T-11 | Cadeia de suprimentos | SBOM, gitleaks, CodeQL, deps | CI bloqueante |
 | T-12 | Backup ressuscita eliminados | Registro externo de eliminações (DEC-062) + reaplicação antes de reabrir o banco | TS-008 + restore com backup anterior à eliminação |
@@ -360,7 +360,7 @@ fundação (`.github/workflows/ci.yml`).
 | Isolamento | contrato + integração | Testcontainers + Schemathesis | TS-001, RNF-001 |
 | Upload seguro | integração | fixtures sintéticas + EICAR | TS-002, CA-029 |
 | Confiança/faixa + fronteira 0,90 | unidade + propriedade | Vitest + fast-check | TS-003, CA-005/CA-006 |
-| k-anonimato | unidade + propriedade | fast-check | TS-004, RNF-004 |
+| k-anonimato | unidade + propriedade | fast-check | TS-004, RNF-004, DEC-067, DEC-071 |
 | Eliminação + reaplicação em restore | integração + E2E | Testcontainers + Playwright | TS-005/TS-008 |
 | Imutabilidade | integração | Testcontainers | TS-006, CA-001 |
 | Cota IA | integração | mock do medidor | TS-007, CA-030 |
@@ -413,10 +413,10 @@ incremento inteiro → Gate 2 (aceite do responsável).
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 46 CAs da REQ v1.7
+### 11.1 Cobertura dos 46 CAs da REQ v1.8
 
 A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 46 critérios
-de aceite da REQ v1.7 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
+de aceite da REQ v1.8 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
 confere que cada CA está no incremento do seu RF.
 
 **CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
@@ -498,19 +498,50 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 
 | Achado | Revisão | Severidade | Descrição | Responsável | Incremento |
 | --- | --- | --- | --- | --- | --- |
-| — | — | — | — | — | — |
+| M-01 | REV-REQ-007 | médio | Dedução por comparação entre consultas (filtro F e ¬F sem cruzamento; período deslizante) | Carlos Yano (decisão: aceitar o risco ou restringir período a meses fechados) | antes do IMP-004 |
+| M-02 | REV-REQ-007 | médio | Aplicacao.cpf_hash não é limpo na eliminação | IA-DEV (CMP-LGPD) | IMP-004 |
+| M-03 | REV-REQ-007 | médio | Valor e estado exatos dos itens sobrescritos na eliminação | IA-DEV + aprovação do responsável (CMP-LGPD) | IMP-004 |
+| M-04 | REV-REQ-007 | médio | Pedido do titular sem Respondente (CPF só em aplicações em andamento ou já anonimizado) | Carlos Yano (decisão) + IA-DEV (CMP-LGPD) | antes do IMP-004 |
+| M-05 | REV-REQ-007 | médio | Correções do pedido do titular sem coluna no dicionário; ENT-023.aplicacao_id NOT NULL | IA-DEV (CMP-LGPD) | IMP-004 |
+| M-06 | REV-REQ-007 | médio | Formato, colunas e retenção dos arquivos de acesso, portabilidade e linha a linha | Carlos Yano (decisão) + IA-DEV (CMP-LGPD) | antes do IMP-004 |
+| M-07 | REV-REQ-007 | médio | getPageImage expõe a página inteira sem reserva e em qualquer estado | IA-DEV (CMP-Upload, CMP-Revisao) | IMP-002 |
+| M-08 | REV-REQ-007 | médio | Reabertura: vínculo e anonimização do respondente órfão | IA-DEV (CMP-Respondents) | IMP-003 |
+| M-09 | REV-REQ-007 | médio | Regras de salto: tipos de origem, ciclos e auto-referência | IA-DEV (CMP-Forms) | IMP-002 |
+| M-10 | REV-REQ-007 | médio | Tipos agregáveis, cruzáveis e filtráveis; linha de matriz na consulta e na ficha | IA-DEV (CMP-Dashboard) | IMP-004 |
+| M-12 | REV-REQ-007 | médio | Desenho técnico de tenant inativo (DEC-070) no login, sessão e jobs | IA-DEV (CMP-Auth, CMP-Infra) | IMP-001 |
+| M-13 | REV-REQ-007 | médio | Injeção de instrução que altera outros campos da mesma chamada; subconjunto adversarial no conjunto-ouro | IA-DEV (CMP-MotorIA) | IMP-003 |
+| M-14 | REV-REQ-007 | médio | Sensibilidade identificacao em pergunta de saúde | IA-DEV (CMP-Forms) | IMP-002 |
+| M-15 | REV-REQ-007 | médio | Ordem e atomicidade da eliminação (registro externo primeiro, passos idempotentes) | IA-DEV (CMP-LGPD) | IMP-004 |
+| M-16 | REV-REQ-007 | médio | Imagens órfãs no bucket após restore do banco | IA-DEV (CMP-Infra) | IMP-004 |
+| M-17 | REV-REQ-007 | médio | Aviso da volta de sem_assinatura para em_revisao usa ERR-018 | IA-DEV (CMP-Revisao) | IMP-003 |
+| M-18 | REV-REQ-007 | médio | Ausência dos outros quatro campos obrigatórios quando ilegível, rasurado ou não se aplica | IA-DEV (CMP-Revisao) | IMP-003 |
+| M-19 | REV-REQ-007 | médio | ERR-036 não cobre os casos da RN-047 | IA-DEV (CMP-Forms) | IMP-002 |
+| M-20 | REV-REQ-007 | médio | Consulta à lista de senhas vazadas sem DEC, timeout e comportamento em falha | IA-DEV (CMP-Auth) | IMP-001 |
+| M-21 | REV-REQ-007 | médio | findRespondent: 404 para respondente fora do escopo da concessão | IA-DEV (CMP-Dashboard) | IMP-004 |
+| M-22 | REV-REQ-007 | médio | Aplicação em andamento sem cpf_hash recria titular eliminado | Carlos Yano (decisão: aceitar risco ou barrar por janela) | antes do IMP-004 |
+| B-01 | REV-REQ-007 | baixo | Admin ausente do 'Quem executa' dos RF-009 e RF-010 | IA-DEV | IMP-004 |
+| B-02 | REV-REQ-007 | baixo | Regras de reserva mortas e vigência implícita | IA-DEV | IMP-003 |
+| B-03 | REV-REQ-007 | baixo | Trechos do PLANO §4.1, §4.5 desatualizados | IA-DEV | IMP-003 |
+| B-04 | REV-REQ-007 | baixo | Inconsistências menores do contrato (exceto exemplo de campos, já corrigido) | IA-DEV | IMP-001 |
+| B-05 | REV-REQ-007 | baixo | §6.5 sem createProject, createForm, createVersion | IA-DEV | IMP-002 |
+| B-06 | REV-REQ-007 | baixo | AuditEvent sem detalhes; IndividualRecord sem linha_codigo | IA-DEV | IMP-004 |
+| B-07 | REV-REQ-007 | baixo | Transições menores em FL-001/FL-002; obrigatorio; retryReading | IA-DEV | IMP-003 |
+| B-08 | REV-REQ-007 | baixo | Destinatário do aviso sem cotação; definição de 'atingido' | IA-DEV | IMP-003 |
+| B-09 | REV-REQ-007 | baixo | Unicidades omitidas no §5.3; FL-003 no checklist; FL da matriz | IA-DEV | IMP-001 |
+| B-10 | REV-REQ-007 | baixo | Admin sem leitura da fila; encerrar outras sessões | IA-DEV | IMP-001 |
+| B-11 | REV-REQ-007 | baixo | Risco de perda de imagens e lista de buckets | IA-DEV | IMP-001 |
 
 ## 13. Critério de prontidão e ciclo de verificação
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.7
+- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.8
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
 - [x] CHG-002 e CHG-003 aceitas pelo responsável
 - [x] Q-012 a Q-020 respondidas; CHG-004 e CHG-005 aceitas
-- [ ] Revisão independente (REV-PLANO-009) com 0 bloqueantes e 0 altos; médios e baixos registrados no §12.3 (DEC-061, DEC-073)
+- [ ] Revisão independente (REV-PLANO-010) com 0 bloqueantes e 0 altos; médios e baixos registrados no §12.3 (DEC-061, DEC-073)
 
 **Bloqueio de status:** este plano NÃO pode ser declarado PRONTO PARA IMPLEMENTAÇÃO
 enquanto os itens acima não estiverem marcados.
@@ -551,8 +582,9 @@ REQ §8.1; o CI falha se divergirem.
 | REV-PLANO-006 | 27/10/2026 | Claude (assistente IA; não independente) | 2.3 | 4 | n/c | n/c | n/c | Resolvido | Bloqueantes: IDs de DEC colidindo entre REQ e CSV; status da REV-PLANO-005 divergente; CSV de incrementos desatualizado; rotas públicas exigindo sessão no contrato. Também: RLS sem desenho para login e jobs, confiança e recortes indefinidos, segredo MFA enviado pelo cliente, 30 operações ausentes no contrato, CSVs corrompidos e nomes de arquivo com caixa errada. Corrigidos na v2.4. |
 | REV-PLANO-007 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.5 | 2 | 10 | 17 | 5 | Resolvido | Achados em conjunto com a REV-REQ-005 (lista de eliminações no banco restaurado; nulidade na criação da aplicação; entidades faltantes; autorização sem 403; histórico de atributos sem entidade; oasdiff declarado e ausente; RLS sem WITH CHECK; imutabilidade da auditoria sem mecanismo). Corrigidos na v2.6. |
 | REV-PLANO-008 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.6 | 2 | 7 | 19 | 6 | Resolvido | Em conjunto com a REV-REQ-006: matriz de autorização contraditória (linhas por RF); resolução de sessão sob RLS sem desenho; ordem de validação do upload; versionamento do bucket de imagens; corpo da resposta guardado na idempotência; IDs de outro recurso pai no corpo. Corrigidos na v2.7. |
-| REV-PLANO-009 | 28/10/2026 | Agente revisor-independente (nova rodada) | 2.8 | — | — | — | — | Pendente | Rodada 3. |
+| REV-PLANO-009 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.8 | 0 | 1 | 22 | 11 | Resolvido | Em conjunto com a REV-REQ-007: alto da DEC-071 corrigido na v2.9; constraint de parametro_configuracao alinhada; médios e baixos no §12.3. |
+| REV-PLANO-010 | 28/10/2026 | Agente revisor-independente (verificação) | 2.9 | — | — | — | — | Pendente | Verificar a correção do alto da REV-PLANO-009. |
 
 ---
 
-**Fim do documento `PLANO.md` v2.8**
+**Fim do documento `PLANO.md` v2.9**
