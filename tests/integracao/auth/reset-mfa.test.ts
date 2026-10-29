@@ -125,6 +125,20 @@ describe('CA-037b — reset de MFA pelo administrador', () => {
     expect((await aceitar(novo, alvo.senha)).r.status).toBe(200);
   });
 
+  // @trace CA-037b, CA-026b, RF-002, DEC-082 (V-B2 do PLANO §12.3)
+  it('reset entre o login e o código: a pré-sessão é encerrada e o código antigo não cria sessão', async () => {
+    const { t, alvo } = await preparar();
+    const c = new Cliente(h.baseUrl);
+    expect((await c.post('/auth/login', { corpo: { email: alvo.email, senha: alvo.senha } })).status).toBe(200);
+    const codigoAntigo = codigoTotp(alvo.segredoTotp, h.clock.now());
+
+    await resetar(t, alvo);
+
+    esperarErro(await c.post('/auth/mfa/verify', { corpo: { codigo: codigoAntigo } }), 'ERR-015');
+    expect(c.temCookie('mp_session')).toBe(false);
+    expect(await h.inspect.sessoesAtivas(alvo.usuarioId)).toEqual([]);
+  });
+
   // @trace CA-037b, CA-026, RF-002, DEC-082, ERR-014
   it('login antes do link → ERR-013 sem pré-sessão, contando para o bloqueio', async () => {
     const { t, alvo } = await preparar();
