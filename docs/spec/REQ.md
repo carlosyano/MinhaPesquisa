@@ -1,7 +1,7 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-005 aceitas · CHG-006 e CHG-007 aplicadas, pendentes de aceite
+Status: APROVADO (Gate 1) · CHG-002 a CHG-007 aceitas
 Versão: 1.9
 Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007)
 Nível de rigor: Completo (DEC-001)

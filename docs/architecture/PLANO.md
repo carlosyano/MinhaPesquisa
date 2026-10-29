@@ -3,11 +3,11 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.9 (CHG-006 e CHG-007 aplicadas, pendentes de aceite) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v1.9 (CHG-006 e CHG-007 aceitas em 29/10/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
 **Versão do plano:** 2.10
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 pendentes de aceite
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -460,8 +460,8 @@ validado pelo CI a cada merge.
 | CHG-003 — respostas às Q-005 a Q-011 | mudança normativa | aceita em 27/10/2026 (REQ v1.4, DEC-054 a DEC-060) |
 | CHG-004 — achados das revisões independentes (rodadas 1 e 2) | mudança normativa | aceita em 28/10/2026 (REQ v1.6) |
 | CHG-005 — respostas às Q-012 a Q-020, DEC-061 e DEC-073 | mudança normativa | aceita em 28/10/2026 (REQ v1.7, DEC-064 a DEC-073) |
-| CHG-006 — achado alto da REV-REQ-007 (DEC-071 no contrato e nos CAs) | mudança normativa | aplicada (REQ v1.8), pendente de aceite |
-| CHG-007 — altos A-01 e A-02 da REV-REQ-008; Q-021 a Q-029 | mudança normativa | aplicada (REQ v1.9, DEC-074 a DEC-082), pendente de aceite |
+| CHG-006 — achado alto da REV-REQ-007 (DEC-071 no contrato e nos CAs) | mudança normativa | aceita em 29/10/2026 (REQ v1.8) |
+| CHG-007 — altos A-01 e A-02 da REV-REQ-008; Q-021 a Q-029 | mudança normativa | aceita em 29/10/2026 (REQ v1.9, DEC-074 a DEC-082) |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
@@ -573,7 +573,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
 - [x] CHG-002 e CHG-003 aceitas pelo responsável
-- [x] Q-012 a Q-029 respondidas; CHG-004 e CHG-005 aceitas; CHG-006 e CHG-007 pendentes de aceite
+- [x] Q-012 a Q-029 respondidas; CHG-004 a CHG-007 aceitas
 - [ ] Revisão independente (REV-PLANO-010) com 0 bloqueantes e 0 altos; médios e baixos registrados no §12.3 (DEC-061, DEC-073)
 
 **Bloqueio de status:** este plano NÃO pode ser declarado PRONTO PARA IMPLEMENTAÇÃO
