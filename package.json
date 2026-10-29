@@ -8,14 +8,16 @@
   ],
   "scripts": {
     "lint:spec": "spectral lint contracts/openapi.yaml",
+    "build": "npm run build -w @minhapesquisa/db && npm run build -w @minhapesquisa/api",
     "typecheck:tests": "tsc -p tests",
+    "pretest": "npm run build",
     "test": "vitest run"
   },
   "devDependencies": {
     "@stoplight/spectral-cli": "^6.14.0",
     "@types/node": "24.10.1",
     "typescript": "5.9.3",
-    "vitest": "3.2.4"
+    "vitest": "3.2.7"
   },
   "type": "module"
 }
