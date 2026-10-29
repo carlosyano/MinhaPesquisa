@@ -1,11 +1,15 @@
 # Testes do MinhaPesquisa
 
 IA-TEST do IMP-001 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
-implementação (IA-DEV), que não pode alterá-los: o job `testes-congelados` do CI (exigido
-na regra da `main`) barra mudança em teste sem o rótulo `ia-test`, e o responsável só autoriza
-a junção depois de revisar o diff. Com uma só pessoa no repositório, o `CODEOWNERS` não é
-barreira técnica (o GitHub não deixa o autor aprovar o próprio PR); ele passa a valer se
-houver um segundo revisor.
+implementação (IA-DEV), que não pode alterá-los: o job `testes-congelados` do CI marca de
+vermelho qualquer mudança em teste sem o rótulo `ia-test`, e o responsável só autoriza a
+junção depois de revisar o diff, com as verificações verdes.
+
+Limite conhecido (decisão do responsável em 29/10/2026, opção A): o repositório é privado no
+plano gratuito, então o GitHub não aplica regra de proteção na `main`; e, com uma só pessoa,
+o `CODEOWNERS` não bloqueia (o autor não aprova o próprio PR). A proteção é de processo:
+nenhuma junção sem a autorização do responsável. Com um segundo revisor, reavaliar o
+GitHub Pro para tornar a regra obrigatória.
 
 ## Como rodar
 

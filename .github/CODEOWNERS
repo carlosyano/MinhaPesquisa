@@ -1,6 +1,6 @@
 # DEC-053: responsável pelos testes aprovados e pela esteira que os protege.
 # Só bloqueia a junção com um segundo revisor no repositório e a regra "Require review
-# from Code Owners"; hoje a proteção é o job testes-congelados (ver tests/README.md).
+# from Code Owners" (plano pago em repositório privado); ver tests/README.md.
 /tests/            @carlosyano
 /vitest.config.ts  @carlosyano
 /.github/          @carlosyano
