@@ -4,10 +4,11 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { linha, sql } from './infra/banco.js';
-import { iguais, segredoAleatorio, sha256 } from './infra/cripto.js';
+import { segredoAleatorio, sha256 } from './infra/cripto.js';
 import { ErroApi } from './infra/erros.js';
 import { MINUTO } from './infra/relogio.js';
 import { type Nucleo, PRE_SESSAO, type SessaoAtiva } from './nucleo.js';
+import { csrfValido } from './regras/autorizacao.js';
 
 export const COOKIE_SESSAO = 'mp_session';
 export const COOKIE_PRE = 'mp_pre_session';
@@ -102,16 +103,8 @@ export async function exigirPreSessao(n: Nucleo, req: Req): Promise<PreSessao> {
 
 /** Double-submit (cookie + cabeçalho) e Origin em toda mutação autenticada (DEC-044). */
 export function exigirCsrf(n: Nucleo, req: Req): void {
-  const cookie = req.cookies[COOKIE_CSRF];
   const cabecalho = req.headers['x-csrf-token'];
-  const origem = req.headers.origin;
-  if (
-    !cookie ||
-    typeof cabecalho !== 'string' ||
-    !iguais(cookie, cabecalho) ||
-    typeof origem !== 'string' ||
-    !n.config.origensPermitidas.includes(origem)
-  ) {
+  if (!csrfValido(req.cookies[COOKIE_CSRF], typeof cabecalho === 'string' ? cabecalho : undefined, req.headers.origin, n.config.origensPermitidas)) {
     throw new ErroApi('ERR-016');
   }
 }

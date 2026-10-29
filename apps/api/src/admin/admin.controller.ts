@@ -8,10 +8,8 @@ import { exigirCsrf, exigirSessao, type Req as Requisicao, type Res as Resposta 
 import { linha, linhas, sql, type Executor } from '../infra/banco.js';
 import { normalizarEmail, SENHA_INDEFINIDA } from '../infra/cripto.js';
 import { ErroApi, naoEncontrado } from '../infra/erros.js';
-import { DIA, somar } from '../infra/relogio.js';
 import { ehUuid, Nucleo, type Perfil, type SessaoAtiva } from '../nucleo.js';
-
-const VALIDADE_CONCESSAO = 90 * DIA; // DEC-031
+import { concessaoVigente, exigeOutroAdmin, exigirConcessivel, exigirPerfil, paginacao, proximaSituacao, validadeConcessao } from '../regras/autorizacao.js';
 
 interface UsuarioCriar {
   email: string;
@@ -47,20 +45,12 @@ function codigoPg(e: unknown): string | undefined {
   return x?.code ?? x?.cause?.code;
 }
 
-function pagina(q: Record<string, string | undefined>): { pagina: number; limite: number } {
-  const p = q.pagina === undefined ? 1 : Number(q.pagina);
-  const l = q.limite === undefined ? 20 : Number(q.limite);
-  if (!Number.isInteger(p) || p < 1) throw new ErroApi('ERR-001', { campos: ['pagina'] });
-  if (!Number.isInteger(l) || l < 1 || l > 100) throw new ErroApi('ERR-001', { campos: ['limite'] });
-  return { pagina: p, limite: l };
-}
-
 @Controller('admin')
 export class AdminController {
   constructor(@Inject(NUCLEO) private readonly n: Nucleo) {}
 
   private exigirAdmin(s: SessaoAtiva): void {
-    if (!s.perfis.includes('admin_tenant')) throw new ErroApi('ERR-016');
+    exigirPerfil(s.perfis, 'admin_tenant');
   }
 
   private validar(operacao: string, corpo: unknown): void {
@@ -130,7 +120,7 @@ export class AdminController {
   async listUsers(@Query() q: Record<string, string | undefined>, @Req() req: Requisicao) {
     const s = await exigirSessao(this.n, req);
     this.exigirAdmin(s);
-    const { pagina: p, limite } = pagina(q);
+    const { pagina: p, limite } = paginacao(q);
     return this.n.comAtor(s, async (tx) => {
       const total = (await linha<{ n: number }>(tx, sql`SELECT count(*)::int AS n FROM usuario`))!.n;
       const us = await linhas<LinhaUsuario>(
@@ -217,18 +207,12 @@ export class AdminController {
       if (ifMatch !== etag(atual.versao)) throw new ErroApi('ERR-017');
       await this.exigirProjetos(tx, corpo.projetos);
 
-      let situacao = atual.situacao;
-      if (corpo.ativo !== undefined) {
-        if (atual.situacao === 'pendente_convite') throw new ErroApi('ERR-018');
-        situacao = corpo.ativo ? 'ativo' : 'inativo';
-      }
+      const situacao = proximaSituacao(atual.situacao, corpo.ativo);
       const perfisAtuais = await this.n.perfisDe(tx, id);
       const perfis = corpo.perfis ?? perfisAtuais;
 
       // Não deixa o tenant sem administrador ativo (RF-001).
-      const eraAdminAtivo = atual.situacao === 'ativo' && perfisAtuais.includes('admin_tenant');
-      const seguiraAdminAtivo = situacao === 'ativo' && perfis.includes('admin_tenant');
-      if (eraAdminAtivo && !seguiraAdminAtivo) {
+      if (exigeOutroAdmin({ situacao: atual.situacao, perfis: perfisAtuais }, { situacao, perfis })) {
         const outros = await linha<{ n: number }>(
           tx,
           sql`SELECT count(*)::int AS n FROM usuario u
@@ -300,7 +284,7 @@ export class AdminController {
 
   // ─────────────────────── concessões de acesso individual ───────────────────────
 
-  private concessao(g: { id: string; usuario_id: string; projeto_id: string; concedido_em: Date; valido_ate: Date; revogado_em: Date | null; vigente: boolean }) {
+  private concessao(g: { id: string; usuario_id: string; projeto_id: string; concedido_em: Date; valido_ate: Date; revogado_em: Date | null; ativo: boolean }) {
     return {
       id: g.id,
       usuario_id: g.usuario_id,
@@ -308,14 +292,13 @@ export class AdminController {
       concedido_em: new Date(g.concedido_em).toISOString(),
       valido_ate: new Date(g.valido_ate).toISOString(),
       revogado_em: g.revogado_em ? new Date(g.revogado_em).toISOString() : null,
-      vigente: g.vigente,
+      vigente: concessaoVigente({ ativo: g.ativo, revogado_em: g.revogado_em, valido_ate: g.valido_ate }, this.n.agora()),
     };
   }
 
   /** Vigente = ativa e dentro do prazo; nunca depende só do job de expiração (ENT-015). */
   private consultaConcessoes(onde: ReturnType<typeof sql>) {
-    return sql`SELECT id, usuario_id, projeto_id, concedido_em, valido_ate, revogado_em,
-                      (ativo AND revogado_em IS NULL AND valido_ate > ${this.n.agora()}) AS vigente
+    return sql`SELECT id, usuario_id, projeto_id, concedido_em, valido_ate, revogado_em, ativo
                  FROM concessao_acesso_individual WHERE ${onde}`;
   }
 
@@ -323,7 +306,7 @@ export class AdminController {
   async listIndividualAccessGrants(@Query() q: Record<string, string | undefined>, @Req() req: Requisicao) {
     const s = await exigirSessao(this.n, req);
     this.exigirAdmin(s);
-    const { pagina: p, limite } = pagina(q);
+    const { pagina: p, limite } = paginacao(q);
     if (q.somente_vigentes !== undefined && !['true', 'false'].includes(q.somente_vigentes)) {
       throw new ErroApi('ERR-001', { campos: ['somente_vigentes'] });
     }
@@ -356,7 +339,7 @@ export class AdminController {
         await this.linhaUsuario(tx, corpo.usuario_id, true);
         await this.exigirProjetos(tx, [corpo.projeto_id]);
         // DEC-060, DEC-080, Q-030: só para quem tem o perfil analista_individual.
-        if (!(await this.n.perfisDe(tx, corpo.usuario_id)).includes('analista_individual')) throw new ErroApi('ERR-018');
+        exigirConcessivel(await this.n.perfisDe(tx, corpo.usuario_id));
         const agora = this.n.agora();
         // Expiradas deixam de ocupar o par antes de checar a vigente (job só mantém o flag).
         await tx.execute(sql`
@@ -372,7 +355,7 @@ export class AdminController {
         await tx.execute(sql`
           INSERT INTO concessao_acesso_individual (id, tenant_id, usuario_id, projeto_id, justificativa, concedido_em, valido_ate, criado_por)
           VALUES (${id}, ${s.tenantId}, ${corpo.usuario_id}, ${corpo.projeto_id}, ${corpo.justificativa}, ${agora},
-                  ${somar(agora, VALIDADE_CONCESSAO)}, ${s.usuarioId})`);
+                  ${validadeConcessao(agora)}, ${s.usuarioId})`);
         await this.n.auditar(tx, s, 'CONCEDER_ACESSO_INDIVIDUAL', 'ConcessaoAcessoIndividual', id, { projeto_id: corpo.projeto_id });
         return { status: 201, recursoId: id };
       });

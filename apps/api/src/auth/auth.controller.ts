@@ -30,7 +30,8 @@ import {
   uriOtpauth,
 } from '../infra/cripto.js';
 import { ErroApi } from '../infra/erros.js';
-import { MAX_SESSOES, Nucleo, SESSAO_INATIVIDADE } from '../nucleo.js';
+import { Nucleo, SESSAO_INATIVIDADE } from '../nucleo.js';
+import { exigirEtapa, limiteSessoesAtingido } from '../regras/autorizacao.js';
 
 export const NUCLEO = Symbol('Nucleo');
 
@@ -125,7 +126,7 @@ export class AuthController {
 
   /** Cria a sessão plena ao fim do MFA, respeitando o limite de 3 sessões (ERR-021). */
   private async abrirSessaoPlena(tx: Executor, pre: PreSessao, nome: string) {
-    if ((await this.n.contarSessoesPlenas(tx, pre.usuarioId)) >= MAX_SESSOES) throw new ErroApi('ERR-021');
+    if (limiteSessoesAtingido(await this.n.contarSessoesPlenas(tx, pre.usuarioId))) throw new ErroApi('ERR-021');
     const { segredo } = await this.n.criarSessao(tx, { tenantId: pre.tenantId, usuarioId: pre.usuarioId, tipo: 'plena', ip: pre.ip });
     const expira = new Date(this.n.agora().getTime() + SESSAO_INATIVIDADE);
     return { segredo, info: await this.infoSessao(tx, pre.usuarioId, nome, expira) };
@@ -163,7 +164,7 @@ export class AuthController {
     const pre = await exigirPreSessao(this.n, req);
     exigirCsrf(this.n, req);
     this.validar('verifyMfa', corpo);
-    if (pre.etapa !== 'mfa_verificacao') throw new ErroApi('ERR-018');
+    exigirEtapa(pre.etapa, 'mfa_verificacao');
 
     const u = await this.n.banco.noTenant(pre.tenantId, (tx) => this.usuarioMfa(tx, pre.usuarioId));
     if (!u.mfa_ativo || !u.mfa_secret) throw new ErroApi('ERR-018');
@@ -200,7 +201,7 @@ export class AuthController {
   async startMfaSetup(@Req() req: Requisicao) {
     const pre = await exigirPreSessao(this.n, req);
     exigirCsrf(this.n, req);
-    if (pre.etapa !== 'mfa_cadastro') throw new ErroApi('ERR-018');
+    exigirEtapa(pre.etapa, 'mfa_cadastro');
     return this.n.banco.noTenant(pre.tenantId, async (tx) => {
       // mfa_ativo relido na mesma transação que grava o segredo (CA-026b).
       const u = await this.usuarioMfa(tx, pre.usuarioId, true);
@@ -217,7 +218,7 @@ export class AuthController {
     const pre = await exigirPreSessao(this.n, req);
     exigirCsrf(this.n, req);
     this.validar('setupMfa', corpo);
-    if (pre.etapa !== 'mfa_cadastro') throw new ErroApi('ERR-018');
+    exigirEtapa(pre.etapa, 'mfa_cadastro');
 
     const u = await this.n.banco.noTenant(pre.tenantId, (tx) => this.usuarioMfa(tx, pre.usuarioId));
     if (u.mfa_ativo || !u.mfa_secret) throw new ErroApi('ERR-018');
