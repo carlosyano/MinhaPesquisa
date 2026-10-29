@@ -500,23 +500,24 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 
 | Achado | Revisão | Severidade | Descrição | Responsável | Incremento |
 | --- | --- | --- | --- | --- | --- |
-| M-01 | REV-REQ-007 | médio | Dedução por comparação entre consultas (filtro F e ¬F sem cruzamento; período deslizante) | Carlos Yano (decisão: aceitar o risco ou restringir período a meses fechados) | antes do IMP-004 |
+| M-01 | REV-REQ-007 | médio | Dedução por comparação entre consultas (filtro F e ¬F sem cruzamento; período deslizante). Mitigação parcial pela DEC-071; resta a comparação entre períodos e entre projetos (B-N3 da REV-REQ-008) | Carlos Yano (decisão: aceitar o risco ou restringir período a meses fechados) | antes do IMP-004 |
 | M-02 | REV-REQ-007 | médio | Aplicacao.cpf_hash não é limpo na eliminação | IA-DEV (CMP-LGPD) | IMP-004 |
 | M-03 | REV-REQ-007 | médio | Valor e estado exatos dos itens sobrescritos na eliminação | IA-DEV + aprovação do responsável (CMP-LGPD) | IMP-004 |
 | M-04 | REV-REQ-007 | médio | Pedido do titular sem Respondente (CPF só em aplicações em andamento ou já anonimizado) | Carlos Yano (decisão) + IA-DEV (CMP-LGPD) | antes do IMP-004 |
 | M-05 | REV-REQ-007 | médio | Correções do pedido do titular sem coluna no dicionário; ENT-023.aplicacao_id NOT NULL | IA-DEV (CMP-LGPD) | IMP-004 |
 | M-06 | REV-REQ-007 | médio | Formato, colunas e retenção dos arquivos de acesso, portabilidade e linha a linha | Carlos Yano (decisão) + IA-DEV (CMP-LGPD) | antes do IMP-004 |
 | M-07 | REV-REQ-007 | médio | getPageImage expõe a página inteira sem reserva e em qualquer estado | IA-DEV (CMP-Upload, CMP-Revisao) | IMP-002 |
-| M-08 | REV-REQ-007 | médio | Reabertura: vínculo e anonimização do respondente órfão | IA-DEV (CMP-Respondents) | IMP-003 |
+| M-08 | REV-REQ-007 | médio | Reabertura: vínculo e anonimização do respondente órfão | Carlos Yano (Q-025) + IA-DEV (CMP-Respondents) | IMP-003 |
 | M-09 | REV-REQ-007 | médio | Regras de salto: tipos de origem, ciclos e auto-referência | IA-DEV (CMP-Forms) | IMP-002 |
 | M-10 | REV-REQ-007 | médio | Tipos agregáveis, cruzáveis e filtráveis; linha de matriz na consulta e na ficha | IA-DEV (CMP-Dashboard) | IMP-004 |
+| M-11 | REV-REQ-007 | médio | Constraint de unicidade sem `competencia` | — (corrigido na CHG-006; registrado pela M-N6 da REV-REQ-008) | — |
 | M-12 | REV-REQ-007 | médio | Desenho técnico de tenant inativo (DEC-070) no login, sessão e jobs | IA-DEV (CMP-Auth, CMP-Infra) | IMP-001 |
 | M-13 | REV-REQ-007 | médio | Injeção de instrução que altera outros campos da mesma chamada; subconjunto adversarial no conjunto-ouro | IA-DEV (CMP-MotorIA) | IMP-003 |
 | M-14 | REV-REQ-007 | médio | Sensibilidade identificacao em pergunta de saúde | IA-DEV (CMP-Forms) | IMP-002 |
 | M-15 | REV-REQ-007 | médio | Ordem e atomicidade da eliminação (registro externo primeiro, passos idempotentes) | IA-DEV (CMP-LGPD) | IMP-004 |
 | M-16 | REV-REQ-007 | médio | Imagens órfãs no bucket após restore do banco | IA-DEV (CMP-Infra) | IMP-004 |
 | M-17 | REV-REQ-007 | médio | Aviso da volta de sem_assinatura para em_revisao usa ERR-018 | IA-DEV (CMP-Revisao) | IMP-003 |
-| M-18 | REV-REQ-007 | médio | Ausência dos outros quatro campos obrigatórios quando ilegível, rasurado ou não se aplica | IA-DEV (CMP-Revisao) | IMP-003 |
+| M-18 | REV-REQ-007 | médio | Ausência dos outros quatro campos obrigatórios quando ilegível, rasurado ou não se aplica | Carlos Yano (Q-026) + IA-DEV (CMP-Revisao) | IMP-003 |
 | M-19 | REV-REQ-007 | médio | ERR-036 não cobre os casos da RN-047 | IA-DEV (CMP-Forms) | IMP-002 |
 | M-20 | REV-REQ-007 | médio | Consulta à lista de senhas vazadas sem DEC, timeout e comportamento em falha | IA-DEV (CMP-Auth) | IMP-001 |
 | M-21 | REV-REQ-007 | médio | findRespondent: 404 para respondente fora do escopo da concessão | IA-DEV (CMP-Dashboard) | IMP-004 |
@@ -531,7 +532,26 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | B-08 | REV-REQ-007 | baixo | Destinatário do aviso sem cotação; definição de 'atingido' | IA-DEV | IMP-003 |
 | B-09 | REV-REQ-007 | baixo | Unicidades omitidas no §5.3; FL-003 no checklist; FL da matriz | IA-DEV | IMP-001 |
 | B-10 | REV-REQ-007 | baixo | Admin sem leitura da fila; encerrar outras sessões | IA-DEV | IMP-001 |
-| B-11 | REV-REQ-007 | baixo | Risco de perda de imagens e lista de buckets | IA-DEV | IMP-001 |
+| B-11 | REV-REQ-007 | baixo | Risco de perda de imagens e lista de buckets. O revisor da REV-REQ-008 sugere elevar a médio: a página 1 assinada é a evidência do consentimento | Carlos Yano (decidir a severidade) + IA-DEV | IMP-001 |
+| M-N1 | REV-REQ-008 | médio | CA-003 (só página 2 → em leitura) contradiz a tabela de criação da FL-001 e o CA-013 | IA-DEV + aceite do responsável (corrigir o CA-003, mudança normativa) | IMP-003 |
+| M-N2 | REV-REQ-008 | médio | Campo lido em branco fora de regra de salto | Carlos Yano (Q-021) | IMP-003 |
+| M-N3 | REV-REQ-008 | médio | Contrato não distingue em branco, ilegível, rasurado e não se aplica no dashboard, na ficha e na exportação (RN-020) | IA-DEV (CMP-Dashboard, contrato) | IMP-004 |
+| M-N4 | REV-REQ-008 | médio | Filtro em `escala` com intervalos quase livres; semântica do filtro em múltipla escolha | Carlos Yano (Q-022) | antes do IMP-004 |
+| M-N5 | REV-REQ-008 | médio | Regra do complemento sem filtros, com vários projetos e com período | Carlos Yano (Q-023) | antes do IMP-004 |
+| M-N6 | REV-REQ-008 | médio | M-11 da REV-REQ-007 ausente do §12.3 | — (registrado nesta tabela) | — |
+| M-N7 | REV-REQ-008 | médio | Lacunas de negócio do §12.3 atribuídas à IA-DEV | — (M-08 e M-18 reclassificados para Q-025 e Q-026; M-01, M-04, M-06 e M-22 já estavam com o responsável) | — |
+| M-N8 | REV-REQ-008 | médio | Aplicação descartada mantém os valores lidos sem prazo | Carlos Yano (Q-024) | IMP-003 |
+| B-N1 | REV-REQ-008 | baixo | Checklist da REQ cita REV-REQ-007 como última revisão | IA-DEV | próxima versão da REQ |
+| B-N2 | REV-REQ-008 | baixo | CHG-006 fora da tabela de mudanças do PLANO §12 | IA-DEV | próxima versão do PLANO |
+| B-N3 | REV-REQ-008 | baixo | Ampliar M-01 e registrar a mitigação parcial da DEC-071 | — (feito na linha M-01) | — |
+| B-N4 | REV-REQ-008 | baixo | RF-010 sem ERR-024, ERR-001 e ERR-019 na lista de erros | IA-DEV (CMP-LGPD) | IMP-004 |
+| B-N5 | REV-REQ-008 | baixo | CPF mascarado no CA-002 × formato canônico do dicionário | IA-DEV (CMP-Respondents) | IMP-003 |
+| B-N6 | REV-REQ-008 | baixo | Faixa de idade abaixo de 60 ausente da DEC-071 | Carlos Yano (Q-028) | antes do IMP-004 |
+| B-N7 | REV-REQ-008 | baixo | Concessão individual a usuário sem o perfil exigido | Carlos Yano (Q-027) | IMP-001 |
+| B-N8 | REV-REQ-008 | baixo | `versao_id` de outro tenant no `identifyApplication`: 404 (TS-001) × ERR-039 | IA-DEV (CMP-Upload) | IMP-002 |
+| B-N9 | REV-REQ-008 | baixo | Reuso do mesmo código TOTP na janela de tempo e parâmetros do Argon2id | IA-DEV (CMP-Auth) | IMP-001 |
+| B-N10 | REV-REQ-008 | baixo | Erro de `saveReview` em item `aguardando_condicao` não definido | IA-DEV (CMP-Revisao) | IMP-003 |
+| B-N11 | REV-REQ-008 | baixo | Cópia de data, local e aplicador para a aplicação na conclusão | IA-DEV (CMP-Revisao) | IMP-003 |
 
 ## 13. Critério de prontidão e ciclo de verificação
 
@@ -585,7 +605,7 @@ REQ §8.1; o CI falha se divergirem.
 | REV-PLANO-007 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.5 | 2 | 10 | 17 | 5 | Resolvido | Achados em conjunto com a REV-REQ-005 (lista de eliminações no banco restaurado; nulidade na criação da aplicação; entidades faltantes; autorização sem 403; histórico de atributos sem entidade; oasdiff declarado e ausente; RLS sem WITH CHECK; imutabilidade da auditoria sem mecanismo). Corrigidos na v2.6. |
 | REV-PLANO-008 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.6 | 2 | 7 | 19 | 6 | Resolvido | Em conjunto com a REV-REQ-006: matriz de autorização contraditória (linhas por RF); resolução de sessão sob RLS sem desenho; ordem de validação do upload; versionamento do bucket de imagens; corpo da resposta guardado na idempotência; IDs de outro recurso pai no corpo. Corrigidos na v2.7. |
 | REV-PLANO-009 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.8 | 0 | 1 | 22 | 11 | Resolvido | Em conjunto com a REV-REQ-007: alto da DEC-071 corrigido na v2.9; constraint de parametro_configuracao alinhada; médios e baixos no §12.3. |
-| REV-PLANO-010 | 28/10/2026 | Agente revisor-independente (verificação) | 2.9 | — | — | — | — | Pendente | Verificar a correção do alto da REV-PLANO-009. |
+| REV-PLANO-010 | 28/10/2026 | Agente revisor-independente (verificação) | 2.9 | 0 | 2 | 8 | 11 | Resolvido | Ver REV-REQ-008 (mesma rodada). A-01 e A-02 corrigidos (PLANO §4.1 e §4.6); verificação restrita ao diff aprovada (0 bloqueantes, 0 altos). Médios e baixos no §12.3. |
 
 ---
 

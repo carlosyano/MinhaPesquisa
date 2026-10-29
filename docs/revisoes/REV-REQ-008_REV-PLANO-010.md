@@ -27,3 +27,10 @@ Situação: **não tratado ainda** — pendente para a próxima sessão.
 B-N1 checklist cita REV-REQ-007; B-N2 CHG-006 fora da tabela do PLANO §12; B-N3 ampliar M-01 e notar mitigação parcial da DEC-071; B-N4 RF-010 sem ERR-024/001/019; B-N5 CPF mascarado no CA-002 × formato canônico; B-N6 faixa `<60` não consta da DEC-071; B-N7 concessão a usuário sem perfil; B-N8 `versao_id` de outro tenant no `identifyApplication` (404 × ERR-039); B-N9 replay de TOTP e parâmetros Argon2id; B-N10 erro de `saveReview` em item `aguardando_condicao`; B-N11 cópia de data/local/aplicador para a aplicação na conclusão.
 
 Observação do revisor: B-11 (imagens sem backup) talvez mereça ser médio, porque a página 1 assinada é a evidência de consentimento.
+
+## Tratamento (29/10/2026)
+
+- **A-01:** corrigido (commit 8991ff2) — RF-002, CA-026b, ERR-018, contrato (`MfaConflict`), PLANO §4.6.
+- **A-02:** corrigido (commit 1dd1a1c) — FL-002 regra 1, CA-018 com exemplos, PLANO §4.1.
+- **Verificação restrita ao diff:** agente revisor-independente, executado no modelo Sonnet (o modelo configurado estava sem créditos; continua sendo outro modelo, DEC-061; escolha aceita pelo responsável). Resultado: 0 bloqueantes, 0 altos → **APROVADO** (DEC-073). Dois baixos novos: `startMfaSetup` repetido na mesma pré-sessão sobrescreve o segredo não confirmado (seguro, mas implícito); falta exemplo de reset do MFA entre o login e a chamada.
+- **Médios e baixos:** registrados no PLANO §12.3. Decisões de negócio viraram Q-021 a Q-029 (REQ §9), abertas para o responsável.
