@@ -6,7 +6,7 @@
 **Fontes normativas:** REQ v1.10 (CHG-007 e CHG-008 aceitas em 29/10/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.11
+**Versão do plano:** 2.12
 **Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
@@ -36,7 +36,7 @@ estiver pendente (Q-001).
 Node.js 24 · TypeScript strict · NestJS + Fastify · Next.js + React + Tailwind +
 shadcn/ui · PostgreSQL 17 + Drizzle + migrações SQL explícitas · pg-boss + Outbox ·
 npm workspaces. Testes: Vitest, Testcontainers, Playwright + axe, Schemathesis,
-fast-check, Stryker (escopo da DEC-052). CI GitHub Actions: CodeQL, gitleaks, SBOM.
+fast-check, Stryker (escopo da DEC-052). CI GitHub Actions: Semgrep (DEC-089), gitleaks, SBOM.
 
 A estrutura de pastas e a fonte de verdade de cada artefato estão em `ARCHITECTURE.md`
 (DEC-049). As pastas `apps/` e `packages/` são criadas no IMP-001.
@@ -315,7 +315,7 @@ Medidor de custo de IA por página/tenant com reserva atômica de orçamento (DE
 | T-08 | Elevação para ficha individual | Concessão com justificativa, 90 dias, expiração por data | Teste por perfil |
 | T-09 | Reidentificação por filtro | k-anon por célula, também na exportação; célula oculta sem contagem; supressão complementar (DEC-067); faixas fixas de idade, filtros só categóricos e recusa pelo complemento (DEC-071, ERR-024) | TS-004 + fast-check (propriedade: nenhuma célula oculta é recuperável por subtração; complemento < mínimo sempre recusa) |
 | T-10 | Replay / clique duplo | Idempotência obrigatória + dedupe | Testes de concorrência |
-| T-11 | Cadeia de suprimentos | SBOM, gitleaks, CodeQL, deps | CI bloqueante |
+| T-11 | Cadeia de suprimentos | SBOM, gitleaks, Semgrep (DEC-089), deps | CI bloqueante |
 | T-12 | Backup ressuscita eliminados | Registro externo de eliminações (DEC-062) + reaplicação antes de reabrir o banco | TS-008 + restore com backup anterior à eliminação |
 | T-13 | Esgotamento de cota | Teto + reserva atômica + fila sem descarte | TS-007 |
 | T-14 | QR forjado / de outro tenant | Validação tenant+projeto+versão; QR com identificador opaco | Teste de integração do upload (IMP-002) |
@@ -352,7 +352,7 @@ isolamento e falha do job de expurgo.
 ### 9.4 CI/CD e rollback
 
 validador de consistência → typecheck → lint → unit → contrato (Spectral + oasdiff)
-→ integração (Testcontainers) → E2E + axe → mutação (DEC-052) → CodeQL → gitleaks → SBOM.
+→ integração (Testcontainers) → E2E + axe → mutação (DEC-052) → Semgrep (DEC-089) → gitleaks → SBOM.
 Migrações antes do código; rollback = migração `down` testada + imagem anterior.
 O validador (`tools/validar_consistencia.py`) e o Spectral já rodam no CI desde a
 fundação (`.github/workflows/ci.yml`).
@@ -505,6 +505,15 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-053 | 27/10/2026 | técnica | Separação IA-TEST e IA-DEV | Mesmo PR; PRs separados com testes congelados | Testes vermelhos em PR próprio aprovado pelo responsável; PR de implementação não altera testes aprovados (CI + CODEOWNERS) | Evita que a mesma IA ajuste o teste ao código | definitivo | | Alto | Bloco P P.14 |
 | DEC-062 | 28/10/2026 | técnica | Onde guardar a lista de eliminações | Tabela no mesmo banco; registro externo | Registro append-only em bucket S3 separado, com Object Lock (retenção 180 dias), gravado na mesma execução da eliminação; o runbook de restore lê dele e reaplica antes de reabrir o banco | A tabela no banco restaurado é tão antiga quanto o backup e não contém eliminações posteriores (achado B-01 da REV-PLANO-007) | definitivo | | Alto | DEC-033, T-12, TS-008 |
 | DEC-063 | 28/10/2026 | técnica | Guarda do valor anterior para reversão (CA-042) | Na auditoria; tabela própria cifrada | Tabela HistoricoAtributoRespondente (ENT-023), cifrada como o original, apagada na eliminação; reversão condicionada ao valor atual | A auditoria não pode guardar valores (RN-027) | definitivo | | Alto | CA-042, CA-023, RN-027 |
+| DEC-083 | 29/10/2026 | técnica | Tenant inativo no login e na sessão (M-12, DEC-070) | Checar só no login; checar no login e em toda sessão | A função de login devolve tenant.ativo; tenant inativo → ERR-013 (conta como falha, sem pré-sessão). auth_resolver_sessao recusa sessão e pré-sessão de tenant inativo (ERR-015) sem apagar nada. Jobs do tenant filtram tenant.ativo a partir do IMP-002 | Inativar o tenant deve ter efeito imediato, não só no próximo login | definitivo | | Médio | DEC-070, RF-002, M-12 |
+| DEC-084 | 29/10/2026 | técnica | Lista de senhas vazadas (M-20, Bloco P P.2) | Lista embutida; consulta ao Have I Been Pwned | Lista embutida no código (SecLists 10k-most-common, licença MIT), comparada sem diferenciar maiúsculas; sem chamada externa, sem timeout e sem modo de falha. Atualização da lista por PR | Escolha do responsável (opção 1A, 29/10/2026): nada sai do servidor e não há dependência de terceiro; cobertura menor que a consulta online | definitivo | | Médio | Bloco P P.2, RF-002, M-20 |
+| DEC-085 | 29/10/2026 | técnica | Parâmetros de senha e TOTP (B-N9) | Padrões da biblioteca; parâmetros explícitos | Argon2id m=19456 KiB, t=2, p=1 (OWASP); TOTP RFC 6238 SHA-1, 6 dígitos, passo de 30 s, tolerância de ±1 passo; código de passo já usado ou anterior ao último aceito é recusado (ERR-012); segredo TOTP cifrado com AES-256-GCM pela chave da aplicação (KMS na implantação) | Parâmetros auditáveis e proteção contra reuso do código na janela | definitivo | | Médio | DEC-050, RF-002, B-N9 |
+| DEC-086 | 29/10/2026 | técnica | Repetições no cadastro de MFA (V-B1, CA-026b) | Recusar segundo startMfaSetup; sobrescrever o segredo não confirmado | startMfaSetup repetido sobrescreve o segredo ainda não confirmado; só setupMfa ativa o MFA. Pré-sessão encerrada porque outra concluiu o setupMfa responde ERR-018 (CA-026b, exemplo 4); pré-sessão expirada ou encerrada por outro motivo (logout, reset de MFA, desativação) responde ERR-015 | Seguro, pois o segredo só vale após a confirmação; o código de erro segue o CA-026b | definitivo | | Baixo | CA-026b, V-B1, DEC-050 |
+| DEC-087 | 29/10/2026 | técnica | Contagem de falhas de login (CA-026) | Janela deslizante; janela fixa a partir da primeira falha | Janela fixa de 15 min aberta na primeira falha, por HMAC do e-mail; contam ERR-013 (login e acceptMfaReset) e ERR-012; a 5ª falha bloqueia por 15 min; a contagem zera só quando uma sessão plena é criada (o acerto da senha sozinho não zera) | Sem zerar no acerto da senha, quem tem a senha não testa códigos MFA sem limite | definitivo | | Médio | CA-026, RF-002, ERR-014 |
+| DEC-088 | 29/10/2026 | técnica | Envio de e-mail no IMP-001 (convite, recuperação, reset de MFA) | Integrar o provedor agora; interface e captura agora, provedor na implantação | Interface Mailer; outbox transacional com só IDs; o token é gerado no despacho e só o hash fica no banco; no IMP-001 o despacho roda no próprio processo após o commit; Amazon SES (sa-east-1) e despacho por pg-boss entram com o ambiente na nuvem | Escolha do responsável (opção 2A, 29/10/2026): não há conta AWS configurada; nenhum e-mail sai em desenvolvimento | definitivo | | Médio | RF-001, RF-002, PLANO §7 |
+| DEC-089 | 29/10/2026 | técnica | Análise estática de segurança no CI | CodeQL; Semgrep; nenhuma | Semgrep (regras públicas para TypeScript/Node) no lugar do CodeQL, que exige plano pago em repositório privado | Escolha do responsável (opção 3A, 29/10/2026); mesma função no plano gratuito | definitivo | | Médio | PLANO §9.4 |
+| DEC-090 | 29/10/2026 | técnica | Dono das funções SECURITY DEFINER (refina DEC-046) | mp_owner; papel próprio com BYPASSRLS | Papel mp_auth (NOLOGIN, BYPASSRLS) é dono só das funções auth_* (login, falhas, tokens, resolução de sessão), com search_path fixo e grants mínimos; mp_app só tem EXECUTE nelas | Com FORCE ROW LEVEL SECURITY o próprio mp_owner é filtrado pela RLS, então as funções de login não enxergariam o usuário | definitivo | | Alto | DEC-046, DEC-040 |
+| DEC-091 | 29/10/2026 | técnica | Proteção dos testes aprovados no plano gratuito (complementa DEC-053) | Regra da main no GitHub (plano pago); processo com job de CI | Repositório privado no plano gratuito: o GitHub não aplica a regra da main e, com uma só pessoa, o CODEOWNERS não bloqueia. Valem o job testes-congelados e a regra de que nenhuma junção ocorre sem a autorização do responsável; reavaliar o GitHub Pro com um segundo revisor | Escolha do responsável (opção A, 29/10/2026) | definitivo | | Médio | DEC-053 |
 
 ---
 
@@ -525,7 +534,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | M-09 | REV-REQ-007 | médio | Regras de salto: tipos de origem, ciclos e auto-referência | IA-DEV (CMP-Forms) | IMP-002 |
 | M-10 | REV-REQ-007 | médio | Tipos agregáveis, cruzáveis e filtráveis; linha de matriz na consulta e na ficha | IA-DEV (CMP-Dashboard) | IMP-004 |
 | M-11 | REV-REQ-007 | médio | Constraint de unicidade sem `competencia` | — (corrigido na CHG-006; registrado pela M-N6 da REV-REQ-008) | — |
-| M-12 | REV-REQ-007 | médio | Desenho técnico de tenant inativo (DEC-070) no login, sessão e jobs | IA-DEV (CMP-Auth, CMP-Infra) | IMP-001 |
+| M-12 | REV-REQ-007 | médio | Desenho técnico de tenant inativo (DEC-070) no login, sessão e jobs | — (decidido: DEC-083) | IMP-001 |
 | M-13 | REV-REQ-007 | médio | Injeção de instrução que altera outros campos da mesma chamada; subconjunto adversarial no conjunto-ouro | IA-DEV (CMP-MotorIA) | IMP-003 |
 | M-14 | REV-REQ-007 | médio | Sensibilidade identificacao em pergunta de saúde | IA-DEV (CMP-Forms) | IMP-002 |
 | M-15 | REV-REQ-007 | médio | Ordem e atomicidade da eliminação (registro externo primeiro, passos idempotentes) | IA-DEV (CMP-LGPD) | IMP-004 |
@@ -533,7 +542,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | M-17 | REV-REQ-007 | médio | Aviso da volta de sem_assinatura para em_revisao usa ERR-018 | IA-DEV (CMP-Revisao) | IMP-003 |
 | M-18 | REV-REQ-007 | médio | Ausência dos outros quatro campos obrigatórios quando ilegível, rasurado ou não se aplica | IA-DEV (CMP-Revisao); decidido: DEC-079 | IMP-003 |
 | M-19 | REV-REQ-007 | médio | ERR-036 não cobre os casos da RN-047 | IA-DEV (CMP-Forms) | IMP-002 |
-| M-20 | REV-REQ-007 | médio | Consulta à lista de senhas vazadas sem DEC, timeout e comportamento em falha | IA-DEV (CMP-Auth) | IMP-001 |
+| M-20 | REV-REQ-007 | médio | Consulta à lista de senhas vazadas sem DEC, timeout e comportamento em falha | — (decidido: DEC-084) | IMP-001 |
 | M-21 | REV-REQ-007 | médio | findRespondent: 404 para respondente fora do escopo da concessão | IA-DEV (CMP-Dashboard) | IMP-004 |
 | M-22 | REV-REQ-007 | médio | Aplicação em andamento sem cpf_hash recria titular eliminado | Carlos Yano (decisão: aceitar risco ou barrar por janela) | antes do IMP-004 |
 | B-01 | REV-REQ-007 | baixo | Admin ausente do 'Quem executa' dos RF-009 e RF-010 | IA-DEV | IMP-004 |
@@ -563,13 +572,13 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | B-N6 | REV-REQ-008 | baixo | Faixa de idade abaixo de 60 ausente da DEC-071 | — (decidido: DEC-081, incorporado na CHG-007) | antes do IMP-004 |
 | B-N7 | REV-REQ-008 | baixo | Concessão individual a usuário sem o perfil exigido | — (decidido: DEC-080, incorporado na CHG-007) | IMP-001 |
 | B-N8 | REV-REQ-008 | baixo | `versao_id` de outro tenant no `identifyApplication`: 404 (TS-001) × ERR-039 | IA-DEV (CMP-Upload) | IMP-002 |
-| B-N9 | REV-REQ-008 | baixo | Reuso do mesmo código TOTP na janela de tempo e parâmetros do Argon2id | IA-DEV (CMP-Auth) | IMP-001 |
+| B-N9 | REV-REQ-008 | baixo | Reuso do mesmo código TOTP na janela de tempo e parâmetros do Argon2id | — (decidido: DEC-085) | IMP-001 |
 | B-N10 | REV-REQ-008 | baixo | Erro de `saveReview` em item `aguardando_condicao` não definido | IA-DEV (CMP-Revisao) | IMP-003 |
 | B-N11 | REV-REQ-008 | baixo | Cópia de data, local e aplicador para a aplicação na conclusão | IA-DEV (CMP-Revisao) | IMP-003 |
 | V-M1 | verificação CHG-007 | médio | Exemplos testáveis dos filtros das DEC-075, DEC-076 e DEC-081 (`em` em escala → ERR-001; "marcou a opção"; sem filtro; vários projetos; período; faixa `<60`) e validação por tipo no schema Filter | IA-TEST + IA-DEV (CMP-Dashboard) | IMP-004 |
 | V-M2 | verificação CHG-007 | médio | Exemplo do CA-032 para campo obrigatório ilegível (DEC-079) | IA-TEST (CMP-Revisao) | IMP-003 |
-| V-B1 | verificação CHG-007 | baixo | `startMfaSetup` repetido na mesma pré-sessão sobrescreve o segredo não confirmado (seguro, mas implícito) | IA-DEV (CMP-Auth) | IMP-001 |
-| V-B2 | verificação CHG-007 | baixo | Exemplo de reset do MFA entre o login e a chamada de MFA | IA-TEST (CMP-Auth) | IMP-001 |
+| V-B1 | verificação CHG-007 | baixo | `startMfaSetup` repetido na mesma pré-sessão sobrescreve o segredo não confirmado (seguro, mas implícito) | — (decidido: DEC-086) | IMP-001 |
+| V-B2 | verificação CHG-007 | baixo | Exemplo de reset do MFA entre o login e a chamada de MFA | — (teste no IA-TEST do IMP-001) | IMP-001 |
 | V-B3 | verificação CHG-007 | baixo | CA-023, TS-005 e TS-008 ainda descrevem a ListaEliminacoes só para eliminação; faltam exemplos de reaplicação dos motivos `descarte_aplicacao` e `anonimizacao_reabertura` | IA-DEV + IA-TEST (CMP-LGPD) | IMP-004 |
 
 ## 13. Critério de prontidão e ciclo de verificação
