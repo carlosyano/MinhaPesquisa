@@ -1,0 +1,4 @@
+# DEC-053: testes aprovados e a esteira que os protege só mudam com a aprovação do responsável.
+/tests/            @carlosyano
+/vitest.config.ts  @carlosyano
+/.github/          @carlosyano

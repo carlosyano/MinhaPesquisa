@@ -7,9 +7,15 @@
     "packages/*"
   ],
   "scripts": {
-    "lint:spec": "spectral lint contracts/openapi.yaml"
+    "lint:spec": "spectral lint contracts/openapi.yaml",
+    "typecheck:tests": "tsc -p tests",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@stoplight/spectral-cli": "^6.14.0"
-  }
+    "@stoplight/spectral-cli": "^6.14.0",
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  },
+  "type": "module"
 }
