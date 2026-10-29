@@ -1,9 +1,10 @@
-# CI da fundação: só o que já existe no repositório. As etapas de código (typecheck,
-# testes, mutação, CodeQL, gitleaks, SBOM — PLANO §9.4) entram no IMP-001.
+# CI: consistência, contrato e testes. As demais etapas de código (lint, mutação, CodeQL,
+# gitleaks, SBOM — PLANO §9.4) entram no IA-DEV do IMP-001.
 name: ci
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]
 
@@ -36,3 +37,40 @@ jobs:
       - run: npm ci
       - name: Lint do contrato (Spectral)
         run: npm run lint:spec
+
+  testes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Typecheck dos testes
+        run: npm run typecheck:tests
+      - name: Testes (Vitest; integração com PostgreSQL 17 via Testcontainers)
+        run: npm test
+
+  # DEC-053: o PR de implementação (IA-DEV) não altera testes aprovados. Só PR com o rótulo
+  # ia-test pode mexer neles. O rótulo e a junção dependem do responsável (ver
+  # tests/README.md sobre o limite do plano gratuito).
+  testes-congelados:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Testes aprovados não mudam fora de PR ia-test
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          IA_TEST: ${{ contains(github.event.pull_request.labels.*.name, 'ia-test') }}
+        run: |
+          alterados=$(git diff --name-only "$BASE_SHA"...HEAD -- tests vitest.config.ts)
+          if [ -n "$alterados" ] && [ "$IA_TEST" != "true" ]; then
+            echo "::error::Este PR altera testes aprovados (DEC-053) sem o rótulo ia-test:"
+            echo "$alterados"
+            exit 1
+          fi
+          echo "ok: ${alterados:-nenhum teste alterado}"
