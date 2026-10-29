@@ -3,7 +3,7 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.10 (CHG-007 aceita em 29/10/2026; CHG-008 aguardando aceite) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v1.10 (CHG-007 e CHG-008 aceitas em 29/10/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
 **Versão do plano:** 2.11
@@ -469,7 +469,7 @@ validado pelo CI a cada merge.
 | CHG-005 — respostas às Q-012 a Q-020, DEC-061 e DEC-073 | mudança normativa | aceita em 28/10/2026 (REQ v1.7, DEC-064 a DEC-073) |
 | CHG-006 — achado alto da REV-REQ-007 (DEC-071 no contrato e nos CAs) | mudança normativa | aceita em 29/10/2026 (REQ v1.8) |
 | CHG-007 — altos A-01 e A-02 da REV-REQ-008; Q-021 a Q-029 | mudança normativa | aceita em 29/10/2026 (REQ v1.9, DEC-074 a DEC-082) |
-| CHG-008 — perfil exigido na concessão individual (Q-030) | mudança normativa | aguardando aceite (REQ v1.10) |
+| CHG-008 — perfil exigido na concessão individual (Q-030) | mudança normativa | aceita em 29/10/2026 (REQ v1.10, Q-030) |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
@@ -581,7 +581,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
 - [x] CHG-002 e CHG-003 aceitas pelo responsável
-- [x] Q-012 a Q-030 respondidas; CHG-004 a CHG-007 aceitas (CHG-008 aguardando aceite)
+- [x] Q-012 a Q-030 respondidas; CHG-004 a CHG-008 aceitas
 - [x] Revisão independente (REV-PLANO-010) com 0 bloqueantes e 0 altos; médios e baixos registrados no §12.3 (DEC-061, DEC-073)
 
 **Bloqueio de status:** este plano NÃO pode ser declarado PRONTO PARA IMPLEMENTAÇÃO
