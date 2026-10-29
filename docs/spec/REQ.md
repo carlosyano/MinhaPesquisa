@@ -1053,7 +1053,7 @@ Ordem de avaliação ao fim da leitura de um item (a primeira regra que se aplic
 
 | Ordem | Regra | Estado |
 |---|---|---|
-| 1 | Item é destino de regra de salto e a pergunta de origem ainda não está resolvida (CA-018) | aguardando_condicao |
+| 1 | Item é destino de regra de salto e a pergunta de origem está em `pendente_leitura`, `aguardando_condicao` ou `a_revisar` (CA-018) | aguardando_condicao |
 | 2 | Origem resolvida, a regra manda pular e o item está em branco (CA-015) | nao_se_aplica |
 | 3 | Origem resolvida, a regra manda pular e o item está preenchido (CA-019) | a_revisar |
 | 4 | Origem em `nao_se_aplica` (origem pulada por outra regra): destino em branco → `nao_se_aplica`; destino preenchido → `a_revisar` | nao_se_aplica ou a_revisar |
@@ -1064,7 +1064,9 @@ Ordem de avaliação ao fim da leitura de um item (a primeira regra que se aplic
 | 8 | Confiança > limite_confianca (DEC-028) | confirmado_automaticamente |
 | 9 | Demais casos (confiança ≤ limite) | a_revisar |
 
-"Origem resolvida" significa origem em `confirmado_automaticamente`, `confirmado` ou `corrigido`.
+"Origem resolvida" (regras 2 e 3) significa origem em `confirmado_automaticamente`, `confirmado` ou `corrigido`. A regra 1 vale só para os três estados que listam; origem em `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica` segue para as regras 4 e 4a. Assim, todo estado da origem cai em exatamente uma das regras 1, 2/3, 4 ou 4a (ou, se a regra de salto não mandar pular, segue para as regras 5 a 9).
+
+"Condição de salto resolvida" (evento da tabela abaixo) é a saída da origem de `pendente_leitura`, `aguardando_condicao` ou `a_revisar` para qualquer outro estado.
 
 "Item resolvido" (usado na conclusão, FL-001) significa item em `confirmado_automaticamente`, `confirmado`, `corrigido`, `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica`. Itens em `pendente_leitura`, `aguardando_condicao` ou `a_revisar` impedem a conclusão (ERR-022).
 
@@ -1319,6 +1321,19 @@ Dado que a pergunta 7 está "a_revisar"
 Quando a leitura da pergunta 8 termina
 Então a regra de salto da pergunta 8 só é avaliada depois que a pergunta 7 for resolvida
 E a pergunta 8 fica no estado "aguardando_condicao"
+
+Regra de salto: "pergunta 8 só se a pergunta 7 = sim".
+
+| Exemplo | Estado da pergunta 7 (origem) | Pergunta 8 (destino) | Regra FL-002 | Estado da pergunta 8 |
+|---|---|---|---|---|
+| 1 | `a_revisar` | preenchida | 1 | `aguardando_condicao` |
+| 2 | `pendente_leitura` | em branco | 1 | `aguardando_condicao` |
+| 3 | `confirmado` = "não" | em branco | 2 | `nao_se_aplica` |
+| 4 | `em_branco` | em branco | 4a | `a_revisar` |
+| 5 | `ilegivel` | preenchida | 4a | `a_revisar` |
+| 6 | `nao_se_aplica` (pulada por outra regra) | em branco | 4 | `nao_se_aplica` |
+| 7 | `nao_se_aplica` (pulada por outra regra) | preenchida | 4 | `a_revisar` |
+| 8 | sai de `a_revisar` para `rasurado` com a 8 em `aguardando_condicao` | — | 4a (reavaliação) | `a_revisar` |
 
 CA-019 — Resposta em pergunta que deveria ser pulada
 Dado que a pergunta 7 = "não" e a pergunta 8 foi preenchida

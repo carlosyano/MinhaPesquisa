@@ -93,7 +93,7 @@ recebe o recorte já normalizado.
 - Saída validada contra schema; estado de cada item pela ordem de avaliação da FL-002 (REQ §6.4). Pontos de atenção:
   - Confiança comparada no valor bruto; **estritamente maior** que o limite confirma (0,90 exato vai para `a_revisar` — CA-005, CA-006, TS-003).
   - CPF sempre revisável (RN-012); valor fora do schema sempre revisável (CA-006); `texto_livre` sempre revisável (DEC-057).
-  - Regra de salto dependente de campo não resolvido → `aguardando_condicao` (CA-018).
+  - Regra de salto com origem em `pendente_leitura`, `aguardando_condicao` ou `a_revisar` → `aguardando_condicao` (FL-002 regra 1, CA-018); origem em `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica` segue as regras 4 e 4a.
 - Revisão humana com reserva de 30 min (ReservaAplicacao é a fonte única) e ETag/If-Match obrigatório (RN-043, DEC-034).
 - Conclusão (`confirmApplication`) exige os 5 campos da DEC-020 e assinatura presente (RN-044); vínculo por CPF é feito aqui — CPF existente vincula, CPF novo cria respondente (CA-014b). Divergência de cadastro: o digitalizador escolhe o valor (CA-014).
 - Falta de campo obrigatório → ERR-006 (CPF ausente/inválido → `aguardando_cpf`).
