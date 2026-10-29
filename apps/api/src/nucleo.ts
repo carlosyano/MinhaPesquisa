@@ -28,7 +28,6 @@ export const VALIDADE_TOKEN: Record<TipoToken, number> = {
 export const SESSAO_INATIVIDADE = 30 * MINUTO;
 export const SESSAO_MAXIMA = 24 * HORA;
 export const PRE_SESSAO = 5 * MINUTO;
-export const MAX_SESSOES = 3;
 
 /** Quem age numa requisição autenticada. */
 export interface Ator {
