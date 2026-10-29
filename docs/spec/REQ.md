@@ -1,9 +1,9 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-005 aceitas · CHG-006 aplicada, pendente de aceite
-Versão: 1.8
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-007 aceitas
+Versão: 1.9
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado)
 Responsável: Carlos Yano
@@ -167,6 +167,15 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-071 | 28/10/2026 | negócio | Dedução por diferença entre filtros | Faixas fixas e mínimo no complemento; aceitar o risco | Filtros de idade só em faixas fixas de 5 anos (60-64 ... 90+); consulta recusada quando o complemento do filtro no projeto tem menos respondentes que o mínimo | Dois filtros que diferem em uma pessoa revelariam suas respostas (Q-019) | definitivo | Alto | RF-009, RNF-004, DEC-055 |
 | DEC-072 | 28/10/2026 | negócio | Mascaramento de CPF | Ver DEC-021 | Exceto na revisão, no pedido de acesso e na portabilidade do titular e na exportação linha a linha, com auditoria | Inclui o acesso do próprio titular (Q-020); substitui a DEC-021 | definitivo | Alto | RNF-003, CA-008, CA-024 |
 | DEC-073 | 28/10/2026 | negócio | Critério de parada da revisão independente | Zero achados médios; zero bloqueantes e altos com médios registrados | Rodada aprovada com 0 bloqueantes e 0 altos; achados médios e baixos restantes só com registro de responsável e incremento (PLANO §12.3) | Rodadas sucessivas descem de nível e não convergem a zero médios; desvio do nível Completo aceito | definitivo | Médio | DEC-001, DEC-061 |
+| DEC-074 | 29/10/2026 | negócio | Campo lido em branco | Sempre revisão; regra geral de confiança | Campo lido em branco que não é destino de salto que mande pular vai para `a_revisar` | Evita confirmar como vazio um campo marcado de leve (Q-021) | definitivo | Médio | RF-007, FL-002, RN-020 |
+| DEC-075 | 29/10/2026 | negócio | Filtro em escala e múltipla escolha | Valor único e "marcou a opção"; intervalos livres | Escala filtrada por um valor (`igual` ou `diferente`, sem `em`); múltipla escolha filtra por "marcou a opção" | Evita recortes estreitos (Q-022) | definitivo | Médio | RF-009, DEC-071 |
+| DEC-076 | 29/10/2026 | negócio | Complemento do filtro | Por projeto e por período; proibir vários projetos | Sem filtro, não se aplica; com vários projetos, verificado em cada projeto com o maior mínimo; com período, calculado no mesmo período | Fecha a DEC-071 (Q-023) | definitivo | Médio | RF-009, DEC-055, DEC-071 |
+| DEC-077 | 29/10/2026 | negócio | Valores de aplicação descartada | Apagar no descarte; manter até a retenção | No descarte, `valor_ia` e `valor_final` dos itens são apagados com as imagens e a aplicação vai para a ListaEliminacoes (motivo `descarte_aplicacao`) para reaplicação após restore; fica a auditoria | Minimização (LGPD) (Q-024) | definitivo | Médio | RF-008, CA-033, RN-030 |
+| DEC-078 | 29/10/2026 | negócio | Respondente sem aplicação após reabertura | Anonimizar; manter até a retenção | Respondente que fica sem aplicação concluída após reabertura é anonimizado e registrado na ListaEliminacoes só para reaplicação após restore (motivo `anonimizacao_reabertura`), com auditoria | Sem finalidade para manter (Q-025) | definitivo | Médio | RF-005, CA-042 |
+| DEC-079 | 29/10/2026 | negócio | Campo obrigatório ilegível | Bloquear conclusão; concluir sem vínculo | Nome, nascimento, data ou local ilegível, rasurado ou não se aplica → ERR-006 até informar o valor; CPF ilegível → `aguardando_cpf` | Integridade mínima (DEC-020) (Q-026) | definitivo | Médio | RF-008, DEC-020, CA-032 |
+| DEC-080 | 29/10/2026 | negócio | Concessão individual sem perfil | Recusar; permitir | Concessão recusada (ERR-018) se o usuário não tiver o perfil `analista` | Evita concessão sem efeito ou indevida (Q-027) | definitivo | Baixo | RF-001, CA-025 |
+| DEC-081 | 29/10/2026 | negócio | Faixa abaixo de 60 | Criar faixa; excluir | Faixa `<60` com o mesmo mínimo das demais; complementa a DEC-071 | Público pode ter menos de 60 (Q-028) | definitivo | Baixo | RF-009, DEC-071 |
+| DEC-082 | 29/10/2026 | negócio | Novo MFA após reset | Link por e-mail; próximo login | Após o reset, o novo cadastro só começa pelo link de uso único (24 h) enviado ao e-mail, com a senha; login com `mfa_ativo = false` não cria pré-sessão (ERR-013) | Quem tem só a senha não cadastra MFA (Q-029) | definitivo | Alto | RF-001, RF-002, CA-037b, CA-026b |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -640,11 +649,15 @@ Constraint única: `(aplicacao_id)` onde `ativa = true` — impede reservas simu
 |---|---|---|---|---|---|---|---|---|---|---|
 | id | identificador do registro | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
 | tenant_id | tenant da eliminação | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
-| respondente_id_original | ID interno do respondente eliminado | uuid | sim | 36 | UUID v4 | — | — | não | — | não |
+| motivo | origem do registro | enum | sim | — | — | eliminacao; anonimizacao_reabertura; descarte_aplicacao | eliminacao | não | — | não |
+| respondente_id_original | ID interno do respondente eliminado ou anonimizado | uuid | não | 36 | UUID v4 | — | NULL | não | — | não |
+| aplicacao_id | aplicação descartada cujos valores lidos foram apagados (DEC-077) | uuid | não | 36 | UUID v4 | — | NULL | não | — | não |
 | eliminado_em | data da eliminação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 | valido_ate | data de expiração do registro | timestamp | sim | — | ISO 8601 UTC | — | eliminado_em + 180 dias | não | — | não |
 
-Constraint única: `(tenant_id, respondente_id_original)` — impede registros duplicados.
+Constraint única: `(tenant_id, respondente_id_original)` e `(tenant_id, aplicacao_id)` — impede registros duplicados. Check: `motivo = descarte_aplicacao` exige `aplicacao_id` e `respondente_id_original` nulo; os demais motivos exigem `respondente_id_original` e `aplicacao_id` nulo.
+
+Todos os motivos são reaplicados após restauração de backup (CA-023, exemplo 4). Só `eliminacao` tem os demais efeitos do direito de eliminação (RN-031); `anonimizacao_reabertura` (DEC-078) e `descarte_aplicacao` (DEC-077) servem apenas para que o dado apagado não volte com o backup.
 
 Nota: Esta entidade não tem FK para `Respondente` porque o respondente foi anonimizado. O `respondente_id_original` guarda apenas o UUID interno para reaplicar a eliminação em caso de restauração de backup.
 
@@ -770,7 +783,7 @@ Linha a linha contém dados pessoais em repouso: cancelada e apagada na elimina�
 | id | identificador do token | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
 | tenant_id | tenant do usuário | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
 | usuario_id | usuário | uuid | sim | 36 | UUID v4 | — | — | não | Usuario.id | não |
-| tipo | finalidade | enum | sim | — | — | convite; recuperacao_senha | — | não | — | não |
+| tipo | finalidade | enum | sim | — | — | convite; recuperacao_senha; reset_mfa | — | não | — | não |
 | token_hash | hash do token enviado por e-mail | bytea | sim | 32 | SHA-256 | — | — | sim | — | sensível |
 | expira_em | expiração (convite 24 h; recuperação 60 min) | timestamp | sim | — | ISO 8601 UTC | — | — | não | — | não |
 | usado_em | uso (uso único) | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
@@ -821,7 +834,7 @@ Filtros e comparações entre versões (RN-018) usam este formato.
 **RF-001 — Gestão de usuários, perfis e vínculo a projetos**
 Quem executa: Administrador do tenant.
 Quando pode: Quando o usuário tem o perfil `admin_tenant` no tenant.
-Quando não pode: Quando não tem o perfil ou tenta acessar outro tenant; desativar ou retirar o perfil `admin_tenant` do último administrador ativo do tenant (ERR-018).
+Quando não pode: Quando não tem o perfil ou tenta acessar outro tenant; desativar ou retirar o perfil `admin_tenant` do último administrador ativo do tenant (ERR-018); conceder acesso individual a usuário sem o perfil `analista` (ERR-018, DEC-080).
 Entradas: dados do usuário (e-mail, nome, um ou mais perfis), projeto(s) a vincular; concessão e revogação de acesso individual (justificativa).
 Sucesso: usuário criado ou atualizado, vínculo salvo, convite enviado.
 Erro e timeout: ERR-001 (validação), ERR-002 (recurso não encontrado), ERR-016 (sem permissão), ERR-017 (edição concorrente), timeout de 30 s no envio de e-mail.
@@ -832,10 +845,10 @@ Estado final: usuário ativo ou inativo, vínculo criado ou removido.
 **RF-002 — Autenticação, sessões, recuperação de senha e MFA**
 Quem executa: Qualquer usuário.
 Quando pode: Com credenciais válidas.
-Quando não pode: Após 5 falhas em 15 min (bloqueio de 15 min), ou sessão expirada (30 min inatividade ou 24 h).
-Entradas: e-mail, senha, código MFA; token de convite ou de recuperação (uso único).
+Quando não pode: Após 5 falhas em 15 min (bloqueio de 15 min), ou sessão expirada (30 min inatividade ou 24 h). Cadastrar MFA (`startMfaSetup`, `setupMfa`) só é permitido com pré-sessão na etapa `mfa_cadastro` e `mfa_ativo = false` no momento da chamada; verificar MFA (`verifyMfa`) só na etapa `mfa_verificacao`; fora disso → ERR-018 (CA-026b).
+Entradas: e-mail, senha, código MFA; token de convite, de recuperação ou de reset de MFA (uso único).
 Sucesso: sessão criada, MFA verificado, no máximo 3 sessões ativas.
-Erro e timeout: ERR-013 (credenciais inválidas), ERR-014 (bloqueio por tentativas, aplicado por e-mail exista ou não a conta), ERR-012 (código MFA inválido), ERR-011 (link inválido ou expirado), ERR-015 (sessão expirada), ERR-021 (limite de 3 sessões ativas).
+Erro e timeout: ERR-013 (credenciais inválidas), ERR-014 (bloqueio por tentativas, aplicado por e-mail exista ou não a conta), ERR-012 (código MFA inválido), ERR-011 (link inválido ou expirado), ERR-015 (sessão expirada), ERR-021 (limite de 3 sessões ativas), ERR-018 (operação de MFA fora da etapa da pré-sessão).
 Registros alterados: Usuario (ultimo_login, situacao), Sessao, TokenUsoUnico, FalhaLogin, Auditoria.
 Mensagens: exatamente as do catálogo para ERR-011 a ERR-015 e ERR-021 (genéricas, sem revelar se a conta existe).
 Estado final: autenticado ou bloqueado.
@@ -913,7 +926,7 @@ Quando não pode: Quando o grupo é menor que o mínimo configurado (números oc
 Entradas: filtros (idade, estado civil, resposta a pergunta, período).
 Sucesso: dashboard com gráficos por pergunta e cruzamento por uma segunda pergunta, respeitando o tamanho mínimo de grupo.
 Erro e timeout: ERR-008 (ficha sem concessão), ERR-002 (projeto não vinculado), ERR-024 (consulta recusada pelo complemento do filtro, DEC-071), ERR-001 (filtro fora das regras abaixo), timeout de 30 s.
-Regras de filtro (DEC-071): idade só por faixas fixas `<60`, `60-64`, `65-69`, `70-74`, `75-79`, `80-84`, `85-89`, `90+`; filtro por resposta só em perguntas categóricas (`escolha_unica`, `multipla_escolha`, `sim_nao`, `escala`, `matriz` por linha), com operadores `igual`, `diferente` ou `em` sobre códigos de opção. Não há filtro por intervalo livre.
+Regras de filtro (DEC-071): idade só por faixas fixas `<60`, `60-64`, `65-69`, `70-74`, `75-79`, `80-84`, `85-89`, `90+`; filtro por resposta só em perguntas categóricas (`escolha_unica`, `multipla_escolha`, `sim_nao`, `escala`, `matriz` por linha), com operadores `igual`, `diferente` ou `em` sobre códigos de opção; em `escala`, só `igual` ou `diferente` com um valor (DEC-075); em `multipla_escolha`, o filtro significa "marcou a opção". Não há filtro por intervalo livre. Complemento (DEC-076): sem filtro, não se aplica; com vários projetos, verificado em cada projeto com o maior mínimo; com período, calculado no mesmo período. A faixa `<60` segue o mesmo mínimo (DEC-081).
 Registros alterados: Auditoria (abertura de ficha, ocultação de grupo pequeno); Grupo (ao salvar grupo).
 Mensagens: "Grupo pequeno demais para ser anonimizado".
 Estado final: dashboard exibido.
@@ -993,26 +1006,26 @@ Transições:
 |---|---|---|---|---|---|
 | identificacao_pendente | digitalizador informa formulário, versão e página ou corrige as páginas | páginas completas e coerentes; teto não atingido | dispara leitura | em_leitura | digitalizador |
 | identificacao_pendente | digitalizador informa formulário, versão e página ou corrige as páginas | páginas completas e coerentes; teto atingido | enfileira | aguardando_cota | digitalizador |
-| identificacao_pendente | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
+| identificacao_pendente | digitalizador descarta | — | apaga imagens e valores lidos dos itens (DEC-077), audita | descartada | digitalizador |
 | aguardando_cota | cota disponível | teto não atingido | dispara leitura | em_leitura | sistema (job) |
-| aguardando_cota | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
+| aguardando_cota | digitalizador descarta | — | apaga imagens e valores lidos dos itens (DEC-077), audita | descartada | digitalizador |
 | em_leitura | leitura concluída | todos os campos lidos | avalia estados dos itens (FL-002) | em_revisao | worker |
 | em_leitura | teto atingido antes de ler todas as páginas | — | preserva itens já lidos; páginas restantes aguardam | aguardando_cota | worker |
 | em_leitura | leitura falhou 3x | timeout ou erro | audita | erro_leitura | worker |
-| em_leitura | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
+| em_leitura | digitalizador descarta | — | apaga imagens e valores lidos dos itens (DEC-077), audita | descartada | digitalizador |
 | erro_leitura | digitalizador manda ler de novo | teto não atingido | dispara leitura | em_leitura | digitalizador |
 | erro_leitura | digitalizador manda ler de novo | teto atingido | enfileira | aguardando_cota | digitalizador |
-| erro_leitura | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
+| erro_leitura | digitalizador descarta | — | apaga imagens e valores lidos dos itens (DEC-077), audita | descartada | digitalizador |
 | em_revisao | digitalizador conclui | todos os itens resolvidos (FL-002); nome, data de nascimento, CPF válido, data e local informados (DEC-020); assinatura presente | grava manter_cadastro, vincula respondente, audita | concluida | digitalizador |
 | em_revisao | digitalizador conclui | CPF ausente, ilegível ou inválido | audita; ERR-006 | aguardando_cpf | digitalizador |
 | em_revisao | digitalizador conclui | assinatura marcada como ausente; demais condições atendidas | grava manter_cadastro; NÃO vincula respondente (DEC-064); audita | sem_assinatura | digitalizador |
-| em_revisao | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
+| em_revisao | digitalizador descarta | — | apaga imagens e valores lidos dos itens (DEC-077), audita | descartada | digitalizador |
 | aguardando_cpf | digitalizador informa CPF válido | — | volta para revisão | em_revisao | digitalizador |
-| aguardando_cpf | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
+| aguardando_cpf | digitalizador descarta | — | apaga imagens e valores lidos dos itens (DEC-077), audita | descartada | digitalizador |
 | sem_assinatura | digitalizador envia página 1 assinada e confirma a assinatura como presente (RN-044) | QR confere versão e página; divergências de cadastro iguais às gravadas | grava a imagem como `assinatura` (a página 1 original é mantida); confere assinatura sem reler os outros campos; vincula respondente com o manter_cadastro gravado; audita | concluida | digitalizador |
 | sem_assinatura | digitalizador envia página 1 assinada e confirma a assinatura como presente | divergências de cadastro mudaram desde a conclusão (outra aplicação alterou o cadastro ou o respondente foi eliminado) | grava a imagem; recalcula divergências; audita; aviso ERR-018 | em_revisao | digitalizador |
 | sem_assinatura | digitalizador corrige a conferência (assinatura marcada como ausente por engano) | — | volta para revisão, preservando os itens | em_revisao | digitalizador |
-| sem_assinatura | digitalizador descarta | — | apaga imagens, audita | descartada | digitalizador |
+| sem_assinatura | digitalizador descarta | — | apaga imagens e valores lidos dos itens (DEC-077), audita | descartada | digitalizador |
 | concluida | digitalizador ou admin reabre com motivo | — | sai dos relatórios, audita | em_revisao | digitalizador/admin |
 | descartada | — | estado final | — | — | — |
 
@@ -1020,7 +1033,7 @@ Precedência na conclusão (a primeira que se aplica decide):
 
 1. Algum item fora dos estados resolvidos (FL-002) → ERR-022; nada é gravado.
 2. CPF ausente, ilegível ou inválido → resposta de sucesso com aviso ERR-006 e estado `aguardando_cpf` (a transição é gravada).
-3. Nome, data de nascimento, data ou local ausentes → ERR-006; nada é gravado; permanece em `em_revisao`.
+3. Nome, data de nascimento, data ou local ausentes, ilegíveis, rasurados ou marcados como não se aplica → ERR-006; nada é gravado; permanece em `em_revisao` (DEC-079).
 4. Assinatura ausente → `sem_assinatura`; presente → `concluida`.
 
 Operações por estado (fora destas combinações → ERR-018):
@@ -1053,25 +1066,28 @@ Ordem de avaliação ao fim da leitura de um item (a primeira regra que se aplic
 
 | Ordem | Regra | Estado |
 |---|---|---|
-| 1 | Item é destino de regra de salto e a pergunta de origem ainda não está resolvida (CA-018) | aguardando_condicao |
+| 1 | Item é destino de regra de salto e a pergunta de origem está em `pendente_leitura`, `aguardando_condicao` ou `a_revisar` (CA-018) | aguardando_condicao |
 | 2 | Origem resolvida, a regra manda pular e o item está em branco (CA-015) | nao_se_aplica |
 | 3 | Origem resolvida, a regra manda pular e o item está preenchido (CA-019) | a_revisar |
 | 4 | Origem em `nao_se_aplica` (origem pulada por outra regra): destino em branco → `nao_se_aplica`; destino preenchido → `a_revisar` | nao_se_aplica ou a_revisar |
 | 4a | Origem em `em_branco`, `ilegivel` ou `rasurado` (condição indeterminada) | a_revisar |
 | 5 | Pergunta do tipo `cpf` (RN-012) | a_revisar |
 | 6 | Pergunta do tipo `texto_livre` (DEC-057) ou `texto_curto` (DEC-066) | a_revisar |
+| 6a | Valor lido em branco (DEC-074) | a_revisar |
 | 7 | Valor fora do schema: tipo, faixa, opção inexistente, mais de uma marcação em escolha única, ou `nenhuma_das_anteriores` marcada junto com outra opção (CA-006) | a_revisar |
 | 8 | Confiança > limite_confianca (DEC-028) | confirmado_automaticamente |
 | 9 | Demais casos (confiança ≤ limite) | a_revisar |
 
-"Origem resolvida" significa origem em `confirmado_automaticamente`, `confirmado` ou `corrigido`.
+"Origem resolvida" (regras 2 e 3) significa origem em `confirmado_automaticamente`, `confirmado` ou `corrigido`. A regra 1 vale só para os três estados que listam; origem em `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica` segue para as regras 4 e 4a. Assim, todo estado da origem cai em exatamente uma das regras 1, 2/3, 4 ou 4a (ou, se a regra de salto não mandar pular, segue para as regras 5 a 9).
+
+"Condição de salto resolvida" (evento da tabela abaixo) é a saída da origem de `pendente_leitura`, `aguardando_condicao` ou `a_revisar` para qualquer outro estado.
 
 "Item resolvido" (usado na conclusão, FL-001) significa item em `confirmado_automaticamente`, `confirmado`, `corrigido`, `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica`. Itens em `pendente_leitura`, `aguardando_condicao` ou `a_revisar` impedem a conclusão (ERR-022).
 
 | Estado atual | Evento | Condição | Ação | Próximo estado | Quem dispara |
 |---|---|---|---|---|---|
 | pendente_leitura | leitura concluída | regra 8 | — | confirmado_automaticamente | worker |
-| pendente_leitura | leitura concluída | regras 3, 4 (destino preenchido), 4a, 5, 6, 7 ou 9 | — | a_revisar | worker |
+| pendente_leitura | leitura concluída | regras 3, 4 (destino preenchido), 4a, 5, 6, 6a, 7 ou 9 | — | a_revisar | worker |
 | pendente_leitura | leitura concluída | regra 1 | — | aguardando_condicao | worker |
 | pendente_leitura | leitura concluída | regra 2 ou 4 (destino em branco) | — | nao_se_aplica | worker |
 | aguardando_condicao | condição de salto resolvida | regra 2 | — | nao_se_aplica | worker |
@@ -1320,6 +1336,19 @@ Quando a leitura da pergunta 8 termina
 Então a regra de salto da pergunta 8 só é avaliada depois que a pergunta 7 for resolvida
 E a pergunta 8 fica no estado "aguardando_condicao"
 
+Regra de salto: "pergunta 8 só se a pergunta 7 = sim".
+
+| Exemplo | Estado da pergunta 7 (origem) | Pergunta 8 (destino) | Regra FL-002 | Estado da pergunta 8 |
+|---|---|---|---|---|
+| 1 | `a_revisar` | preenchida | 1 | `aguardando_condicao` |
+| 2 | `pendente_leitura` | em branco | 1 | `aguardando_condicao` |
+| 3 | `confirmado` = "não" | em branco | 2 | `nao_se_aplica` |
+| 4 | `em_branco` | em branco | 4a | `a_revisar` |
+| 5 | `ilegivel` | preenchida | 4a | `a_revisar` |
+| 6 | `nao_se_aplica` (pulada por outra regra) | em branco | 4 | `nao_se_aplica` |
+| 7 | `nao_se_aplica` (pulada por outra regra) | preenchida | 4 | `a_revisar` |
+| 8 | sai de `a_revisar` para `rasurado` com a 8 em `aguardando_condicao` | — | 4a (reavaliação) | `a_revisar` |
+
 CA-019 — Resposta em pergunta que deveria ser pulada
 Dado que a pergunta 7 = "não" e a pergunta 8 foi preenchida
 Quando a leitura termina
@@ -1396,7 +1425,7 @@ Então o sistema gera os dados do respondente em formato CSV ou JSON
 E a auditoria registra a execução sem conter os dados pessoais
 
 **US-010 — Como administrador do tenant, quero gerenciar usuários e perfis para controlar o acesso ao sistema.**
-Relacionado a: RF-001, RF-002, CA-012, CA-013, CA-014, CA-014b, CA-016, CA-021, CA-025, CA-026, CA-030, CA-033, CA-035, CA-037, CA-037b, CA-038, CA-039, CA-040, CA-041, CA-042, CA-043, CA-044
+Relacionado a: RF-001, RF-002, CA-012, CA-013, CA-014, CA-014b, CA-016, CA-021, CA-025, CA-026, CA-026b, CA-030, CA-033, CA-035, CA-037, CA-037b, CA-038, CA-039, CA-040, CA-041, CA-042, CA-043, CA-044
 
 CA-012 — Isolamento entre tenants
 Dado que o usuário "user-A" pertence ao tenant "tenant-A"
@@ -1448,6 +1477,7 @@ Quando o acesso é concedido com justificativa
 Então o acesso vale por 90 dias
 E expira sozinho
 E cada abertura de ficha fica auditada
+E concessão a usuário sem o perfil `analista` é recusada com ERR-018 (DEC-080)
 
 CA-026 — Autenticação
 Dado que o usuário tenta fazer login
@@ -1455,6 +1485,24 @@ Quando ele erra a senha 5 vezes em 15 minutos
 Então novas tentativas são bloqueadas por 15 minutos
 E a resposta não revela se a conta existe
 E o MFA é obrigatório após o login bem-sucedido
+
+CA-026b — Cadastro de MFA só na etapa de cadastro
+Dado que existe uma pré-sessão com a etapa definida pelo servidor: `mfa_verificacao` pelo login (só para `mfa_ativo = true`) ou `mfa_cadastro` pelo convite (`acceptInvite`) ou pelo link de reset (`acceptMfaReset`, DEC-082)
+Quando o usuário chama `startMfaSetup` ou `setupMfa`
+Então a operação só é aceita se a pré-sessão estiver em `mfa_cadastro` e o usuário ainda tiver `mfa_ativo = false`
+E fora disso a resposta é ERR-018, o segredo TOTP existente não é alterado e nenhuma sessão é criada
+E `verifyMfa` só é aceito na etapa `mfa_verificacao`
+E ao concluir `setupMfa` as demais pré-sessões do usuário são encerradas
+
+| Exemplo | Situação | Chamada | Resultado esperado |
+|---|---|---|---|
+| 1 | Primeiro acesso: `mfa_ativo = false`, pré-sessão em `mfa_cadastro` criada pelo convite | `startMfaSetup` e depois `setupMfa` com código válido | Segredo gerado; MFA ativo; sessão plena criada |
+| 2 | Usuário com `mfa_ativo = true` (atacante com a senha), pré-sessão em `mfa_verificacao` | `startMfaSetup` | ERR-018; segredo atual mantido; nada gravado |
+| 3 | Usuário com `mfa_ativo = true`, pré-sessão em `mfa_verificacao` | `setupMfa` com qualquer código | ERR-018; nenhuma sessão criada |
+| 4 | Duas pré-sessões em `mfa_cadastro`; a primeira conclui `setupMfa` | `startMfaSetup` na segunda | ERR-018 (pré-sessão encerrada e `mfa_ativo = true`) |
+| 5 | `mfa_ativo = false`, pré-sessão em `mfa_cadastro` | `verifyMfa` | ERR-018 |
+| 6 | Após reset pelo administrador (CA-037b), pré-sessão criada pelo link de reset | `startMfaSetup` na etapa `mfa_cadastro` | Segredo gerado (fluxo do exemplo 1) |
+| 7 | Após reset, sem usar o link | `login` com a senha correta | ERR-013; nenhuma pré-sessão (DEC-082) |
 
 CA-030 — Teto de custo de IA
 Dado que o tenant atingiu o teto mensal de R$ 500,00
@@ -1476,13 +1524,16 @@ Dado que uma aplicação tem agrupamento errado
 Quando o digitalizador a descarta com motivo
 Então ela vai para "descartada"
 E as imagens são apagadas
+E os valores lidos dos itens são apagados e a aplicação é registrada na ListaEliminacoes com motivo `descarte_aplicacao` (DEC-077)
 E a auditoria registra quem, quando e o motivo
 
 CA-035 — Primeiro acesso do tenant
 Dado que o tenant foi criado pelo script
 Quando o primeiro administrador abre o convite dentro de 24 horas
 Então define a senha e cadastra o MFA
+E o convite só é consumido quando o `setupMfa` conclui; se a pré-sessão expirar antes, o mesmo convite, dentro das 24 horas, redefine a senha e cria nova pré-sessão
 E convite vencido ou já usado é recusado com ERR-011
+E o convite vencido sem MFA cadastrado é reenviado pelo administrador (`inviteUser`) ou, para o primeiro administrador do tenant, pelo script de criação do tenant
 
 CA-037 — Recuperação de senha
 Dado que o usuário esqueceu a senha
@@ -1494,8 +1545,19 @@ CA-037b — Reset de MFA pelo administrador
 Dado que um usuário perdeu o acesso ao MFA
 Quando o administrador do tenant reseta o MFA
 Então as sessões ativas do usuário são encerradas
-E o usuário cadastra um novo MFA no próximo login
+E o usuário recebe por e-mail um link de uso único válido por 24 horas
+E só pelo link, informando a senha, ele cadastra o novo MFA (DEC-082)
+E login com senha antes disso é recusado com ERR-013, sem pré-sessão (conta como falha de login para o bloqueio da ERR-014)
+E o reset grava `mfa_ativo = false`, apaga o segredo TOTP e invalida links de reset anteriores ainda não usados
 E o reset fica registrado na auditoria
+
+| Exemplo | Situação | Chamada | Resultado esperado |
+|---|---|---|---|
+| 1 | Link válido, senha correta | `acceptMfaReset` | Pré-sessão `mfa_cadastro`; o link continua válido até o `setupMfa` concluir |
+| 2 | Link válido, senha errada | `acceptMfaReset` | ERR-013 (conta para a ERR-014); o link não é consumido |
+| 3 | Pré-sessão do exemplo 1 expirou sem `setupMfa` | `acceptMfaReset` com o mesmo link dentro das 24 h | Nova pré-sessão `mfa_cadastro` |
+| 4 | `setupMfa` concluído | `acceptMfaReset` com o mesmo link | ERR-011 (link já usado) |
+| 5 | Link com mais de 24 h ou substituído por novo reset | `acceptMfaReset` | ERR-011 |
 
 CA-038 — Revogação e desativação
 Dado que o analista tem acesso individual
@@ -1530,7 +1592,7 @@ Então ela volta a "em_revisao"
 E sai dos relatórios até ser concluída de novo
 E se o CPF for corrigido, o vínculo é refeito
 E as alterações de cadastro feitas por essa aplicação são revertidas
-E o respondente que tinha sido criado por essa aplicação e ficou sem nenhuma aplicação é anonimizado como na eliminação
+E o respondente que ficou sem nenhuma aplicação concluída é anonimizado como na eliminação e registrado na ListaEliminacoes com motivo `anonimizacao_reabertura`, sem os demais efeitos da eliminação (DEC-078)
 E a reversão é registrada na auditoria
 
 CA-043 — Reserva da aplicação
@@ -1563,7 +1625,7 @@ A matriz completa é mantida em `registros/matriz_rastreabilidade.csv`, idêntic
 | Requisito | Regra | Entidade | Fluxo | História | Critério | Teste Sentinela | Operation ID | Componente | Incremento |
 |---|---|---|---|---|---|---|---|---|---|
 | RF-001 | RN-001, RN-003, RN-004 | ENT-002, ENT-003, ENT-014, ENT-015, ENT-022 | FL-001 | US-010 | CA-012, CA-016, CA-025, CA-035, CA-037, CA-037b, CA-038 | TS-001 | listUsers, createTenantUser, getUser, updateUser, inviteUser, resetMfa, grantIndividualAccess, listIndividualAccessGrants, revokeAccess | CMP-Auth | IMP-001 |
-| RF-002 | RN-048 | ENT-002, ENT-027, ENT-028, ENT-030 | FL-001 | US-010 | CA-026, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite | CMP-Auth | IMP-001 |
+| RF-002 | RN-048 | ENT-002, ENT-027, ENT-028, ENT-030 | FL-001 | US-010 | CA-026, CA-026b, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite, acceptMfaReset | CMP-Auth | IMP-001 |
 | RF-003 | RN-027 | ENT-004, ENT-020, ENT-021 | FL-001 | US-006 | CA-027 | — | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject | CMP-Projects | IMP-002 |
 | RF-004 | RN-017, RN-018, RN-019, RN-021, RN-042, RN-047 | ENT-005, ENT-006, ENT-007, ENT-008, ENT-016, ENT-024 | FL-001 | US-007 | CA-001, CA-028, CA-036 | TS-006 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf | CMP-Forms | IMP-002 |
 | RF-005 | RN-011, RN-012, RN-014, RN-015 | ENT-009, ENT-010 | FL-001, FL-002 | US-003 | CA-002, CA-014, CA-014b, CA-032 | — | linkRespondent (interna) | CMP-Respondents | IMP-003 |
@@ -1584,19 +1646,19 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 | ERR-003 | AI_QUOTA_EXCEEDED | — | Teto de custo de IA do tenant atingido; aviso exibido na tela e enviado por e-mail (estado assíncrono, não é resposta HTTP de erro). | O processamento deste tenant está pausado. Contate o administrador. | info: ai_quota_exceeded (tenant_id) | Aplicação em `aguardando_cota` | RF-007, CA-030, DEC-035 | ativo |
 | ERR-004 | INVALID_QR_CODE | 400 | QR ilegível ou ausente, registro da imagem impossível, ou páginas faltantes, repetidas ou excedentes. | Não foi possível identificar o formulário nesta página. Informe manualmente. | warn: qr_invalid_or_missing | Aplicação em `identificacao_pendente` | RF-006, CA-004, CA-013, CA-040 | ativo |
 | ERR-005 | RESERVATION_EXPIRED | 409 | Descontinuado pela CHG-002: duplicava o ERR-043. | Descontinuado; usar ERR-043. | — | — | CHG-002 | descontinuado |
-| ERR-006 | MISSING_MANDATORY_FIELDS | 400 | Tentativa de concluir aplicação sem nome, data de nascimento, CPF válido, data ou local (DEC-020). | A aplicação não pode ser concluída sem nome, data de nascimento, CPF válido, data e local da aplicação. | warn: missing_mandatory_fields | CPF ausente ou inválido: sucesso com este aviso e estado `aguardando_cpf`; demais campos: nada é gravado, permanece em `em_revisao` | RF-005, RF-008, CA-032 | ativo |
+| ERR-006 | MISSING_MANDATORY_FIELDS | 400 | Tentativa de concluir aplicação sem nome, data de nascimento, CPF válido, data ou local, ou com um deles ilegível, rasurado ou marcado como não se aplica (DEC-020, DEC-079). | A aplicação não pode ser concluída sem nome, data de nascimento, CPF válido, data e local da aplicação. | warn: missing_mandatory_fields | CPF ausente ou inválido: sucesso com este aviso e estado `aguardando_cpf`; demais campos: nada é gravado, permanece em `em_revisao` | RF-005, RF-008, CA-032 | ativo |
 | ERR-007 | FILE_REJECTED | 400 | Descontinuado pela CHG-002: duplicava o ERR-029. | Descontinuado; usar ERR-029. | — | — | CHG-002 | descontinuado |
 | ERR-008 | ACCESS_DENIED_INDIVIDUAL | 403 | Usuário sem concessão ativa de acesso individual tenta ver ficha ou exportar linha a linha em projeto vinculado. | Você não tem permissão para acessar dados individuais neste projeto. | warn: unauthorized_individual_access | Nada é gravado | RF-009, RF-010, CA-022, CA-025 | ativo |
 | ERR-009 | VERSION_IMMUTABLE | 409 | Tentativa de alterar perguntas de uma versão já publicada. | Versões publicadas são imutáveis. Crie uma nova versão em rascunho. | info: immutable_version_attempt | Nada é gravado | RF-004, CA-001, RN-042 | ativo |
 | ERR-010 | RATE_LIMIT_EXCEEDED | 429 | Mais de 100 req/min por usuário ou 20 req/min por IP em rotas públicas. | Muitas tentativas. Aguarde alguns minutos antes de tentar novamente. | warn: rate_limit_exceeded (ip/user) | Nada é gravado | RF-002, Bloco P.7 | ativo |
 | ERR-011 | TOKEN_INVALID | 400 | Link de convite ou de recuperação de senha inválido, expirado ou já usado. | Este link é inválido ou expirou. Solicite um novo. | warn: token_invalid | Nada é gravado | RF-002, CA-035, CA-037 | ativo |
 | ERR-012 | MFA_INVALID | 400 | Código MFA incorreto ou fora da janela de tempo. | Código de verificação inválido. Tente novamente. | warn: mfa_invalid (conta como falha de login) | Nada é gravado | RF-002, CA-026, CA-035 | ativo |
-| ERR-013 | INVALID_CREDENTIALS | 401 | E-mail ou senha incorretos, conta inexistente, inativa ou com convite pendente, ou tenant inativo (DEC-070) — mesma resposta. | Credenciais inválidas. | warn: login_failed (HMAC do e-mail) | Contagem de falhas atualizada | RF-002, CA-026 | ativo |
+| ERR-013 | INVALID_CREDENTIALS | 401 | E-mail ou senha incorretos, conta inexistente, inativa, com convite pendente ou com MFA não cadastrado (DEC-082), ou tenant inativo (DEC-070) — mesma resposta. | Credenciais inválidas. | warn: login_failed (HMAC do e-mail) | Contagem de falhas atualizada | RF-002, CA-026 | ativo |
 | ERR-014 | LOGIN_THROTTLED | 429 | 5 falhas em 15 minutos para o mesmo e-mail, exista ou não a conta. | Muitas tentativas. Tente novamente em 15 minutos. | warn: login_throttled (HMAC do e-mail) | Bloqueio de 15 minutos | RF-002, CA-026 | ativo |
 | ERR-015 | SESSION_REQUIRED | 401 | Sessão ausente, expirada (30 min de inatividade ou 24 h) ou encerrada. | Sua sessão expirou. Entre novamente. | info: session_required | Nada é gravado | RF-002, CA-026 | ativo |
 | ERR-016 | FORBIDDEN | 403 | Perfil sem permissão para a ação, ou token CSRF ausente ou inválido. | Você não tem permissão para realizar esta ação. | warn: forbidden_action | Nada é gravado | RF-001, RF-002 | ativo |
 | ERR-017 | STALE_VERSION | 412 | If-Match diferente do ETag atual (edição concorrente); If-Match ausente é erro de validação (ERR-001). | Os dados foram alterados por outra pessoa. Recarregue e tente novamente. | info: stale_etag | Nada é gravado | RF-008, CA-043 | ativo |
-| ERR-018 | INVALID_STATE | 409 | Ação não permitida no estado atual do recurso (FL-001, pedido do titular já executado). | Esta ação não é permitida no estado atual. | info: invalid_state_transition | Nada é gravado | RF-008, RF-010 | ativo |
+| ERR-018 | INVALID_STATE | 409 | Ação não permitida no estado atual do recurso (FL-001, pedido do titular já executado, operação de MFA fora da etapa da pré-sessão). | Esta ação não é permitida no estado atual. | info: invalid_state_transition | Nada é gravado | RF-002, RF-008, RF-010, CA-026b | ativo |
 | ERR-019 | IDEMPOTENCY_CONFLICT | 409 | Chave de idempotência reutilizada com conteúdo diferente. | Esta solicitação já foi enviada com outros dados. Gere uma nova solicitação. | warn: idempotency_conflict | Nada é gravado | RF-006, Bloco P.8 | ativo |
 | ERR-020 | DEPENDENCY_UNAVAILABLE | 503 | Storage, e-mail ou outro serviço interno indisponível após as retentativas. | Serviço temporariamente indisponível. Tente novamente em instantes. | error: dependency_unavailable (serviço) | Nada é gravado | RF-004, RF-006 | ativo |
 | ERR-021 | SESSION_LIMIT_REACHED | 409 | Usuário já tem 3 sessões ativas (Bloco P P.2). | Você já tem 3 sessões ativas. Saia em outro dispositivo ou aguarde até 30 minutos sem uso para entrar. | info: session_limit_reached | Nenhuma sessão nova | RF-002 | ativo |
@@ -1635,6 +1697,15 @@ Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, f
 | Q-018 | 28/10/2026 | Efeito de tenant inativo | `Tenant.ativo` existe, mas sem regra; a gestão é por script (DEC-017) | A: login recusado (ERR-013), jobs do tenant suspensos, dados preservados e expurgos legais mantidos | B: só login recusado | — | A | Tenant inativo: login recusado com ERR-013, jobs do tenant suspensos, dados preservados e expurgos por eliminação e retenção mantidos. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | DEC-017, ENT-001 |
 | Q-019 | 28/10/2026 | Dedução por diferença entre filtros | Dois filtros que diferem em uma só pessoa (ex.: idade ≥ 65 e idade ≥ 66) revelam as respostas dela por subtração, mesmo com todas as células acima do mínimo | A: filtros de idade só em faixas fixas (60-64, 65-69, ..., 90+) e mínimo aplicado também ao complemento do filtro | B: aceitar formalmente o risco e reescrever o Risco 2 e a RNF-004 | — | A | Filtros de idade só em faixas fixas de 5 anos (90+ na última); uma consulta é recusada quando o complemento do filtro dentro do projeto tem menos respondentes que o mínimo. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | RF-009, RNF-004, DEC-055, CA-009 |
 | Q-020 | 28/10/2026 | CPF completo no pedido de acesso do titular | DEC-021 lista portabilidade e linha a linha, mas não o pedido de acesso (CA-024) | A: incluir o acesso entre as exceções (o arquivo é do próprio titular) | B: mascarar no acesso | — | A | No pedido de acesso, o CPF do próprio titular aparece completo, com auditoria. | Aceito a recomendação (Carlos Yano, 28/10/2026). | respondida | DEC-021, CA-024, RN-013 |
+| Q-021 | 29/10/2026 | Campo lido em branco fora de regra de salto | A IA pode ler um campo como em branco com confiança alta; sem regra, ele seria confirmado automaticamente como vazio e um campo preenchido de leve passaria despercebido (M-N2) | A: campo lido em branco vai sempre para `a_revisar` | B: segue a regra geral de confiança (confirmado automaticamente se acima do limite) | — | A | Campo lido em branco que não é destino de regra de salto vai para `a_revisar`; o revisor marca `em_branco`. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-007, FL-002, RN-020 |
+| Q-022 | 29/10/2026 | Filtros em `escala` e em `multipla_escolha` | Intervalos livres em escala (ex.: 3 a 3, 3 a 4) permitem recortes estreitos parecidos com os de idade; em múltipla escolha não está definido se o filtro é "marcou a opção" ou "marcou só a opção" (M-N4) | A: escala filtrada só por um valor ou por faixas definidas no formulário; múltipla escolha filtra por "marcou a opção" (contém) | B: intervalos livres em escala, protegidos só pelo mínimo do complemento (DEC-071) | — | A | Filtro em escala por valor único; múltipla escolha filtra por "marcou a opção"; o mínimo do complemento (DEC-071) vale para ambos. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-009, RNF-004, DEC-071 |
+| Q-023 | 29/10/2026 | Complemento do filtro sem filtro, com vários projetos e com período | A DEC-071 manda recusar a consulta quando o complemento do filtro tem menos respondentes que o mínimo, mas não diz como calcular o complemento nesses três casos (M-N5) | A: sem filtro não há complemento; com vários projetos o complemento é verificado em cada projeto com o maior mínimo (DEC-055); com período o complemento é calculado dentro do mesmo período | B: recusar filtro em consulta com mais de um projeto | — | A | Sem filtro, a regra do complemento não se aplica; com vários projetos, vale em cada projeto com o maior mínimo; com período, o complemento é calculado no mesmo período. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-009, DEC-055, DEC-071 |
+| Q-024 | 29/10/2026 | Valores lidos de aplicação descartada | O descarte apaga as imagens, mas os valores lidos pela IA ficam guardados sem prazo, inclusive de pessoa que pode ter sido agrupada por engano (M-N8) | A: apagar os valores dos itens no descarte, mantendo só a auditoria | B: manter os valores até o prazo de retenção do tenant (RN-030) | — | A | No descarte, os valores lidos (`valor_ia`, `valor_final`) são apagados junto com as imagens; fica só a auditoria. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-008, CA-033, RN-030 |
+| Q-025 | 29/10/2026 | Respondente sem aplicação após reabertura | Ao reabrir e revincular uma aplicação, o respondente anterior pode ficar sem nenhuma aplicação concluída, guardando nome e CPF sem finalidade (M-08 da REV-REQ-007, reclassificado pela M-N7) | A: respondente sem aplicação concluída é anonimizado como na eliminação, sem entrar na lista de eliminações | B: manter o cadastro até o prazo de retenção | — | A | Respondente que fica sem aplicação concluída após a reabertura é anonimizado (registrado na ListaEliminacoes só para reaplicação após restore), com auditoria. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-005, CA-042, RN-030 |
+| Q-026 | 29/10/2026 | Campo obrigatório ilegível, rasurado ou não se aplica | A DEC-020 exige os 5 campos para concluir, mas não diz o que fazer quando um deles está ilegível ou rasurado no papel (M-18 da REV-REQ-007, reclassificado pela M-N7) | A: a conclusão fica bloqueada (ERR-006) até o digitalizador informar o valor, obtido com o aplicador ou o respondente | B: permite concluir com o campo marcado, sem vincular o respondente | — | A | Nome, data de nascimento, data ou local marcados como ilegível, rasurado ou não se aplica bloqueiam a conclusão (ERR-006) até o valor ser informado; CPF ilegível segue para `aguardando_cpf` (FL-001). | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-008, DEC-020, CA-032 |
+| Q-027 | 29/10/2026 | Concessão individual a usuário sem perfil de analista | Hoje nada impede conceder acesso linha a linha a um usuário que não tem perfil para ver dados individuais (B-N7) | A: recusar a concessão se o usuário não tiver o perfil exigido | B: permitir; a concessão só vale se o perfil for dado depois | — | A | Concessão individual só para usuário com o perfil exigido; caso contrário é recusada. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, CA-025 |
+| Q-028 | 29/10/2026 | Idade abaixo de 60 nos filtros | As faixas da DEC-071 começam em 60-64; respondentes com menos de 60 não têm faixa definida (B-N6) | A: criar a faixa "menos de 60" | B: respondentes com menos de 60 ficam fora dos filtros de idade | — | A | Há a faixa "menos de 60", sujeita ao mesmo mínimo das demais. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-009, DEC-071 |
+| Q-029 | 29/10/2026 | Novo cadastro de MFA após reset | Após o reset pelo administrador, quem tiver só a senha cadastra o próprio MFA antes do titular (risco residual da correção A-01) | A: após o reset, o novo cadastro exige link de uso único enviado por e-mail, como no convite | B: manter o cadastro no próximo login e aceitar o risco | — | A | Após o reset de MFA, o novo cadastro só começa por link de uso único enviado ao e-mail do usuário, válido por 24 horas. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, RF-002, CA-037b, CA-026b |
 
 10. Gates externos (GX)
 
@@ -1663,7 +1734,7 @@ Testes sentinela são casos de teste de alto nível que validam os riscos críti
 
 Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tools/validar_consistencia.py`; o resultado do script prevalece sobre este texto.
 
-- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-048, ENT-001 a ENT-030, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 46 CAs (CA-001 a CA-044, CA-014b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-073 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), Q-001 a Q-020 e GX-001. Verificado por script (IDs citados existem nos registros).
+- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-048, ENT-001 a ENT-030, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 47 CAs (CA-001 a CA-044, CA-014b, CA-026b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-082 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), Q-001 a Q-029 e GX-001. Verificado por script (IDs citados existem nos registros).
 - [x] 2. BDD com dados concretos: tabelas de exemplos nos CAs de alto risco CA-002, CA-008, CA-010, CA-012, CA-023, CA-029, CA-030, CA-032 e CA-043 (adicionadas na v1.3; na v1.2 só o CA-029 tinha tabela).
 - [x] 3. Estados e fluxos fechados: FL-001 com tabela de criação e entradas em `aguardando_cota`; FL-002 com ordem de avaliação explícita. Estados verificados por script contra o dicionário e o contrato.
 - [x] 4. Dicionário de dados completo: 30 entidades com as 11 propriedades; `registros/dicionario_dados.csv` idêntico, verificado por script.
@@ -1674,7 +1745,7 @@ Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tool
 - [x] 9. Testes sentinela cobrindo riscos: TS-001 a TS-008.
 - [x] 10. Gates externos registrados: GX-001 (bloqueia piloto e produção).
 - [x] 11. Nenhum trecho exige "bom senso": lacunas resolvidas pelas DEC-054 a DEC-060 e DEC-064 a DEC-072.
-- [x] 12. Toda Q respondida: Q-001 a Q-020.
+- [x] 12. Toda Q respondida: Q-001 a Q-029.
 - [ ] 13. Consenso DEV/TEST sem divergência bloqueante: depende da próxima rodada de revisão independente.
 - [x] 14. REQ autocontida: referências externas (MeuRemedio, Kit v3) são informativas; o Bloco P está em `docs/spec/BLOCO_P.md`.
 - [ ] 15. Última revisão independente sem achado bloqueante ou alto, com médios e baixos registrados (DEC-061, DEC-073): pendente (REV-REQ-007).
@@ -1705,6 +1776,6 @@ A revisão independente é obrigatória no nível Completo. O revisor não pode 
 | REV-REQ-005 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 1.4 | 2 | 10 | 17 | 5 | Resolvido | Bloqueantes: lista de eliminações no mesmo banco restaurado; colunas NOT NULL da aplicação impossíveis na criação. Altos: FL-002 presa com origem pulada; vínculo sem assinatura; histórico de atributos sem entidade; entidades faltantes (exportação, página, sessão, token, idempotência, falha de login); e-mail de outro tenant; texto curto; linhas de matriz e 'nenhuma das anteriores'; reserva fixa × deslizante; pedido do titular sem estado de falha; dedução de célula oculta. Corrigidos na v1.5 (CHG-004); decisões de negócio viraram Q-012 a Q-018. |
 | REV-REQ-006 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 1.5 | 2 | 7 | 19 | 6 | Resolvido | Confirmou a correção dos achados da REV-REQ-005. Novos: identificação de páginas e conferência de assinatura sem acesso à imagem; CPF e dados do respondente em claro nos itens; matriz de autorização contraditória; cadastro existente não exposto para a escolha do CA-014; PedidoTitular sem transição para `falhou`; minimização dependente de configuração manual; dedução por diferença entre filtros; resolução de sessão sob RLS. Corrigidos na v1.6; Q-019 e Q-020 abertas. |
 | REV-REQ-007 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 1.7 | 0 | 1 | 22 | 11 | Resolvido | Alto: DEC-071 (faixas de idade e recusa pelo complemento) ausente do contrato e dos CAs; corrigido na v1.8 (ERR-024, CA-009, CA-010, Filter). Médios e baixos registrados no PLANO §12.3 com incremento (DEC-073). |
-| REV-REQ-008 | 28/10/2026 | Agente revisor-independente (verificação) | 1.8 | — | — | — | — | Pendente | Verificar a correção do alto da REV-REQ-007. |
+| REV-REQ-008 | 28/10/2026 | Agente revisor-independente (verificação) | 1.8 | 0 | 2 | 8 | 11 | Resolvido | Altos: A-01 (MFA cadastrável com mfa_ativo) e A-02 (regra 1 da FL-002 capturava origem em branco/ilegível/rasurado/não se aplica). Corrigidos em 29/10/2026 (CA-026b; FL-002 e CA-018); verificação restrita ao diff: 0 bloqueantes, 0 altos (agente revisor-independente no modelo Sonnet, por falta de créditos do modelo configurado; aceito pelo responsável). Médios e baixos no PLANO §12.3; decisões de negócio viraram Q-021 a Q-029. |
 
 Fim do documento `REQ.md`

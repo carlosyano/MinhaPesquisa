@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.2.5
+  version: 0.2.6
   description: |
     API do SaaS MinhaPesquisa — digitalização de pesquisas em papel com leitura por IA,
     revisão humana e dashboards anonimizados, em conformidade com a LGPD.
-    Fonte normativa: REQ v1.8 e PLANO.md v2.9. Contract-first — este arquivo valida
+    Fonte normativa: REQ v1.9 e PLANO.md v2.10. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: rotas públicas declaram `security: []`; rotas de MFA usam a pré-sessão (DEC-050);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -48,9 +48,11 @@ paths:
       summary: Primeira etapa do login (e-mail e senha)
       description: |
         Rota pública. Valida e-mail e senha e cria uma pré-sessão restrita às rotas de MFA
-        (DEC-050). Falha → ERR-013; 5 falhas em 15 min para o mesmo e-mail, exista ou não a
+        (DEC-050), sempre na etapa `mfa_verificacao`. Usuário com `mfa_ativo = false` recebe
+        ERR-013 sem pré-sessão; o cadastro de MFA começa só por acceptInvite ou acceptMfaReset
+        (DEC-082). Falha → ERR-013; 5 falhas em 15 min para o mesmo e-mail, exista ou não a
         conta → ERR-014 (CA-026). O MFA é obrigatório para todos os perfis (DEC-025).
-      x-trace: [RF-002, CA-026, DEC-025, DEC-050]
+      x-trace: [RF-002, CA-026, CA-037b, DEC-025, DEC-050, DEC-082]
       security: []
       requestBody:
         required: true
@@ -77,8 +79,10 @@ paths:
       operationId: verifyMfa
       tags: [auth]
       summary: Segunda etapa do login (código TOTP)
-      description: Valida o código TOTP de quem já tem MFA e cria a sessão plena (DEC-050).
-      x-trace: [RF-002, CA-026, DEC-050]
+      description: |
+        Valida o código TOTP de quem já tem MFA e cria a sessão plena (DEC-050).
+        Só na etapa `mfa_verificacao` da pré-sessão; fora dela → ERR-018 (CA-026b).
+      x-trace: [RF-002, CA-026, CA-026b, DEC-050]
       security:
         - preSessionCookie: []
           csrfToken: []
@@ -100,7 +104,7 @@ paths:
               schema: { $ref: '#/components/schemas/SessionInfo' }
         '400': { $ref: '#/components/responses/MfaInvalid' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '409': { $ref: '#/components/responses/SessionLimit' }
+        '409': { $ref: '#/components/responses/MfaConflict' }
         '429': { $ref: '#/components/responses/LoginThrottled' }
 
   /auth/mfa/setup/start:
@@ -111,7 +115,9 @@ paths:
       description: |
         O segredo é gerado pelo servidor, gravado cifrado e devolvido uma única vez para
         cadastro no aplicativo autenticador (DEC-050, CA-035, CA-037b).
-      x-trace: [RF-002, CA-035, CA-037b, DEC-050]
+        Só na etapa `mfa_cadastro` da pré-sessão e com `mfa_ativo = false` no momento da chamada;
+        fora disso → ERR-018, sem alterar o segredo existente (CA-026b).
+      x-trace: [RF-002, CA-026b, CA-035, CA-037b, DEC-050]
       security:
         - preSessionCookie: []
           csrfToken: []
@@ -132,8 +138,11 @@ paths:
       operationId: setupMfa
       tags: [auth]
       summary: Confirma o cadastro do MFA com um código e cria a sessão
-      description: Confirma o segredo gerado em startMfaSetup (CA-035, CA-037b).
-      x-trace: [RF-002, CA-035, CA-037b, DEC-050]
+      description: |
+        Confirma o segredo gerado em startMfaSetup (CA-035, CA-037b). Só na etapa `mfa_cadastro`
+        e com `mfa_ativo = false`; fora disso → ERR-018, sem criar sessão (CA-026b). Ao concluir,
+        as demais pré-sessões do usuário são encerradas.
+      x-trace: [RF-002, CA-026b, CA-035, CA-037b, DEC-050]
       security:
         - preSessionCookie: []
           csrfToken: []
@@ -155,7 +164,7 @@ paths:
               schema: { $ref: '#/components/schemas/SessionInfo' }
         '400': { $ref: '#/components/responses/MfaInvalid' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '409': { $ref: '#/components/responses/SessionLimit' }
+        '409': { $ref: '#/components/responses/MfaConflict' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /auth/logout:
@@ -242,7 +251,8 @@ paths:
       summary: Aceita convite (24 h, uso único) e define a senha
       description: |
         Rota pública. Convite vencido ou já usado → ERR-011 (CA-035). Cria pré-sessão com
-        etapa `mfa_cadastro`.
+        etapa `mfa_cadastro`. O convite só é consumido quando setupMfa conclui; dentro das 24 h,
+        nova chamada redefine a senha e cria nova pré-sessão.
       x-trace: [RF-002, CA-035, DEC-032]
       security: []
       requestBody:
@@ -263,6 +273,38 @@ paths:
               schema: { $ref: '#/components/schemas/LoginResponse' }
         '400': { $ref: '#/components/responses/TokenInvalid' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/mfa-reset/accept:
+    post:
+      operationId: acceptMfaReset
+      tags: [auth]
+      summary: Usa o link de reset de MFA (24 h, uso único) com a senha
+      description: |
+        Rota pública. Valida o token de reset de MFA e a senha atual do usuário dono do token e
+        cria pré-sessão com etapa `mfa_cadastro` (DEC-082, CA-037b). Token vencido ou já usado →
+        ERR-011; senha errada → ERR-013 (conta como falha de login; 5 falhas → ERR-014), sem
+        consumir o token. O token só é consumido quando setupMfa conclui.
+      x-trace: [RF-002, CA-037b, DEC-082]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AcceptMfaResetRequest' }
+      responses:
+        '200':
+          description: Pré-sessão criada para cadastro do novo MFA
+          headers:
+            Set-Cookie:
+              description: Cookies mp_pre_session e mp_csrf
+              schema: { type: string }
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400': { $ref: '#/components/responses/TokenInvalid' }
+        '401': { $ref: '#/components/responses/InvalidCredentials' }
+        '429': { $ref: '#/components/responses/LoginThrottled' }
 
   # ───────────────────────────── admin (RF-001) ─────────────────────────────
   /admin/users:
@@ -415,9 +457,11 @@ paths:
       tags: [admin]
       summary: Reseta o MFA do usuário (encerra sessões)
       description: |
-        Todas as sessões são encerradas e o usuário cadastra novo MFA no próximo login.
-        Auditoria: acao=RESET_MFA, entidade=Usuario (CA-037b).
-      x-trace: [RF-001, CA-037b]
+        Grava mfa_ativo = false, apaga o segredo TOTP e invalida links de reset anteriores.
+        Todas as sessões são encerradas e o usuário recebe por e-mail um link de uso único (24 h)
+        para cadastrar o novo MFA via acceptMfaReset (DEC-082). Auditoria: acao=RESET_MFA,
+        entidade=Usuario (CA-037b).
+      x-trace: [RF-001, CA-037b, DEC-082]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -461,7 +505,7 @@ paths:
       summary: Concede acesso individual por 90 dias, com justificativa
       description: |
         Vale enquanto ativo e dentro de `valido_ate` (90 dias, DEC-031). Já existindo concessão
-        vigente para o par usuário/projeto → ERR-018 (CA-025).
+        vigente para o par usuário/projeto, ou usuário sem o perfil `analista` → ERR-018 (CA-025, DEC-080).
       x-trace: [RF-001, CA-025, DEC-031]
       security:
         - sessionCookie: []
@@ -1180,7 +1224,7 @@ paths:
       description: |
         Precedência (REQ FL-001): item não resolvido → 400 ERR-022; CPF ausente ou inválido →
         200 com `aviso: ERR-006` e estado `aguardando_cpf`; nome, nascimento, data ou local
-        ausentes → 400 ERR-006 (CA-032). Assinatura ausente → `sem_assinatura`, sem vincular
+        ausentes, ilegíveis, rasurados ou marcados como não se aplica → 400 ERR-006 (CA-032, DEC-079). Assinatura ausente → `sem_assinatura`, sem vincular
         o respondente (DEC-064).
         Vínculo por CPF: existente vincula, novo cria (CA-002, CA-014b); divergência de cadastro
         resolvida pelo digitalizador (CA-014).
@@ -1966,15 +2010,17 @@ components:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-039', title: QR inválido, status: 400, detail: QR code inválido para o contexto atual. Informe manualmente., errorCode: ERR-039, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
-    SessionLimit:
-      description: Limite de 3 sessões ativas (ERR-021)
+    MfaConflict:
+      description: Operação de MFA fora da etapa da pré-sessão (ERR-018, CA-026b) ou limite de 3 sessões ativas (ERR-021)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
-          schema:
-            allOf:
-              - $ref: '#/components/schemas/ProblemDetails'
-              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-021', title: Limite de sessões, status: 409, detail: Você já tem 3 sessões ativas. Saia em outro dispositivo ou aguarde até 30 minutos sem uso para entrar., errorCode: ERR-021, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+          examples:
+            etapaInvalida:
+              value: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-018', title: Estado inválido, status: 409, detail: Esta ação não é permitida no estado atual., errorCode: ERR-018, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+            limiteSessoes:
+              value: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-021', title: Limite de sessões, status: 409, detail: Você já tem 3 sessões ativas. Saia em outro dispositivo ou aguarde até 30 minutos sem uso para entrar., errorCode: ERR-021, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     ServiceUnavailable:
       description: Dependência indisponível após retentativas (ERR-020)
       headers:
@@ -2049,7 +2095,7 @@ components:
       additionalProperties: false
       required: [etapa]
       properties:
-        etapa: { type: string, enum: [mfa_verificacao, mfa_cadastro] }
+        etapa: { type: string, enum: [mfa_verificacao, mfa_cadastro], description: 'login devolve só mfa_verificacao; acceptInvite e acceptMfaReset devolvem mfa_cadastro (DEC-082)' }
 
     MfaCode:
       type: object
@@ -2099,6 +2145,14 @@ components:
       properties:
         token: { type: string, minLength: 32, maxLength: 128 }
         senha: { type: string, format: password, minLength: 10, maxLength: 72 }
+
+    AcceptMfaResetRequest:
+      type: object
+      additionalProperties: false
+      required: [token, senha]
+      properties:
+        token: { type: string, minLength: 32, maxLength: 128 }
+        senha: { type: string, format: password, minLength: 10, maxLength: 72, description: Senha atual do usuário }
 
     AcceptedResponse:
       type: object
@@ -2555,6 +2609,7 @@ components:
       description: |
         DEC-071: sem intervalos livres.
         tipo `idade`: faixa de idade na data da aplicação mais recente do período (CA-009); `valores` são faixas fixas.
+        tipo `resposta`: em `escala`, só `igual` ou `diferente` com um valor (DEC-075); em `multipla_escolha`, significa "marcou a opção".
         tipo `resposta`: códigos de opção do valor final de `pergunta_codigo` (só perguntas categóricas: escolha_unica, multipla_escolha, sim_nao, escala, matriz com `linha_codigo`) na aplicação mais recente do período que contenha a pergunta (CA-031). Outro tipo → 400 ERR-001.
       properties:
         tipo: { type: string, enum: [idade, resposta] }

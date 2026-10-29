@@ -3,11 +3,11 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.8 (CHG-006 aplicada, pendente de aceite) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v1.9 (CHG-006 e CHG-007 aceitas em 29/10/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.9
-**Status:** EM REVISÃO — REV-PLANO-010 (verificação) pendente (critério da DEC-073)
+**Versão do plano:** 2.10
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -65,7 +65,7 @@ recebe o recorte já normalizado.
 
 | CMP | Responsabilidade | RF | Principais operationIds |
 | --- | --- | --- | --- |
-| CMP-Auth | sessão, MFA, reset de MFA, convites, perfis, vínculos, concessões | RF-001, RF-002 | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite, listUsers, createTenantUser, getUser, updateUser, inviteUser, resetMfa, grantIndividualAccess, listIndividualAccessGrants, revokeAccess |
+| CMP-Auth | sessão, MFA, reset de MFA, convites, perfis, vínculos, concessões | RF-001, RF-002 | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite, acceptMfaReset, listUsers, createTenantUser, getUser, updateUser, inviteUser, resetMfa, grantIndividualAccess, listIndividualAccessGrants, revokeAccess |
 | CMP-Projects | projetos, parâmetros, ciclo de vida | RF-003 | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject |
 | CMP-Forms | versões imutáveis, perguntas, regras de salto, PDF e mapa de layout | RF-004 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf |
 | CMP-Upload | validação, antimalware, metadados, QR, registro da imagem, storage | RF-006 | uploadImages, identifyApplication, addApplicationPages, getPageImage |
@@ -93,7 +93,7 @@ recebe o recorte já normalizado.
 - Saída validada contra schema; estado de cada item pela ordem de avaliação da FL-002 (REQ §6.4). Pontos de atenção:
   - Confiança comparada no valor bruto; **estritamente maior** que o limite confirma (0,90 exato vai para `a_revisar` — CA-005, CA-006, TS-003).
   - CPF sempre revisável (RN-012); valor fora do schema sempre revisável (CA-006); `texto_livre` sempre revisável (DEC-057).
-  - Regra de salto dependente de campo não resolvido → `aguardando_condicao` (CA-018).
+  - Regra de salto com origem em `pendente_leitura`, `aguardando_condicao` ou `a_revisar` → `aguardando_condicao` (FL-002 regra 1, CA-018); origem em `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica` segue as regras 4 e 4a.
 - Revisão humana com reserva de 30 min (ReservaAplicacao é a fonte única) e ETag/If-Match obrigatório (RN-043, DEC-034).
 - Conclusão (`confirmApplication`) exige os 5 campos da DEC-020 e assinatura presente (RN-044); vínculo por CPF é feito aqui — CPF existente vincula, CPF novo cria respondente (CA-014b). Divergência de cadastro: o digitalizador escolhe o valor (CA-014).
 - Falta de campo obrigatório → ERR-006 (CPF ausente/inválido → `aguardando_cpf`).
@@ -143,15 +143,21 @@ outra aplicação posterior já o alterou, o atributo é mantido e a divergênci
 ### 4.5 Reset de MFA pelo administrador (CA-037b)
 
 Admin reseta MFA do usuário → todas as sessões ativas são encerradas (invalidação em
-banco e em cache) → usuário cadastra novo MFA no próximo login (fluxo equivalente ao
-primeiro acesso, CA-035) → reset registrado em auditoria com acao=RESET_MFA,
+banco e em cache) → e-mail com link de uso único (TokenUsoUnico `reset_mfa`, 24 h) →
+o reset grava `mfa_ativo = false`, apaga o segredo e invalida links de reset anteriores →
+`acceptMfaReset` valida o token **e** a senha e cria pré-sessão `mfa_cadastro` (DEC-082);
+senha errada não consome o token; o token (como o de convite) só é consumido quando o
+`setupMfa` conclui, então uma pré-sessão expirada pode ser refeita com o mesmo link em 24 h;
+login com `mfa_ativo = false` não cria pré-sessão (ERR-013) → reset registrado em auditoria com acao=RESET_MFA,
 entidade=Usuario, registro_id=<usuario_id>.
 
 ### 4.6 Login e MFA (DEC-050)
 
 1. `login` (rota pública) valida e-mail e senha. Falha → ERR-013; 5 falhas em 15 min para o mesmo e-mail (exista ou não a conta, contadas pelo HMAC do e-mail) → ERR-014.
-2. Sucesso cria **pré-sessão** (cookie próprio, 5 min, válida só para `/auth/mfa/*`) e informa a etapa: `mfa_verificacao` ou `mfa_cadastro`.
+2. Sucesso cria **pré-sessão** (cookie próprio, 5 min, válida só para `/auth/mfa/*`) na etapa `mfa_verificacao`. Usuário com `mfa_ativo = false` recebe ERR-013 sem pré-sessão; a etapa `mfa_cadastro` só nasce de `acceptInvite` ou `acceptMfaReset` (DEC-082).
 3. `startMfaSetup` gera o segredo TOTP **no servidor**, grava cifrado e devolve a URI otpauth; `setupMfa` confirma com um código. `verifyMfa` valida o código para quem já tem MFA. Código errado → ERR-012 (conta como falha de login).
+   - **Guarda de etapa (CA-026b):** a etapa fica gravada na pré-sessão no servidor (nunca vem do cliente). `startMfaSetup` e `setupMfa` exigem etapa `mfa_cadastro` **e** `mfa_ativo = false` relido do banco na chamada (na mesma transação que grava o segredo); `verifyMfa` exige `mfa_verificacao`. Fora disso → ERR-018, sem alterar o segredo nem criar sessão. Sem isso, quem tem só a senha cadastraria um novo TOTP e contornaria o MFA.
+   - Ao concluir `setupMfa`, as demais pré-sessões do usuário são encerradas (evita a corrida entre duas pré-sessões em `mfa_cadastro`).
 4. Só então a sessão plena é criada (30 min de inatividade, 24 h no máximo). Com 3 sessões ativas, a nova é recusada com ERR-021 (mesmo comportamento validado no MeuRemedio, Bloco P P.2).
 5. Identificação do usuário: e-mail único global (DEC-054).
 
@@ -250,7 +256,7 @@ eliminações por 180 dias reaplicada após restauração de backup.
 `additionalProperties: false` e `required` declarados. Erros em Problem Details
 (RFC 9457), catálogo ERR fechado, `X-Correlation-ID` em todas as respostas.
 Rate limit: 100 req/min/usuário; 20 req/min/IP em rotas públicas (ERR-010); 429 declarado em todas as operações.
-Rotas públicas (sem sessão): `login`, `resetPassword`, `confirmPasswordReset`, `acceptInvite`.
+Rotas públicas (sem sessão): `login`, `resetPassword`, `confirmPasswordReset`, `acceptInvite`, `acceptMfaReset`.
 Sessão em banco, cookie httpOnly + SameSite, CSRF double-submit em toda mutação autenticada; MFA obrigatório (§4.6).
 Rotas e operationIds conforme §3; operações internas do worker não são endpoints.
 Paths em inglês; campos e mensagens em português. Lint (Spectral) no CI desde a fundação; quebra de compatibilidade (oasdiff) entra no CI no IMP-001, junto com o primeiro código.
@@ -367,7 +373,7 @@ fundação (`.github/workflows/ci.yml`).
 | Erro silencioso | conjunto-ouro | gabarito humano | DEC-004 |
 | Acessibilidade | E2E | Playwright + axe | RNF-012 |
 | Concorrência/reserva | integração | requisições paralelas | CA-043 |
-| Autenticação/MFA/reset MFA | E2E + integração | Playwright + Testcontainers | CA-026, CA-037, CA-037b |
+| Autenticação/MFA/reset MFA | E2E + integração | Playwright + Testcontainers | CA-026, CA-026b, CA-037, CA-037b |
 | Vínculo de respondente (novo/existente) | integração | Testcontainers | CA-002, CA-014, CA-014b |
 | Reabertura com reversão | integração | Testcontainers | CA-042 |
 | Dashboard com gráfico cruzado e k-anon | integração + propriedade | Testcontainers + fast-check | CA-017, CA-034 |
@@ -402,7 +408,7 @@ validada a cada merge.
 
 | IMP | Escopo | CAs cobertos | Entrada | Saída / evidência esperada |
 | --- | --- | --- | --- | --- |
-| IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA |
+| IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-026b, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA |
 | IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada |
 | IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-015, CA-018, CA-019, CA-020, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 aceito | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` |
 | IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-010, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031, CA-034 | IMP-003 aceito | TS-004/TS-005/TS-008; k-anon por célula; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações; grupo mínimo entre projetos |
@@ -413,10 +419,10 @@ incremento inteiro → Gate 2 (aceite do responsável).
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 46 CAs da REQ v1.8
+### 11.1 Cobertura dos 47 CAs da REQ v1.9
 
-A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 46 critérios
-de aceite da REQ v1.8 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
+A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 47 critérios
+de aceite da REQ v1.9 (CA-001 a CA-044, incluindo CA-014b, CA-026b e CA-037b). O validador
 confere que cada CA está no incremento do seu RF.
 
 **CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
@@ -454,6 +460,8 @@ validado pelo CI a cada merge.
 | CHG-003 — respostas às Q-005 a Q-011 | mudança normativa | aceita em 27/10/2026 (REQ v1.4, DEC-054 a DEC-060) |
 | CHG-004 — achados das revisões independentes (rodadas 1 e 2) | mudança normativa | aceita em 28/10/2026 (REQ v1.6) |
 | CHG-005 — respostas às Q-012 a Q-020, DEC-061 e DEC-073 | mudança normativa | aceita em 28/10/2026 (REQ v1.7, DEC-064 a DEC-073) |
+| CHG-006 — achado alto da REV-REQ-007 (DEC-071 no contrato e nos CAs) | mudança normativa | aceita em 29/10/2026 (REQ v1.8) |
+| CHG-007 — altos A-01 e A-02 da REV-REQ-008; Q-021 a Q-029 | mudança normativa | aceita em 29/10/2026 (REQ v1.9, DEC-074 a DEC-082) |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
@@ -498,23 +506,24 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 
 | Achado | Revisão | Severidade | Descrição | Responsável | Incremento |
 | --- | --- | --- | --- | --- | --- |
-| M-01 | REV-REQ-007 | médio | Dedução por comparação entre consultas (filtro F e ¬F sem cruzamento; período deslizante) | Carlos Yano (decisão: aceitar o risco ou restringir período a meses fechados) | antes do IMP-004 |
+| M-01 | REV-REQ-007 | médio | Dedução por comparação entre consultas (filtro F e ¬F sem cruzamento; período deslizante). Mitigação parcial pela DEC-071; resta a comparação entre períodos e entre projetos (B-N3 da REV-REQ-008) | Carlos Yano (decisão: aceitar o risco ou restringir período a meses fechados) | antes do IMP-004 |
 | M-02 | REV-REQ-007 | médio | Aplicacao.cpf_hash não é limpo na eliminação | IA-DEV (CMP-LGPD) | IMP-004 |
 | M-03 | REV-REQ-007 | médio | Valor e estado exatos dos itens sobrescritos na eliminação | IA-DEV + aprovação do responsável (CMP-LGPD) | IMP-004 |
 | M-04 | REV-REQ-007 | médio | Pedido do titular sem Respondente (CPF só em aplicações em andamento ou já anonimizado) | Carlos Yano (decisão) + IA-DEV (CMP-LGPD) | antes do IMP-004 |
 | M-05 | REV-REQ-007 | médio | Correções do pedido do titular sem coluna no dicionário; ENT-023.aplicacao_id NOT NULL | IA-DEV (CMP-LGPD) | IMP-004 |
 | M-06 | REV-REQ-007 | médio | Formato, colunas e retenção dos arquivos de acesso, portabilidade e linha a linha | Carlos Yano (decisão) + IA-DEV (CMP-LGPD) | antes do IMP-004 |
 | M-07 | REV-REQ-007 | médio | getPageImage expõe a página inteira sem reserva e em qualquer estado | IA-DEV (CMP-Upload, CMP-Revisao) | IMP-002 |
-| M-08 | REV-REQ-007 | médio | Reabertura: vínculo e anonimização do respondente órfão | IA-DEV (CMP-Respondents) | IMP-003 |
+| M-08 | REV-REQ-007 | médio | Reabertura: vínculo e anonimização do respondente órfão | IA-DEV (CMP-Respondents); decidido: DEC-078 | IMP-003 |
 | M-09 | REV-REQ-007 | médio | Regras de salto: tipos de origem, ciclos e auto-referência | IA-DEV (CMP-Forms) | IMP-002 |
 | M-10 | REV-REQ-007 | médio | Tipos agregáveis, cruzáveis e filtráveis; linha de matriz na consulta e na ficha | IA-DEV (CMP-Dashboard) | IMP-004 |
+| M-11 | REV-REQ-007 | médio | Constraint de unicidade sem `competencia` | — (corrigido na CHG-006; registrado pela M-N6 da REV-REQ-008) | — |
 | M-12 | REV-REQ-007 | médio | Desenho técnico de tenant inativo (DEC-070) no login, sessão e jobs | IA-DEV (CMP-Auth, CMP-Infra) | IMP-001 |
 | M-13 | REV-REQ-007 | médio | Injeção de instrução que altera outros campos da mesma chamada; subconjunto adversarial no conjunto-ouro | IA-DEV (CMP-MotorIA) | IMP-003 |
 | M-14 | REV-REQ-007 | médio | Sensibilidade identificacao em pergunta de saúde | IA-DEV (CMP-Forms) | IMP-002 |
 | M-15 | REV-REQ-007 | médio | Ordem e atomicidade da eliminação (registro externo primeiro, passos idempotentes) | IA-DEV (CMP-LGPD) | IMP-004 |
 | M-16 | REV-REQ-007 | médio | Imagens órfãs no bucket após restore do banco | IA-DEV (CMP-Infra) | IMP-004 |
 | M-17 | REV-REQ-007 | médio | Aviso da volta de sem_assinatura para em_revisao usa ERR-018 | IA-DEV (CMP-Revisao) | IMP-003 |
-| M-18 | REV-REQ-007 | médio | Ausência dos outros quatro campos obrigatórios quando ilegível, rasurado ou não se aplica | IA-DEV (CMP-Revisao) | IMP-003 |
+| M-18 | REV-REQ-007 | médio | Ausência dos outros quatro campos obrigatórios quando ilegível, rasurado ou não se aplica | IA-DEV (CMP-Revisao); decidido: DEC-079 | IMP-003 |
 | M-19 | REV-REQ-007 | médio | ERR-036 não cobre os casos da RN-047 | IA-DEV (CMP-Forms) | IMP-002 |
 | M-20 | REV-REQ-007 | médio | Consulta à lista de senhas vazadas sem DEC, timeout e comportamento em falha | IA-DEV (CMP-Auth) | IMP-001 |
 | M-21 | REV-REQ-007 | médio | findRespondent: 404 para respondente fora do escopo da concessão | IA-DEV (CMP-Dashboard) | IMP-004 |
@@ -529,18 +538,42 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | B-08 | REV-REQ-007 | baixo | Destinatário do aviso sem cotação; definição de 'atingido' | IA-DEV | IMP-003 |
 | B-09 | REV-REQ-007 | baixo | Unicidades omitidas no §5.3; FL-003 no checklist; FL da matriz | IA-DEV | IMP-001 |
 | B-10 | REV-REQ-007 | baixo | Admin sem leitura da fila; encerrar outras sessões | IA-DEV | IMP-001 |
-| B-11 | REV-REQ-007 | baixo | Risco de perda de imagens e lista de buckets | IA-DEV | IMP-001 |
+| B-11 | REV-REQ-007 | médio | Risco de perda de imagens e lista de buckets. Elevado a médio pelo responsável em 29/10/2026: a página 1 assinada é a evidência do consentimento | IA-DEV (CMP-Infra) | IMP-001 |
+| M-N1 | REV-REQ-008 | médio | CA-003 (só página 2 → em leitura) contradiz a tabela de criação da FL-001 e o CA-013 | IA-DEV + aceite do responsável (corrigir o CA-003, mudança normativa) | IMP-003 |
+| M-N2 | REV-REQ-008 | médio | Campo lido em branco fora de regra de salto | — (decidido: DEC-074, incorporado na CHG-007) | IMP-003 |
+| M-N3 | REV-REQ-008 | médio | Contrato não distingue em branco, ilegível, rasurado e não se aplica no dashboard, na ficha e na exportação (RN-020) | IA-DEV (CMP-Dashboard, contrato) | IMP-004 |
+| M-N4 | REV-REQ-008 | médio | Filtro em `escala` com intervalos quase livres; semântica do filtro em múltipla escolha | — (decidido: DEC-075, incorporado na CHG-007) | antes do IMP-004 |
+| M-N5 | REV-REQ-008 | médio | Regra do complemento sem filtros, com vários projetos e com período | — (decidido: DEC-076, incorporado na CHG-007) | antes do IMP-004 |
+| M-N6 | REV-REQ-008 | médio | M-11 da REV-REQ-007 ausente do §12.3 | — (registrado nesta tabela) | — |
+| M-N7 | REV-REQ-008 | médio | Lacunas de negócio do §12.3 atribuídas à IA-DEV | — (M-08 e M-18 reclassificados para Q-025 e Q-026; M-01, M-04, M-06 e M-22 já estavam com o responsável) | — |
+| M-N8 | REV-REQ-008 | médio | Aplicação descartada mantém os valores lidos sem prazo | — (decidido: DEC-077, incorporado na CHG-007; reaplicação após restore pela ListaEliminacoes) | IMP-003 |
+| B-N1 | REV-REQ-008 | baixo | Checklist da REQ cita REV-REQ-007 como última revisão | IA-DEV | próxima versão da REQ |
+| B-N2 | REV-REQ-008 | baixo | CHG-006 fora da tabela de mudanças do PLANO §12 | — (incluída na v2.10) | — |
+| B-N3 | REV-REQ-008 | baixo | Ampliar M-01 e registrar a mitigação parcial da DEC-071 | — (feito na linha M-01) | — |
+| B-N4 | REV-REQ-008 | baixo | RF-010 sem ERR-024, ERR-001 e ERR-019 na lista de erros | IA-DEV (CMP-LGPD) | IMP-004 |
+| B-N5 | REV-REQ-008 | baixo | CPF mascarado no CA-002 × formato canônico do dicionário | IA-DEV (CMP-Respondents) | IMP-003 |
+| B-N6 | REV-REQ-008 | baixo | Faixa de idade abaixo de 60 ausente da DEC-071 | — (decidido: DEC-081, incorporado na CHG-007) | antes do IMP-004 |
+| B-N7 | REV-REQ-008 | baixo | Concessão individual a usuário sem o perfil exigido | — (decidido: DEC-080, incorporado na CHG-007) | IMP-001 |
+| B-N8 | REV-REQ-008 | baixo | `versao_id` de outro tenant no `identifyApplication`: 404 (TS-001) × ERR-039 | IA-DEV (CMP-Upload) | IMP-002 |
+| B-N9 | REV-REQ-008 | baixo | Reuso do mesmo código TOTP na janela de tempo e parâmetros do Argon2id | IA-DEV (CMP-Auth) | IMP-001 |
+| B-N10 | REV-REQ-008 | baixo | Erro de `saveReview` em item `aguardando_condicao` não definido | IA-DEV (CMP-Revisao) | IMP-003 |
+| B-N11 | REV-REQ-008 | baixo | Cópia de data, local e aplicador para a aplicação na conclusão | IA-DEV (CMP-Revisao) | IMP-003 |
+| V-M1 | verificação CHG-007 | médio | Exemplos testáveis dos filtros das DEC-075, DEC-076 e DEC-081 (`em` em escala → ERR-001; "marcou a opção"; sem filtro; vários projetos; período; faixa `<60`) e validação por tipo no schema Filter | IA-TEST + IA-DEV (CMP-Dashboard) | IMP-004 |
+| V-M2 | verificação CHG-007 | médio | Exemplo do CA-032 para campo obrigatório ilegível (DEC-079) | IA-TEST (CMP-Revisao) | IMP-003 |
+| V-B1 | verificação CHG-007 | baixo | `startMfaSetup` repetido na mesma pré-sessão sobrescreve o segredo não confirmado (seguro, mas implícito) | IA-DEV (CMP-Auth) | IMP-001 |
+| V-B2 | verificação CHG-007 | baixo | Exemplo de reset do MFA entre o login e a chamada de MFA | IA-TEST (CMP-Auth) | IMP-001 |
+| V-B3 | verificação CHG-007 | baixo | CA-023, TS-005 e TS-008 ainda descrevem a ListaEliminacoes só para eliminação; faltam exemplos de reaplicação dos motivos `descarte_aplicacao` e `anonimizacao_reabertura` | IA-DEV + IA-TEST (CMP-LGPD) | IMP-004 |
 
 ## 13. Critério de prontidão e ciclo de verificação
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.8
+- [x] Estratégia de testes cobre todos os 47 CAs da REQ v1.9
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
 - [x] CHG-002 e CHG-003 aceitas pelo responsável
-- [x] Q-012 a Q-020 respondidas; CHG-004 e CHG-005 aceitas
+- [x] Q-012 a Q-029 respondidas; CHG-004 a CHG-007 aceitas
 - [ ] Revisão independente (REV-PLANO-010) com 0 bloqueantes e 0 altos; médios e baixos registrados no §12.3 (DEC-061, DEC-073)
 
 **Bloqueio de status:** este plano NÃO pode ser declarado PRONTO PARA IMPLEMENTAÇÃO
@@ -558,7 +591,7 @@ REQ §8.1; o CI falha se divergirem.
 | Requisito | Regra | Entidade | Fluxo | História | Critério | Teste Sentinela | Operation ID | Componente | Incremento |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | RF-001 | RN-001, RN-003, RN-004 | ENT-002, ENT-003, ENT-014, ENT-015, ENT-022 | FL-001 | US-010 | CA-012, CA-016, CA-025, CA-035, CA-037, CA-037b, CA-038 | TS-001 | listUsers, createTenantUser, getUser, updateUser, inviteUser, resetMfa, grantIndividualAccess, listIndividualAccessGrants, revokeAccess | CMP-Auth | IMP-001 |
-| RF-002 | RN-048 | ENT-002, ENT-027, ENT-028, ENT-030 | FL-001 | US-010 | CA-026, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite | CMP-Auth | IMP-001 |
+| RF-002 | RN-048 | ENT-002, ENT-027, ENT-028, ENT-030 | FL-001 | US-010 | CA-026, CA-026b, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite, acceptMfaReset | CMP-Auth | IMP-001 |
 | RF-003 | RN-027 | ENT-004, ENT-020, ENT-021 | FL-001 | US-006 | CA-027 | — | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject | CMP-Projects | IMP-002 |
 | RF-004 | RN-017, RN-018, RN-019, RN-021, RN-042, RN-047 | ENT-005, ENT-006, ENT-007, ENT-008, ENT-016, ENT-024 | FL-001 | US-007 | CA-001, CA-028, CA-036 | TS-006 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf | CMP-Forms | IMP-002 |
 | RF-005 | RN-011, RN-012, RN-014, RN-015 | ENT-009, ENT-010 | FL-001, FL-002 | US-003 | CA-002, CA-014, CA-014b, CA-032 | — | linkRespondent (interna) | CMP-Respondents | IMP-003 |
@@ -583,7 +616,7 @@ REQ §8.1; o CI falha se divergirem.
 | REV-PLANO-007 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.5 | 2 | 10 | 17 | 5 | Resolvido | Achados em conjunto com a REV-REQ-005 (lista de eliminações no banco restaurado; nulidade na criação da aplicação; entidades faltantes; autorização sem 403; histórico de atributos sem entidade; oasdiff declarado e ausente; RLS sem WITH CHECK; imutabilidade da auditoria sem mecanismo). Corrigidos na v2.6. |
 | REV-PLANO-008 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.6 | 2 | 7 | 19 | 6 | Resolvido | Em conjunto com a REV-REQ-006: matriz de autorização contraditória (linhas por RF); resolução de sessão sob RLS sem desenho; ordem de validação do upload; versionamento do bucket de imagens; corpo da resposta guardado na idempotência; IDs de outro recurso pai no corpo. Corrigidos na v2.7. |
 | REV-PLANO-009 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 2.8 | 0 | 1 | 22 | 11 | Resolvido | Em conjunto com a REV-REQ-007: alto da DEC-071 corrigido na v2.9; constraint de parametro_configuracao alinhada; médios e baixos no §12.3. |
-| REV-PLANO-010 | 28/10/2026 | Agente revisor-independente (verificação) | 2.9 | — | — | — | — | Pendente | Verificar a correção do alto da REV-PLANO-009. |
+| REV-PLANO-010 | 28/10/2026 | Agente revisor-independente (verificação) | 2.9 | 0 | 2 | 8 | 11 | Resolvido | Ver REV-REQ-008 (mesma rodada). A-01 e A-02 corrigidos (PLANO §4.1 e §4.6); verificação restrita ao diff aprovada (0 bloqueantes, 0 altos). Médios e baixos no §12.3. |
 
 ---
 
