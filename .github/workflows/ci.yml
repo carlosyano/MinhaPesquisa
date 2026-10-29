@@ -1,5 +1,6 @@
-# CI: consistência, contrato e testes. As demais etapas de código (lint, mutação, CodeQL,
-# gitleaks, SBOM — PLANO §9.4) entram no IA-DEV do IMP-001.
+# CI (PLANO §9.4): consistência, contrato, testes de integração com PostgreSQL 17 real,
+# segredos (gitleaks), análise estática (Semgrep, DEC-089), dependências e SBOM.
+# Pendentes: ESLint e mutação (DEC-052) no próximo PR do IMP-001; E2E com as telas.
 name: ci
 
 on:
@@ -37,6 +38,15 @@ jobs:
       - run: npm ci
       - name: Lint do contrato (Spectral)
         run: npm run lint:spec
+      - name: Quebra de compatibilidade do contrato (oasdiff)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          git show "$BASE_SHA:contracts/openapi.yaml" > /tmp/openapi-base.yaml
+          docker run --rm -v /tmp:/base -v "$PWD/contracts:/head" tufin/oasdiff:v1.11.7 \
+            breaking /base/openapi-base.yaml /head/openapi.yaml --fail-on ERR
 
   testes:
     runs-on: ubuntu-24.04
@@ -49,7 +59,7 @@ jobs:
       - run: npm ci
       - name: Typecheck dos testes
         run: npm run typecheck:tests
-      - name: Testes (Vitest; integração com PostgreSQL 17 via Testcontainers)
+      - name: Build e testes (Vitest; integração com PostgreSQL 17 via Testcontainers)
         run: npm test
 
   # DEC-053: o PR de implementação (IA-DEV) não altera testes aprovados. Só PR com o rótulo
@@ -74,3 +84,30 @@ jobs:
             exit 1
           fi
           echo "ok: ${alterados:-nenhum teste alterado}"
+
+  seguranca:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Segredos no histórico (gitleaks)
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 git /repo --redact --exit-code 1
+      - name: Análise estática (Semgrep, DEC-089)
+        run: |
+          pip install semgrep==1.182.1
+          semgrep scan --config p/typescript --config p/nodejs --config p/secrets --error --metrics=off apps packages
+      - name: Dependências de produção sem falha alta ou crítica
+        run: npm audit --omit=dev --audit-level=high
+      - name: SBOM (CycloneDX)
+        run: npm sbom --sbom-format cyclonedx --omit dev > sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
