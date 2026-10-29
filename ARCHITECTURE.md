@@ -1,12 +1,12 @@
 # Arquitetura do Projeto MinhaPesquisa
 
 > Mapa do repositório para pessoas e agentes de IA. Resume o que está decidido em
-> `docs/architecture/PLANO.md` (v2.10) e aponta a fonte de verdade de cada artefato.
+> `docs/architecture/PLANO.md` (v2.11) e aponta a fonte de verdade de cada artefato.
 > Em conflito, vale a precedência do PLANO: decisões de negócio → REQ → PLANO/DEC técnicas → Bloco P.
 
 ## 1. Situação atual
 
-Fase 3 (arquitetura) em revisão (ver status do PLANO); implementação ainda não começou. Existem hoje
+Fase 3 (arquitetura) concluída (REV-PLANO-010 aprovada); IMP-001 na etapa IA-TEST. Existem hoje
 apenas especificação, contrato, registros, ferramentas de validação e CI. As pastas
 `apps/`, `packages/`, `infra/` e `tests/` são criadas no IMP-001.
 

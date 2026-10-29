@@ -3,10 +3,10 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.9 (CHG-006 e CHG-007 aceitas em 29/10/2026) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v1.10 (CHG-007 aceita em 29/10/2026; CHG-008 aguardando aceite) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.10
+**Versão do plano:** 2.11
 **Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
@@ -419,10 +419,10 @@ incremento inteiro → Gate 2 (aceite do responsável).
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 47 CAs da REQ v1.9
+### 11.1 Cobertura dos 47 CAs da REQ v1.10
 
 A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 47 critérios
-de aceite da REQ v1.9 (CA-001 a CA-044, incluindo CA-014b, CA-026b e CA-037b). O validador
+de aceite da REQ v1.10 (CA-001 a CA-044, incluindo CA-014b, CA-026b e CA-037b). O validador
 confere que cada CA está no incremento do seu RF.
 
 **CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
@@ -440,6 +440,13 @@ maior `grupo_minimo` entre projetos em relatórios/exportações (RF-009).
 aceitos no IMP-001 sobre as operações que existem nele (projetos vinculados, concessão,
 expiração e revogação com encerramento de sessões). O efeito sobre dashboards e ficha
 individual é reverificado no IMP-004 pelo TS-001 gerado do contrato e pelo CA-011.
+
+**CA-012 no IMP-001:** os exemplos do CA-012 usam `/projects`, que só existe no IMP-002.
+No IMP-001 os mesmos quatro exemplos (outro tenant, inexistente com corpo idêntico,
+escrita em outro tenant sem efeito, próprio tenant) são aplicados às operações de usuários
+e concessões; os exemplos com `/projects` são testados no IMP-002. O teste E2E com
+navegador do login com MFA entra num segundo PR de IA-TEST, quando as telas TL-001 e
+TL-002 tiverem desenho; no primeiro PR o fluxo é testado ponta a ponta pela API.
 
 A conferência unitária está no CSV canônico `registros/matriz_rastreabilidade.csv`,
 validado pelo CI a cada merge.
@@ -462,6 +469,7 @@ validado pelo CI a cada merge.
 | CHG-005 — respostas às Q-012 a Q-020, DEC-061 e DEC-073 | mudança normativa | aceita em 28/10/2026 (REQ v1.7, DEC-064 a DEC-073) |
 | CHG-006 — achado alto da REV-REQ-007 (DEC-071 no contrato e nos CAs) | mudança normativa | aceita em 29/10/2026 (REQ v1.8) |
 | CHG-007 — altos A-01 e A-02 da REV-REQ-008; Q-021 a Q-029 | mudança normativa | aceita em 29/10/2026 (REQ v1.9, DEC-074 a DEC-082) |
+| CHG-008 — perfil exigido na concessão individual (Q-030) | mudança normativa | aguardando aceite (REQ v1.10) |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
@@ -568,13 +576,13 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 47 CAs da REQ v1.9
+- [x] Estratégia de testes cobre todos os 47 CAs da REQ v1.10
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
 - [x] CHG-002 e CHG-003 aceitas pelo responsável
-- [x] Q-012 a Q-029 respondidas; CHG-004 a CHG-007 aceitas
-- [ ] Revisão independente (REV-PLANO-010) com 0 bloqueantes e 0 altos; médios e baixos registrados no §12.3 (DEC-061, DEC-073)
+- [x] Q-012 a Q-030 respondidas; CHG-004 a CHG-007 aceitas (CHG-008 aguardando aceite)
+- [x] Revisão independente (REV-PLANO-010) com 0 bloqueantes e 0 altos; médios e baixos registrados no §12.3 (DEC-061, DEC-073)
 
 **Bloqueio de status:** este plano NÃO pode ser declarado PRONTO PARA IMPLEMENTAÇÃO
 enquanto os itens acima não estiverem marcados.
