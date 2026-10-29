@@ -562,6 +562,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | V-M2 | verificação CHG-007 | médio | Exemplo do CA-032 para campo obrigatório ilegível (DEC-079) | IA-TEST (CMP-Revisao) | IMP-003 |
 | V-B1 | verificação CHG-007 | baixo | `startMfaSetup` repetido na mesma pré-sessão sobrescreve o segredo não confirmado (seguro, mas implícito) | IA-DEV (CMP-Auth) | IMP-001 |
 | V-B2 | verificação CHG-007 | baixo | Exemplo de reset do MFA entre o login e a chamada de MFA | IA-TEST (CMP-Auth) | IMP-001 |
+| V-B3 | verificação CHG-007 | baixo | CA-023, TS-005 e TS-008 ainda descrevem a ListaEliminacoes só para eliminação; faltam exemplos de reaplicação dos motivos `descarte_aplicacao` e `anonimizacao_reabertura` | IA-DEV + IA-TEST (CMP-LGPD) | IMP-004 |
 
 ## 13. Critério de prontidão e ciclo de verificação
 

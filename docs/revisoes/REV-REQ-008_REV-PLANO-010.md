@@ -34,3 +34,9 @@ Observação do revisor: B-11 (imagens sem backup) talvez mereça ser médio, po
 - **A-02:** corrigido (commit 1dd1a1c) — FL-002 regra 1, CA-018 com exemplos, PLANO §4.1.
 - **Verificação restrita ao diff:** agente revisor-independente, executado no modelo Sonnet (o modelo configurado estava sem créditos; continua sendo outro modelo, DEC-061; escolha aceita pelo responsável). Resultado: 0 bloqueantes, 0 altos → **APROVADO** (DEC-073). Dois baixos novos: `startMfaSetup` repetido na mesma pré-sessão sobrescreve o segredo não confirmado (seguro, mas implícito); falta exemplo de reset do MFA entre o login e a chamada.
 - **Médios e baixos:** registrados no PLANO §12.3. Decisões de negócio viraram Q-021 a Q-029 (REQ §9), abertas para o responsável.
+
+## Verificação da CHG-007 (29/10/2026)
+
+- Incorporação das DEC-074 a DEC-082 (commit a8098ce): 2 altos (beco sem saída do convite/link de reset; anonimização e descarte sem reaplicação após restore), 4 médios, 2 baixos.
+- Correção (commit cbbea40) reverificada: 0 bloqueantes, 0 altos → **APROVADO** (DEC-073). Médios e baixos restantes no PLANO §12.3 (V-M1, V-M2, V-B1 a V-B3).
+- Revisor: agente revisor-independente no modelo Sonnet (mesma ressalva acima).
