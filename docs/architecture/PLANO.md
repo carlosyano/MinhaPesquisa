@@ -7,7 +7,7 @@
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
 **Versão do plano:** 2.12
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11)
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -416,6 +416,13 @@ validada a cada merge.
 Cada IMP: IA-TEST escreve testes vermelhos → IA-DEV implementa → verificações
 completas → ciclo de revisão por PR → merge pelo responsável → ciclo sobre o
 incremento inteiro → Gate 2 (aceite do responsável).
+
+**Aceite do IMP-001 (29/10/2026, Carlos Yano):** aceito com 105 testes verdes no CI (74 de
+integração com PostgreSQL 17 e 31 unitários) e mutação de 90% em criptografia e autorização
+(DEC-052). Pendente, por decisão do responsável: o E2E com navegador do login com MFA e do
+reset de MFA, que entra quando as telas TL-001 e TL-002 tiverem desenho. A revisão
+independente do incremento inteiro não foi feita antes do aceite (escolha do responsável
+para economizar custo); fica recomendada antes do piloto.
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
