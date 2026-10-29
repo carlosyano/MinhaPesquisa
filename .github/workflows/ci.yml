@@ -53,7 +53,8 @@ jobs:
         run: npm test
 
   # DEC-053: o PR de implementação (IA-DEV) não altera testes aprovados. Só PR com o rótulo
-  # ia-test pode mexer neles, e o CODEOWNERS exige a aprovação do responsável.
+  # ia-test pode mexer neles. Este job é exigido na regra da main; o rótulo e a junção
+  # dependem do responsável.
   testes-congelados:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04

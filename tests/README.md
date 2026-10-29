@@ -1,8 +1,11 @@
 # Testes do MinhaPesquisa
 
 IA-TEST do IMP-001 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
-implementação (IA-DEV), que não pode alterá-los (`.github/CODEOWNERS` e o job
-`testes-congelados` do CI).
+implementação (IA-DEV), que não pode alterá-los: o job `testes-congelados` do CI (exigido
+na regra da `main`) barra mudança em teste sem o rótulo `ia-test`, e o responsável só autoriza
+a junção depois de revisar o diff. Com uma só pessoa no repositório, o `CODEOWNERS` não é
+barreira técnica (o GitHub não deixa o autor aprovar o próprio PR); ele passa a valer se
+houver um segundo revisor.
 
 ## Como rodar
 
