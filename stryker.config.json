@@ -2,7 +2,7 @@
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "testRunner": "vitest",
   "vitest": { "configFile": "vitest.mutacao.config.ts" },
-  "mutate": ["apps/api/src/infra/cripto.ts"],
+  "mutate": ["apps/api/src/infra/cripto.ts", "apps/api/src/regras/autorizacao.ts"],
   "coverageAnalysis": "perTest",
   "thresholds": { "high": 90, "low": 80, "break": 80 },
   "reporters": ["clear-text", "progress", "html"],
