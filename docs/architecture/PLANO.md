@@ -144,7 +144,10 @@ outra aplicação posterior já o alterou, o atributo é mantido e a divergênci
 
 Admin reseta MFA do usuário → todas as sessões ativas são encerradas (invalidação em
 banco e em cache) → e-mail com link de uso único (TokenUsoUnico `reset_mfa`, 24 h) →
+o reset grava `mfa_ativo = false`, apaga o segredo e invalida links de reset anteriores →
 `acceptMfaReset` valida o token **e** a senha e cria pré-sessão `mfa_cadastro` (DEC-082);
+senha errada não consome o token; o token (como o de convite) só é consumido quando o
+`setupMfa` conclui, então uma pré-sessão expirada pode ser refeita com o mesmo link em 24 h;
 login com `mfa_ativo = false` não cria pré-sessão (ERR-013) → reset registrado em auditoria com acao=RESET_MFA,
 entidade=Usuario, registro_id=<usuario_id>.
 
@@ -543,7 +546,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | M-N5 | REV-REQ-008 | médio | Regra do complemento sem filtros, com vários projetos e com período | — (decidido: DEC-076, incorporado na CHG-007) | antes do IMP-004 |
 | M-N6 | REV-REQ-008 | médio | M-11 da REV-REQ-007 ausente do §12.3 | — (registrado nesta tabela) | — |
 | M-N7 | REV-REQ-008 | médio | Lacunas de negócio do §12.3 atribuídas à IA-DEV | — (M-08 e M-18 reclassificados para Q-025 e Q-026; M-01, M-04, M-06 e M-22 já estavam com o responsável) | — |
-| M-N8 | REV-REQ-008 | médio | Aplicação descartada mantém os valores lidos sem prazo | — (decidido: DEC-077, incorporado na CHG-007) | IMP-003 |
+| M-N8 | REV-REQ-008 | médio | Aplicação descartada mantém os valores lidos sem prazo | — (decidido: DEC-077, incorporado na CHG-007; reaplicação após restore pela ListaEliminacoes) | IMP-003 |
 | B-N1 | REV-REQ-008 | baixo | Checklist da REQ cita REV-REQ-007 como última revisão | IA-DEV | próxima versão da REQ |
 | B-N2 | REV-REQ-008 | baixo | CHG-006 fora da tabela de mudanças do PLANO §12 | — (incluída na v2.10) | — |
 | B-N3 | REV-REQ-008 | baixo | Ampliar M-01 e registrar a mitigação parcial da DEC-071 | — (feito na linha M-01) | — |
@@ -555,6 +558,10 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | B-N9 | REV-REQ-008 | baixo | Reuso do mesmo código TOTP na janela de tempo e parâmetros do Argon2id | IA-DEV (CMP-Auth) | IMP-001 |
 | B-N10 | REV-REQ-008 | baixo | Erro de `saveReview` em item `aguardando_condicao` não definido | IA-DEV (CMP-Revisao) | IMP-003 |
 | B-N11 | REV-REQ-008 | baixo | Cópia de data, local e aplicador para a aplicação na conclusão | IA-DEV (CMP-Revisao) | IMP-003 |
+| V-M1 | verificação CHG-007 | médio | Exemplos testáveis dos filtros das DEC-075, DEC-076 e DEC-081 (`em` em escala → ERR-001; "marcou a opção"; sem filtro; vários projetos; período; faixa `<60`) e validação por tipo no schema Filter | IA-TEST + IA-DEV (CMP-Dashboard) | IMP-004 |
+| V-M2 | verificação CHG-007 | médio | Exemplo do CA-032 para campo obrigatório ilegível (DEC-079) | IA-TEST (CMP-Revisao) | IMP-003 |
+| V-B1 | verificação CHG-007 | baixo | `startMfaSetup` repetido na mesma pré-sessão sobrescreve o segredo não confirmado (seguro, mas implícito) | IA-DEV (CMP-Auth) | IMP-001 |
+| V-B2 | verificação CHG-007 | baixo | Exemplo de reset do MFA entre o login e a chamada de MFA | IA-TEST (CMP-Auth) | IMP-001 |
 
 ## 13. Critério de prontidão e ciclo de verificação
 

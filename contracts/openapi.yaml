@@ -251,7 +251,8 @@ paths:
       summary: Aceita convite (24 h, uso único) e define a senha
       description: |
         Rota pública. Convite vencido ou já usado → ERR-011 (CA-035). Cria pré-sessão com
-        etapa `mfa_cadastro`.
+        etapa `mfa_cadastro`. O convite só é consumido quando setupMfa conclui; dentro das 24 h,
+        nova chamada redefine a senha e cria nova pré-sessão.
       x-trace: [RF-002, CA-035, DEC-032]
       security: []
       requestBody:
@@ -281,7 +282,8 @@ paths:
       description: |
         Rota pública. Valida o token de reset de MFA e a senha atual do usuário dono do token e
         cria pré-sessão com etapa `mfa_cadastro` (DEC-082, CA-037b). Token vencido ou já usado →
-        ERR-011; senha errada → ERR-013 (conta como falha de login; 5 falhas → ERR-014).
+        ERR-011; senha errada → ERR-013 (conta como falha de login; 5 falhas → ERR-014), sem
+        consumir o token. O token só é consumido quando setupMfa conclui.
       x-trace: [RF-002, CA-037b, DEC-082]
       security: []
       requestBody:
@@ -455,6 +457,7 @@ paths:
       tags: [admin]
       summary: Reseta o MFA do usuário (encerra sessões)
       description: |
+        Grava mfa_ativo = false, apaga o segredo TOTP e invalida links de reset anteriores.
         Todas as sessões são encerradas e o usuário recebe por e-mail um link de uso único (24 h)
         para cadastrar o novo MFA via acceptMfaReset (DEC-082). Auditoria: acao=RESET_MFA,
         entidade=Usuario (CA-037b).
@@ -1221,7 +1224,7 @@ paths:
       description: |
         Precedência (REQ FL-001): item não resolvido → 400 ERR-022; CPF ausente ou inválido →
         200 com `aviso: ERR-006` e estado `aguardando_cpf`; nome, nascimento, data ou local
-        ausentes → 400 ERR-006 (CA-032). Assinatura ausente → `sem_assinatura`, sem vincular
+        ausentes, ilegíveis, rasurados ou marcados como não se aplica → 400 ERR-006 (CA-032, DEC-079). Assinatura ausente → `sem_assinatura`, sem vincular
         o respondente (DEC-064).
         Vínculo por CPF: existente vincula, novo cria (CA-002, CA-014b); divergência de cadastro
         resolvida pelo digitalizador (CA-014).
@@ -2092,7 +2095,7 @@ components:
       additionalProperties: false
       required: [etapa]
       properties:
-        etapa: { type: string, enum: [mfa_verificacao, mfa_cadastro] }
+        etapa: { type: string, enum: [mfa_verificacao, mfa_cadastro], description: 'login devolve só mfa_verificacao; acceptInvite e acceptMfaReset devolvem mfa_cadastro (DEC-082)' }
 
     MfaCode:
       type: object

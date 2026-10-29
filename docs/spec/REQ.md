@@ -170,8 +170,8 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-074 | 29/10/2026 | negócio | Campo lido em branco | Sempre revisão; regra geral de confiança | Campo lido em branco que não é destino de salto que mande pular vai para `a_revisar` | Evita confirmar como vazio um campo marcado de leve (Q-021) | definitivo | Médio | RF-007, FL-002, RN-020 |
 | DEC-075 | 29/10/2026 | negócio | Filtro em escala e múltipla escolha | Valor único e "marcou a opção"; intervalos livres | Escala filtrada por um valor (`igual` ou `diferente`, sem `em`); múltipla escolha filtra por "marcou a opção" | Evita recortes estreitos (Q-022) | definitivo | Médio | RF-009, DEC-071 |
 | DEC-076 | 29/10/2026 | negócio | Complemento do filtro | Por projeto e por período; proibir vários projetos | Sem filtro, não se aplica; com vários projetos, verificado em cada projeto com o maior mínimo; com período, calculado no mesmo período | Fecha a DEC-071 (Q-023) | definitivo | Médio | RF-009, DEC-055, DEC-071 |
-| DEC-077 | 29/10/2026 | negócio | Valores de aplicação descartada | Apagar no descarte; manter até a retenção | No descarte, `valor_ia` e `valor_final` dos itens são apagados com as imagens; fica a auditoria | Minimização (LGPD) (Q-024) | definitivo | Médio | RF-008, CA-033, RN-030 |
-| DEC-078 | 29/10/2026 | negócio | Respondente sem aplicação após reabertura | Anonimizar; manter até a retenção | Respondente que fica sem aplicação concluída após reabertura é anonimizado, sem entrar na ListaEliminacoes, com auditoria | Sem finalidade para manter (Q-025) | definitivo | Médio | RF-005, CA-042 |
+| DEC-077 | 29/10/2026 | negócio | Valores de aplicação descartada | Apagar no descarte; manter até a retenção | No descarte, `valor_ia` e `valor_final` dos itens são apagados com as imagens e a aplicação vai para a ListaEliminacoes (motivo `descarte_aplicacao`) para reaplicação após restore; fica a auditoria | Minimização (LGPD) (Q-024) | definitivo | Médio | RF-008, CA-033, RN-030 |
+| DEC-078 | 29/10/2026 | negócio | Respondente sem aplicação após reabertura | Anonimizar; manter até a retenção | Respondente que fica sem aplicação concluída após reabertura é anonimizado e registrado na ListaEliminacoes só para reaplicação após restore (motivo `anonimizacao_reabertura`), com auditoria | Sem finalidade para manter (Q-025) | definitivo | Médio | RF-005, CA-042 |
 | DEC-079 | 29/10/2026 | negócio | Campo obrigatório ilegível | Bloquear conclusão; concluir sem vínculo | Nome, nascimento, data ou local ilegível, rasurado ou não se aplica → ERR-006 até informar o valor; CPF ilegível → `aguardando_cpf` | Integridade mínima (DEC-020) (Q-026) | definitivo | Médio | RF-008, DEC-020, CA-032 |
 | DEC-080 | 29/10/2026 | negócio | Concessão individual sem perfil | Recusar; permitir | Concessão recusada (ERR-018) se o usuário não tiver o perfil `analista` | Evita concessão sem efeito ou indevida (Q-027) | definitivo | Baixo | RF-001, CA-025 |
 | DEC-081 | 29/10/2026 | negócio | Faixa abaixo de 60 | Criar faixa; excluir | Faixa `<60` com o mesmo mínimo das demais; complementa a DEC-071 | Público pode ter menos de 60 (Q-028) | definitivo | Baixo | RF-009, DEC-071 |
@@ -649,11 +649,15 @@ Constraint única: `(aplicacao_id)` onde `ativa = true` — impede reservas simu
 |---|---|---|---|---|---|---|---|---|---|---|
 | id | identificador do registro | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
 | tenant_id | tenant da eliminação | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
-| respondente_id_original | ID interno do respondente eliminado | uuid | sim | 36 | UUID v4 | — | — | não | — | não |
+| motivo | origem do registro | enum | sim | — | — | eliminacao; anonimizacao_reabertura; descarte_aplicacao | eliminacao | não | — | não |
+| respondente_id_original | ID interno do respondente eliminado ou anonimizado | uuid | não | 36 | UUID v4 | — | NULL | não | — | não |
+| aplicacao_id | aplicação descartada cujos valores lidos foram apagados (DEC-077) | uuid | não | 36 | UUID v4 | — | NULL | não | — | não |
 | eliminado_em | data da eliminação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 | valido_ate | data de expiração do registro | timestamp | sim | — | ISO 8601 UTC | — | eliminado_em + 180 dias | não | — | não |
 
-Constraint única: `(tenant_id, respondente_id_original)` — impede registros duplicados.
+Constraint única: `(tenant_id, respondente_id_original)` e `(tenant_id, aplicacao_id)` — impede registros duplicados. Check: `motivo = descarte_aplicacao` exige `aplicacao_id` e `respondente_id_original` nulo; os demais motivos exigem `respondente_id_original` e `aplicacao_id` nulo.
+
+Todos os motivos são reaplicados após restauração de backup (CA-023, exemplo 4). Só `eliminacao` tem os demais efeitos do direito de eliminação (RN-031); `anonimizacao_reabertura` (DEC-078) e `descarte_aplicacao` (DEC-077) servem apenas para que o dado apagado não volte com o backup.
 
 Nota: Esta entidade não tem FK para `Respondente` porque o respondente foi anonimizado. O `respondente_id_original` guarda apenas o UUID interno para reaplicar a eliminação em caso de restauração de backup.
 
@@ -1520,14 +1524,16 @@ Dado que uma aplicação tem agrupamento errado
 Quando o digitalizador a descarta com motivo
 Então ela vai para "descartada"
 E as imagens são apagadas
-E os valores lidos dos itens são apagados (DEC-077)
+E os valores lidos dos itens são apagados e a aplicação é registrada na ListaEliminacoes com motivo `descarte_aplicacao` (DEC-077)
 E a auditoria registra quem, quando e o motivo
 
 CA-035 — Primeiro acesso do tenant
 Dado que o tenant foi criado pelo script
 Quando o primeiro administrador abre o convite dentro de 24 horas
 Então define a senha e cadastra o MFA
+E o convite só é consumido quando o `setupMfa` conclui; se a pré-sessão expirar antes, o mesmo convite, dentro das 24 horas, redefine a senha e cria nova pré-sessão
 E convite vencido ou já usado é recusado com ERR-011
+E o convite vencido sem MFA cadastrado é reenviado pelo administrador (`inviteUser`) ou, para o primeiro administrador do tenant, pelo script de criação do tenant
 
 CA-037 — Recuperação de senha
 Dado que o usuário esqueceu a senha
@@ -1541,8 +1547,17 @@ Quando o administrador do tenant reseta o MFA
 Então as sessões ativas do usuário são encerradas
 E o usuário recebe por e-mail um link de uso único válido por 24 horas
 E só pelo link, informando a senha, ele cadastra o novo MFA (DEC-082)
-E login com senha antes disso é recusado com ERR-013, sem pré-sessão
+E login com senha antes disso é recusado com ERR-013, sem pré-sessão (conta como falha de login para o bloqueio da ERR-014)
+E o reset grava `mfa_ativo = false`, apaga o segredo TOTP e invalida links de reset anteriores ainda não usados
 E o reset fica registrado na auditoria
+
+| Exemplo | Situação | Chamada | Resultado esperado |
+|---|---|---|---|
+| 1 | Link válido, senha correta | `acceptMfaReset` | Pré-sessão `mfa_cadastro`; o link continua válido até o `setupMfa` concluir |
+| 2 | Link válido, senha errada | `acceptMfaReset` | ERR-013 (conta para a ERR-014); o link não é consumido |
+| 3 | Pré-sessão do exemplo 1 expirou sem `setupMfa` | `acceptMfaReset` com o mesmo link dentro das 24 h | Nova pré-sessão `mfa_cadastro` |
+| 4 | `setupMfa` concluído | `acceptMfaReset` com o mesmo link | ERR-011 (link já usado) |
+| 5 | Link com mais de 24 h ou substituído por novo reset | `acceptMfaReset` | ERR-011 |
 
 CA-038 — Revogação e desativação
 Dado que o analista tem acesso individual
@@ -1577,7 +1592,7 @@ Então ela volta a "em_revisao"
 E sai dos relatórios até ser concluída de novo
 E se o CPF for corrigido, o vínculo é refeito
 E as alterações de cadastro feitas por essa aplicação são revertidas
-E o respondente que ficou sem nenhuma aplicação concluída é anonimizado como na eliminação, sem entrar na ListaEliminacoes (DEC-078)
+E o respondente que ficou sem nenhuma aplicação concluída é anonimizado como na eliminação e registrado na ListaEliminacoes com motivo `anonimizacao_reabertura`, sem os demais efeitos da eliminação (DEC-078)
 E a reversão é registrada na auditoria
 
 CA-043 — Reserva da aplicação
@@ -1631,7 +1646,7 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 | ERR-003 | AI_QUOTA_EXCEEDED | — | Teto de custo de IA do tenant atingido; aviso exibido na tela e enviado por e-mail (estado assíncrono, não é resposta HTTP de erro). | O processamento deste tenant está pausado. Contate o administrador. | info: ai_quota_exceeded (tenant_id) | Aplicação em `aguardando_cota` | RF-007, CA-030, DEC-035 | ativo |
 | ERR-004 | INVALID_QR_CODE | 400 | QR ilegível ou ausente, registro da imagem impossível, ou páginas faltantes, repetidas ou excedentes. | Não foi possível identificar o formulário nesta página. Informe manualmente. | warn: qr_invalid_or_missing | Aplicação em `identificacao_pendente` | RF-006, CA-004, CA-013, CA-040 | ativo |
 | ERR-005 | RESERVATION_EXPIRED | 409 | Descontinuado pela CHG-002: duplicava o ERR-043. | Descontinuado; usar ERR-043. | — | — | CHG-002 | descontinuado |
-| ERR-006 | MISSING_MANDATORY_FIELDS | 400 | Tentativa de concluir aplicação sem nome, data de nascimento, CPF válido, data ou local (DEC-020). | A aplicação não pode ser concluída sem nome, data de nascimento, CPF válido, data e local da aplicação. | warn: missing_mandatory_fields | CPF ausente ou inválido: sucesso com este aviso e estado `aguardando_cpf`; demais campos: nada é gravado, permanece em `em_revisao` | RF-005, RF-008, CA-032 | ativo |
+| ERR-006 | MISSING_MANDATORY_FIELDS | 400 | Tentativa de concluir aplicação sem nome, data de nascimento, CPF válido, data ou local, ou com um deles ilegível, rasurado ou marcado como não se aplica (DEC-020, DEC-079). | A aplicação não pode ser concluída sem nome, data de nascimento, CPF válido, data e local da aplicação. | warn: missing_mandatory_fields | CPF ausente ou inválido: sucesso com este aviso e estado `aguardando_cpf`; demais campos: nada é gravado, permanece em `em_revisao` | RF-005, RF-008, CA-032 | ativo |
 | ERR-007 | FILE_REJECTED | 400 | Descontinuado pela CHG-002: duplicava o ERR-029. | Descontinuado; usar ERR-029. | — | — | CHG-002 | descontinuado |
 | ERR-008 | ACCESS_DENIED_INDIVIDUAL | 403 | Usuário sem concessão ativa de acesso individual tenta ver ficha ou exportar linha a linha em projeto vinculado. | Você não tem permissão para acessar dados individuais neste projeto. | warn: unauthorized_individual_access | Nada é gravado | RF-009, RF-010, CA-022, CA-025 | ativo |
 | ERR-009 | VERSION_IMMUTABLE | 409 | Tentativa de alterar perguntas de uma versão já publicada. | Versões publicadas são imutáveis. Crie uma nova versão em rascunho. | info: immutable_version_attempt | Nada é gravado | RF-004, CA-001, RN-042 | ativo |
@@ -1686,7 +1701,7 @@ Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, f
 | Q-022 | 29/10/2026 | Filtros em `escala` e em `multipla_escolha` | Intervalos livres em escala (ex.: 3 a 3, 3 a 4) permitem recortes estreitos parecidos com os de idade; em múltipla escolha não está definido se o filtro é "marcou a opção" ou "marcou só a opção" (M-N4) | A: escala filtrada só por um valor ou por faixas definidas no formulário; múltipla escolha filtra por "marcou a opção" (contém) | B: intervalos livres em escala, protegidos só pelo mínimo do complemento (DEC-071) | — | A | Filtro em escala por valor único; múltipla escolha filtra por "marcou a opção"; o mínimo do complemento (DEC-071) vale para ambos. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-009, RNF-004, DEC-071 |
 | Q-023 | 29/10/2026 | Complemento do filtro sem filtro, com vários projetos e com período | A DEC-071 manda recusar a consulta quando o complemento do filtro tem menos respondentes que o mínimo, mas não diz como calcular o complemento nesses três casos (M-N5) | A: sem filtro não há complemento; com vários projetos o complemento é verificado em cada projeto com o maior mínimo (DEC-055); com período o complemento é calculado dentro do mesmo período | B: recusar filtro em consulta com mais de um projeto | — | A | Sem filtro, a regra do complemento não se aplica; com vários projetos, vale em cada projeto com o maior mínimo; com período, o complemento é calculado no mesmo período. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-009, DEC-055, DEC-071 |
 | Q-024 | 29/10/2026 | Valores lidos de aplicação descartada | O descarte apaga as imagens, mas os valores lidos pela IA ficam guardados sem prazo, inclusive de pessoa que pode ter sido agrupada por engano (M-N8) | A: apagar os valores dos itens no descarte, mantendo só a auditoria | B: manter os valores até o prazo de retenção do tenant (RN-030) | — | A | No descarte, os valores lidos (`valor_ia`, `valor_final`) são apagados junto com as imagens; fica só a auditoria. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-008, CA-033, RN-030 |
-| Q-025 | 29/10/2026 | Respondente sem aplicação após reabertura | Ao reabrir e revincular uma aplicação, o respondente anterior pode ficar sem nenhuma aplicação concluída, guardando nome e CPF sem finalidade (M-08 da REV-REQ-007, reclassificado pela M-N7) | A: respondente sem aplicação concluída é anonimizado como na eliminação, sem entrar na lista de eliminações | B: manter o cadastro até o prazo de retenção | — | A | Respondente que fica sem aplicação concluída após a reabertura é anonimizado (sem entrar na ListaEliminacoes), com auditoria. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-005, CA-042, RN-030 |
+| Q-025 | 29/10/2026 | Respondente sem aplicação após reabertura | Ao reabrir e revincular uma aplicação, o respondente anterior pode ficar sem nenhuma aplicação concluída, guardando nome e CPF sem finalidade (M-08 da REV-REQ-007, reclassificado pela M-N7) | A: respondente sem aplicação concluída é anonimizado como na eliminação, sem entrar na lista de eliminações | B: manter o cadastro até o prazo de retenção | — | A | Respondente que fica sem aplicação concluída após a reabertura é anonimizado (registrado na ListaEliminacoes só para reaplicação após restore), com auditoria. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-005, CA-042, RN-030 |
 | Q-026 | 29/10/2026 | Campo obrigatório ilegível, rasurado ou não se aplica | A DEC-020 exige os 5 campos para concluir, mas não diz o que fazer quando um deles está ilegível ou rasurado no papel (M-18 da REV-REQ-007, reclassificado pela M-N7) | A: a conclusão fica bloqueada (ERR-006) até o digitalizador informar o valor, obtido com o aplicador ou o respondente | B: permite concluir com o campo marcado, sem vincular o respondente | — | A | Nome, data de nascimento, data ou local marcados como ilegível, rasurado ou não se aplica bloqueiam a conclusão (ERR-006) até o valor ser informado; CPF ilegível segue para `aguardando_cpf` (FL-001). | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-008, DEC-020, CA-032 |
 | Q-027 | 29/10/2026 | Concessão individual a usuário sem perfil de analista | Hoje nada impede conceder acesso linha a linha a um usuário que não tem perfil para ver dados individuais (B-N7) | A: recusar a concessão se o usuário não tiver o perfil exigido | B: permitir; a concessão só vale se o perfil for dado depois | — | A | Concessão individual só para usuário com o perfil exigido; caso contrário é recusada. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, CA-025 |
 | Q-028 | 29/10/2026 | Idade abaixo de 60 nos filtros | As faixas da DEC-071 começam em 60-64; respondentes com menos de 60 não têm faixa definida (B-N6) | A: criar a faixa "menos de 60" | B: respondentes com menos de 60 ficam fora dos filtros de idade | — | A | Há a faixa "menos de 60", sujeita ao mesmo mínimo das demais. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-009, DEC-071 |

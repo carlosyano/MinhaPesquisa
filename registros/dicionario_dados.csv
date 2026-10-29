@@ -157,7 +157,9 @@ ENT-018 PedidoTitular,status,status do pedido,enum,sim,—,—,pendente; em_anda
 ENT-018 PedidoTitular,resultado,resultado da execução,text,não,5000,—,—,NULL,não,—,não
 ENT-019 ListaEliminacoes,id,identificador do registro,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-019 ListaEliminacoes,tenant_id,tenant da eliminação,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
-ENT-019 ListaEliminacoes,respondente_id_original,ID interno do respondente eliminado,uuid,sim,36,UUID v4,—,—,não,—,não
+ENT-019 ListaEliminacoes,motivo,origem do registro,enum,sim,—,—,eliminacao; anonimizacao_reabertura; descarte_aplicacao,eliminacao,não,—,não
+ENT-019 ListaEliminacoes,respondente_id_original,ID interno do respondente eliminado ou anonimizado,uuid,não,36,UUID v4,—,NULL,não,—,não
+ENT-019 ListaEliminacoes,aplicacao_id,aplicação descartada cujos valores lidos foram apagados (DEC-077),uuid,não,36,UUID v4,—,NULL,não,—,não
 ENT-019 ListaEliminacoes,eliminado_em,data da eliminação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-019 ListaEliminacoes,valido_ate,data de expiração do registro,timestamp,sim,—,ISO 8601 UTC,—,eliminado_em + 180 dias,não,—,não
 ENT-020 ParametroConfiguracao,id,identificador do parâmetro,uuid,sim,36,UUID v4,—,—,sim,—,não
