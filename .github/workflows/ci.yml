@@ -1,0 +1,38 @@
+# CI da fundação: só o que já existe no repositório. As etapas de código (typecheck,
+# testes, mutação, CodeQL, gitleaks, SBOM — PLANO §9.4) entram no IMP-001.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  consistencia:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependência do validador
+        run: pip install pyyaml==6.0.2
+      - name: Registros CSV gerados a partir da REQ e do PLANO (DEC-049)
+        run: python3 tools/gerar_registros.py --check
+      - name: Consistência cruzada REQ × PLANO × contrato × registros
+        run: python3 tools/validar_consistencia.py
+
+  contrato:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Lint do contrato (Spectral)
+        run: npm run lint:spec

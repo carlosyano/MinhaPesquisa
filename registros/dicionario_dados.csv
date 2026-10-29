@@ -1,6 +1,249 @@
 entidade,campo_tecnico,significado,tipo,obrigatorio,tamanho_precisao,formato_regex,valores_permitidos,padrao,unico,chave_estrangeira,sensibilidade_lgpd
-ENT-001 Respondente,cpf,CPF do respondente,char,sim,11,^[0-9]{11}$,dígitos verificadores válidos,,sim (por tenant),,pessoal
-ENT-001 Respondente,nome,Nome completo do respondente,varchar,sim,200,,sem acentos ou caracteres especiais,,não,,pessoal
-ENT-001 Respondente,data_nascimento,Data de nascimento,date,sim,,YYYY-MM-DD,data não futura,,não,,pessoal
-ENT-002 Aplicacao,id,Identificador único da aplicação,uuid,sim,36,,formato UUID v4,sim,não,,não
-ENT-002 Aplicacao,tenant_id,Identificador do tenant proprietário,uuid,sim,36,,formato UUID v4,,não,Tenant.id,pessoal (indireto)
+ENT-001 Tenant,id,identificador do tenant,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-001 Tenant,nome,nome do tenant,varchar,sim,200,—,—,—,não,—,pessoal
+ENT-001 Tenant,slug,identificador curto,varchar,sim,50,^[a-z0-9-]+$,—,—,sim,—,não
+ENT-001 Tenant,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-001 Tenant,ativo,"tenant ativo (false: login recusado com ERR-013 e jobs do tenant suspensos, sem apagar dados; DEC-070)",boolean,sim,—,—,true/false,true,não,—,não
+ENT-002 Usuario,id,identificador do usuário,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-002 Usuario,tenant_id,tenant do usuário,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-002 Usuario,email,e-mail de login,varchar,sim,255,email RFC 5322,—,—,"sim (global, DEC-054)",—,pessoal
+ENT-002 Usuario,nome,nome do usuário,varchar,sim,200,—,—,—,não,—,pessoal
+ENT-002 Usuario,senha_hash,hash Argon2id,varchar,sim,255,Argon2id,—,—,não,—,sensível
+ENT-002 Usuario,mfa_secret,segredo TOTP,varchar,não,64,base32,—,NULL,não,—,sensível
+ENT-002 Usuario,mfa_ativo,MFA habilitado,boolean,sim,—,—,true/false,false,não,—,não
+ENT-002 Usuario,ultimo_login,último login,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
+ENT-002 Usuario,situacao,situação do usuário,enum,sim,—,—,pendente_convite; ativo; inativo,pendente_convite,não,—,não
+ENT-002 Usuario,todos_projetos,vínculo dinâmico a todos os projetos do tenant (RN-004; DEC-068); true ignora VinculoUsuarioProjeto,boolean,sim,—,—,true/false,true,não,—,não
+ENT-002 Usuario,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-003 Perfil,id,identificador do perfil,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-003 Perfil,tenant_id,tenant do perfil,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-003 Perfil,codigo,código do perfil,varchar,sim,50,^[a-z_]+$,admin_tenant; digitalizador; analista; analista_individual,—,sim (por tenant),—,não
+ENT-003 Perfil,nome,nome do perfil,varchar,sim,100,—,—,—,não,—,não
+ENT-004 Projeto,id,identificador do projeto,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-004 Projeto,tenant_id,tenant do projeto,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-004 Projeto,nome,nome do projeto,varchar,sim,200,—,—,—,não,—,não
+ENT-004 Projeto,descricao,descrição,text,não,5000,—,—,NULL,não,—,não
+ENT-004 Projeto,status,status do projeto,enum,sim,—,—,ativo; arquivado,ativo,não,—,não
+ENT-004 Projeto,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-005 Formulario,id,identificador do formulário,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-005 Formulario,tenant_id,tenant do formulário,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-005 Formulario,projeto_id,projeto do formulário,uuid,sim,36,UUID v4,—,—,não,Projeto.id,não
+ENT-005 Formulario,nome,nome do formulário,varchar,sim,200,—,—,—,não,—,não
+ENT-005 Formulario,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-006 Versao,id,identificador da versão,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-006 Versao,tenant_id,tenant da versão,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-006 Versao,formulario_id,formulário da versão,uuid,sim,36,UUID v4,—,—,não,Formulario.id,não
+ENT-006 Versao,numero,número da versão,int,sim,—,—,≥ 1,auto,sim (por form),—,não
+ENT-006 Versao,status,status da versão,enum,sim,—,—,rascunho; publicada,rascunho,não,—,não
+ENT-006 Versao,publicada_em,data de publicação,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
+ENT-006 Versao,mapa_layout,"coordenadas normalizadas de cada campo por página, gravadas na publicação (DEC-048)",jsonb,não,—,JSON,—,NULL,não,—,não
+ENT-006 Versao,criada_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-007 Pergunta,id,identificador da pergunta,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-007 Pergunta,tenant_id,tenant da pergunta,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-007 Pergunta,versao_id,versão da pergunta,uuid,sim,36,UUID v4,—,—,não,Versao.id,não
+ENT-007 Pergunta,codigo,código estável,varchar,sim,100,^[A-Z0-9_]+$,—,—,sim (por versão),—,não
+ENT-007 Pergunta,tipo,tipo de pergunta,enum,sim,—,—,escolha_unica; multipla_escolha; escala; matriz; numero; data; sim_nao; cpf; texto_curto; texto_livre,—,não,—,não
+ENT-007 Pergunta,enunciado,texto da pergunta,text,sim,2000,—,—,—,não,—,não
+ENT-007 Pergunta,ordem,ordem na página,int,sim,—,—,≥ 1,—,não,—,não
+ENT-007 Pergunta,pagina,número da página,int,sim,—,—,≥ 1,—,não,—,não
+ENT-007 Pergunta,obrigatorio,campo obrigatório,boolean,sim,—,—,true/false,false,não,—,não
+ENT-007 Pergunta,campo_respondente,alimenta atributo do respondente,varchar,não,50,—,nome; data_nascimento; cpf; endereco,NULL,não,—,não
+ENT-007 Pergunta,campo_aplicacao,"marca a pergunta de data, local ou aplicador da aplicação (RN-016, RN-017)",varchar,não,50,—,data_aplicacao; local_aplicacao; aplicador,NULL,não,—,não
+ENT-007 Pergunta,sensibilidade,grupo de envio à IA (RN-039): identificação nunca vai junto com saúde/outro,enum,sim,—,—,identificacao; saude; outro,saude,não,—,não
+ENT-007 Pergunta,valor_min,valor mínimo (escala/número),decimal,não,"10,2",—,—,NULL,não,—,não
+ENT-007 Pergunta,valor_max,valor máximo (escala/número),decimal,não,"10,2",—,—,NULL,não,—,não
+ENT-007 Pergunta,unidade,unidade (número),varchar,não,20,—,—,NULL,não,—,não
+ENT-008 Opcao,id,identificador da opção,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-008 Opcao,tenant_id,tenant da opção,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-008 Opcao,pergunta_id,pergunta da opção,uuid,sim,36,UUID v4,—,—,não,Pergunta.id,não
+ENT-008 Opcao,codigo,código estável,varchar,sim,50,^[a-z0-9_]+$,—,—,sim (por pergunta),—,não
+ENT-008 Opcao,rotulo,texto impresso,varchar,sim,200,—,—,—,não,—,não
+ENT-008 Opcao,ordem,ordem,int,sim,—,—,≥ 1,—,não,—,não
+ENT-009 Respondente,id,identificador do respondente,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-009 Respondente,tenant_id,tenant do respondente,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-009 Respondente,nome,nome completo,varchar,sim,200,—,—,—,não,—,pessoal
+ENT-009 Respondente,data_nascimento,data de nascimento,date,sim (NULL só se anonimizado),—,YYYY-MM-DD,não futura,—,não,—,pessoal
+ENT-009 Respondente,cpf_cifrado,CPF cifrado,bytea,sim (NULL só se anonimizado),variável,AES-256-GCM (IV + cifrado + tag + id da chave),—,—,não,—,sensível
+ENT-009 Respondente,cpf_hash,HMAC do CPF (busca),bytea,sim (NULL só se anonimizado),32,HMAC-SHA256 com chave do tenant,—,—,"sim (por tenant, quando não nulo)",—,sensível
+ENT-009 Respondente,endereco,endereço,varchar,não,500,—,—,NULL,não,—,pessoal
+ENT-009 Respondente,anonimizado,respondente anonimizado,boolean,sim,—,—,true/false,false,não,—,não
+ENT-009 Respondente,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-010 Aplicacao,id,identificador da aplicação,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-010 Aplicacao,tenant_id,tenant da aplicação,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-010 Aplicacao,projeto_id,projeto da aplicação,uuid,sim,36,UUID v4,—,—,não,Projeto.id,não
+ENT-010 Aplicacao,versao_id,versão do formulário (NULL só em identificacao_pendente),uuid,não,36,UUID v4,—,NULL,não,Versao.id,não
+ENT-010 Aplicacao,respondente_id,respondente (só na conclusão),uuid,não,36,UUID v4,—,NULL,não,Respondente.id,pessoal (indireto)
+ENT-010 Aplicacao,data_aplicacao,data da aplicação (obrigatória em sem_assinatura e concluida),date,não,—,YYYY-MM-DD,não futura,NULL,não,—,pessoal
+ENT-010 Aplicacao,local_aplicacao,local da aplicação (obrigatório em sem_assinatura e concluida),varchar,não,200,—,—,NULL,não,—,pessoal
+ENT-010 Aplicacao,aplicador,nome do aplicador,varchar,não,200,—,—,NULL,não,—,pessoal
+ENT-010 Aplicacao,estado,estado da aplicação,enum,sim,—,—,identificacao_pendente; aguardando_cota; em_leitura; erro_leitura; em_revisao; aguardando_cpf; sem_assinatura; concluida; descartada,identificacao_pendente,não,—,não
+ENT-010 Aplicacao,assinatura,status da assinatura,enum,não,—,—,presente; ausente; nao_conferida,nao_conferida,não,—,não
+ENT-010 Aplicacao,criada_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-010 Aplicacao,concluida_em,data de conclusão,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
+ENT-010 Aplicacao,cpf_hash,"HMAC do CPF lido, gravado quando o item de CPF fica resolvido (localiza aplicações em andamento na eliminação)",bytea,não,32,HMAC-SHA256 com chave do tenant,—,NULL,não,—,sensível
+ENT-010 Aplicacao,manter_cadastro,"escolha do digitalizador por atributo divergente (CA-014), gravada na conclusão e aplicada no vínculo",jsonb,não,—,JSON,nome; data_nascimento; endereco → existente; aplicacao,NULL,não,—,não
+ENT-010 Aplicacao,motivo_descarte,motivo informado no descarte (CA-033),text,não,2000,—,—,NULL,não,—,pessoal (indireto)
+ENT-010 Aplicacao,motivo_reabertura,motivo da última reabertura (CA-042),text,não,2000,—,—,NULL,não,—,pessoal (indireto)
+ENT-011 ItemResposta,id,identificador do item,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-011 ItemResposta,tenant_id,tenant do item,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-011 ItemResposta,aplicacao_id,aplicação do item,uuid,sim,36,UUID v4,—,—,não,Aplicacao.id,não
+ENT-011 ItemResposta,pergunta_id,pergunta do item,uuid,sim,36,UUID v4,—,—,não,Pergunta.id,não
+ENT-011 ItemResposta,linha_id,linha da matriz (só perguntas do tipo matriz),uuid,não,36,UUID v4,—,NULL,não,LinhaMatriz.id,não
+ENT-011 ItemResposta,valor_ia,"valor lido pela IA, no formato canônico (§5.4); cifrado (DEC-041) quando a pergunta tem `campo_respondente`",text,não,2000,—,—,NULL,não,—,sensível
+ENT-011 ItemResposta,confianca,"confiança da IA (valor bruto, sem arredondamento)",decimal,não,"5,4",—,0.0000..1.0000,NULL,não,—,não
+ENT-011 ItemResposta,valor_final,"valor confirmado/corrigido, no formato canônico (§5.4); cifrado (DEC-041) quando a pergunta tem `campo_respondente`",text,não,2000,—,—,NULL,não,—,sensível
+ENT-011 ItemResposta,estado,estado do item,enum,sim,—,—,pendente_leitura; aguardando_condicao; confirmado_automaticamente; a_revisar; confirmado; corrigido; em_branco; ilegivel; rasurado; nao_se_aplica,pendente_leitura,não,—,não
+ENT-011 ItemResposta,revisor_id,usuário que revisou,uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
+ENT-011 ItemResposta,revisado_em,data da revisão,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
+ENT-011 ItemResposta,regiao_imagem,região da imagem (bounding box),jsonb,não,—,JSON,—,NULL,não,—,não
+ENT-012 Grupo,id,identificador do grupo,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-012 Grupo,tenant_id,tenant do grupo,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-012 Grupo,projeto_id,projeto do grupo,uuid,sim,36,UUID v4,—,—,não,Projeto.id,não
+ENT-012 Grupo,usuario_id,dono do grupo,uuid,sim,36,UUID v4,—,—,não,Usuario.id,não
+ENT-012 Grupo,nome,nome do grupo,varchar,sim,200,—,—,—,não,—,não
+ENT-012 Grupo,filtros,filtros (JSON),jsonb,sim,—,JSON,—,—,não,—,não
+ENT-012 Grupo,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-013 Auditoria,id,identificador do evento,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-013 Auditoria,tenant_id,tenant do evento,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-013 Auditoria,usuario_id,usuário que executou,uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
+ENT-013 Auditoria,acao,ação executada,varchar,sim,100,—,—,—,não,—,não
+ENT-013 Auditoria,entidade,entidade afetada,varchar,sim,100,—,—,—,não,—,não
+ENT-013 Auditoria,registro_id,ID do registro afetado,uuid,não,36,UUID v4,—,NULL,não,—,não
+ENT-013 Auditoria,campo,campo afetado,varchar,não,100,—,—,NULL,não,—,não
+ENT-013 Auditoria,ip,IP de origem,inet,não,—,IPv4/IPv6,—,NULL,não,—,pessoal
+ENT-013 Auditoria,canal,canal (web; api; script),enum,não,—,—,web; api; script,NULL,não,—,não
+ENT-013 Auditoria,detalhes,referências adicionais em lista fechada por ação (ex.: filtro_aplicado com códigos de pergunta e opção); nunca valores pessoais nem texto livre,jsonb,não,—,JSON,—,NULL,não,—,não
+ENT-013 Auditoria,criado_em,data do evento,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-014 VinculoUsuarioProjeto,id,identificador do vínculo,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-014 VinculoUsuarioProjeto,tenant_id,tenant do vínculo,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-014 VinculoUsuarioProjeto,usuario_id,usuário vinculado,uuid,sim,36,UUID v4,—,—,não,Usuario.id,não
+ENT-014 VinculoUsuarioProjeto,projeto_id,projeto vinculado,uuid,sim,36,UUID v4,—,—,não,Projeto.id,não
+ENT-014 VinculoUsuarioProjeto,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-014 VinculoUsuarioProjeto,criado_por,usuário que criou,uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
+ENT-015 ConcessaoAcessoIndividual,id,identificador da concessão,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-015 ConcessaoAcessoIndividual,tenant_id,tenant da concessão,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-015 ConcessaoAcessoIndividual,usuario_id,usuário que recebeu acesso,uuid,sim,36,UUID v4,—,—,não,Usuario.id,não
+ENT-015 ConcessaoAcessoIndividual,projeto_id,projeto concedido,uuid,sim,36,UUID v4,—,—,não,Projeto.id,não
+ENT-015 ConcessaoAcessoIndividual,justificativa,motivo da concessão,text,sim,1000,—,—,—,não,—,pessoal (indireto)
+ENT-015 ConcessaoAcessoIndividual,concedido_em,data de concessão,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-015 ConcessaoAcessoIndividual,valido_ate,data de expiração,timestamp,sim,—,ISO 8601 UTC,—,concedido_em + 90 dias,não,—,não
+ENT-015 ConcessaoAcessoIndividual,revogado_em,data de revogação,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
+ENT-015 ConcessaoAcessoIndividual,revogado_por,usuário que revogou,uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
+ENT-015 ConcessaoAcessoIndividual,ativo,concessão ativa,boolean,sim,—,—,true/false,true,não,—,não
+ENT-016 RegraSalto,id,identificador da regra,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-016 RegraSalto,tenant_id,tenant da regra,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-016 RegraSalto,versao_id,versão da regra,uuid,sim,36,UUID v4,—,—,não,Versao.id,não
+ENT-016 RegraSalto,pergunta_origem_id,pergunta que dispara a regra,uuid,sim,36,UUID v4,—,—,não,Pergunta.id,não
+ENT-016 RegraSalto,pergunta_destino_id,pergunta que é mostrada/ocultada,uuid,sim,36,UUID v4,—,—,não,Pergunta.id,não
+ENT-016 RegraSalto,opcao_codigo,código da opção que dispara,varchar,sim,50,^[a-z0-9_]+$,—,—,não,—,não
+ENT-016 RegraSalto,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-017 ReservaAplicacao,id,identificador da reserva,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-017 ReservaAplicacao,tenant_id,tenant da reserva,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-017 ReservaAplicacao,aplicacao_id,aplicação reservada,uuid,sim,36,UUID v4,—,—,não,Aplicacao.id,não
+ENT-017 ReservaAplicacao,usuario_id,usuário que reservou,uuid,sim,36,UUID v4,—,—,não,Usuario.id,não
+ENT-017 ReservaAplicacao,reservado_em,data da reserva,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-017 ReservaAplicacao,ultima_atividade_em,última ação de revisão do titular da reserva,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-017 ReservaAplicacao,expira_em,data de expiração (deslizante),timestamp,sim,—,ISO 8601 UTC,—,ultima_atividade_em + 30 min,não,—,não
+ENT-017 ReservaAplicacao,ativa,reserva ativa,boolean,sim,—,—,true/false,true,não,—,não
+ENT-018 PedidoTitular,id,identificador do pedido,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-018 PedidoTitular,tenant_id,tenant do pedido,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-018 PedidoTitular,respondente_id,respondente titular,uuid,sim,36,UUID v4,—,—,não,Respondente.id,pessoal (indireto)
+ENT-018 PedidoTitular,tipo,tipo de direito,enum,sim,—,—,acesso; correcao; eliminacao; portabilidade,—,não,—,não
+ENT-018 PedidoTitular,descricao,descrição do pedido,text,não,2000,—,—,NULL,não,—,pessoal (indireto)
+ENT-018 PedidoTitular,solicitado_em,data da solicitação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-018 PedidoTitular,executado_em,data da execução,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
+ENT-018 PedidoTitular,executado_por,usuário que executou,uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
+ENT-018 PedidoTitular,status,status do pedido,enum,sim,—,—,pendente; em_andamento; concluido; falhou; cancelado,pendente,não,—,não
+ENT-018 PedidoTitular,resultado,resultado da execução,text,não,5000,—,—,NULL,não,—,não
+ENT-019 ListaEliminacoes,id,identificador do registro,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-019 ListaEliminacoes,tenant_id,tenant da eliminação,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-019 ListaEliminacoes,motivo,origem do registro,enum,sim,—,—,eliminacao; anonimizacao_reabertura; descarte_aplicacao,eliminacao,não,—,não
+ENT-019 ListaEliminacoes,respondente_id_original,ID interno do respondente eliminado ou anonimizado,uuid,não,36,UUID v4,—,NULL,não,—,não
+ENT-019 ListaEliminacoes,aplicacao_id,aplicação descartada cujos valores lidos foram apagados (DEC-077),uuid,não,36,UUID v4,—,NULL,não,—,não
+ENT-019 ListaEliminacoes,eliminado_em,data da eliminação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-019 ListaEliminacoes,valido_ate,data de expiração do registro,timestamp,sim,—,ISO 8601 UTC,—,eliminado_em + 180 dias,não,—,não
+ENT-020 ParametroConfiguracao,id,identificador do parâmetro,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-020 ParametroConfiguracao,tenant_id,tenant do parâmetro (NULL = plataforma),uuid,não,36,UUID v4,—,NULL,não,Tenant.id,não
+ENT-020 ParametroConfiguracao,projeto_id,projeto do parâmetro (NULL = tenant/plataforma),uuid,não,36,UUID v4,—,NULL,não,Projeto.id,não
+ENT-020 ParametroConfiguracao,chave,nome do parâmetro,varchar,sim,100,^[a-z_]+$,retencao_dias; custo_ia_teto; limite_confianca; grupo_minimo; cotacao_usd_brl; retencao_exportacao_dias,—,não,—,não
+ENT-020 ParametroConfiguracao,competencia,"mês civil a que o valor se refere (obrigatório para cotacao_usd_brl, NULL nas demais)",date,não,—,YYYY-MM-01,—,NULL,não,—,não
+ENT-020 ParametroConfiguracao,valor,valor do parâmetro,text,sim,1000,—,—,—,não,—,sensível (depende da chave)
+ENT-020 ParametroConfiguracao,alterado_em,data da alteração,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-020 ParametroConfiguracao,alterado_por,usuário que alterou,uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
+ENT-021 HistoricoStatusProjeto,id,identificador do registro,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-021 HistoricoStatusProjeto,tenant_id,tenant do projeto,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-021 HistoricoStatusProjeto,projeto_id,projeto do histórico,uuid,sim,36,UUID v4,—,—,não,Projeto.id,não
+ENT-021 HistoricoStatusProjeto,status_anterior,status antes da mudança,enum,não,—,—,ativo; arquivado,NULL,não,—,não
+ENT-021 HistoricoStatusProjeto,status_novo,status após a mudança,enum,sim,—,—,ativo; arquivado,—,não,—,não
+ENT-021 HistoricoStatusProjeto,alterado_em,data da mudança,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-021 HistoricoStatusProjeto,alterado_por,usuário que alterou,uuid,sim,36,UUID v4,—,—,não,Usuario.id,não
+ENT-022 UsuarioPerfil,id,identificador da atribuição,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-022 UsuarioPerfil,tenant_id,tenant da atribuição,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-022 UsuarioPerfil,usuario_id,usuário,uuid,sim,36,UUID v4,—,—,não,Usuario.id,não
+ENT-022 UsuarioPerfil,perfil_id,perfil atribuído,uuid,sim,36,UUID v4,—,—,não,Perfil.id,não
+ENT-022 UsuarioPerfil,criado_em,data da atribuição,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-022 UsuarioPerfil,criado_por,usuário que atribuiu,uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
+ENT-023 HistoricoAtributoRespondente,id,identificador do registro,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-023 HistoricoAtributoRespondente,tenant_id,tenant,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-023 HistoricoAtributoRespondente,respondente_id,respondente alterado,uuid,sim,36,UUID v4,—,—,não,Respondente.id,pessoal (indireto)
+ENT-023 HistoricoAtributoRespondente,aplicacao_id,aplicação que alterou o atributo,uuid,sim,36,UUID v4,—,—,não,Aplicacao.id,não
+ENT-023 HistoricoAtributoRespondente,atributo,atributo alterado,enum,sim,—,—,nome; data_nascimento; endereco,—,não,—,não
+ENT-023 HistoricoAtributoRespondente,valor_anterior_cifrado,valor antes da alteração (NULL se não havia),bytea,não,variável,AES-256-GCM,—,NULL,não,—,sensível
+ENT-023 HistoricoAtributoRespondente,valor_gravado_hash,HMAC do valor gravado pela aplicação (reversão só se o atual ainda for este),bytea,sim,32,HMAC-SHA256 com chave do tenant,—,—,não,—,sensível
+ENT-023 HistoricoAtributoRespondente,criado_em,data da alteração,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-024 LinhaMatriz,id,identificador da linha,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-024 LinhaMatriz,tenant_id,tenant,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-024 LinhaMatriz,pergunta_id,pergunta do tipo matriz,uuid,sim,36,UUID v4,—,—,não,Pergunta.id,não
+ENT-024 LinhaMatriz,codigo,código estável da linha,varchar,sim,50,^[a-z0-9_]+$,—,—,sim (por pergunta),—,não
+ENT-024 LinhaMatriz,rotulo,texto impresso,varchar,sim,200,—,—,—,não,—,não
+ENT-024 LinhaMatriz,ordem,ordem,int,sim,—,—,≥ 1,—,não,—,não
+ENT-025 PaginaAplicacao,id,identificador da imagem/página,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-025 PaginaAplicacao,tenant_id,tenant,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-025 PaginaAplicacao,aplicacao_id,aplicação,uuid,sim,36,UUID v4,—,—,não,Aplicacao.id,não
+ENT-025 PaginaAplicacao,tipo,finalidade da imagem: `assinatura` é a página 1 assinada anexada em `sem_assinatura` (CA-044); a página 1 original é mantida,enum,sim,—,—,formulario; assinatura,formulario,não,—,não
+ENT-025 PaginaAplicacao,numero_pagina,página da versão (NULL até identificar),int,não,—,—,≥ 1,NULL,não,—,não
+ENT-025 PaginaAplicacao,chave_storage,chave do objeto no bucket privado,varchar,sim,500,—,—,—,sim,—,não
+ENT-025 PaginaAplicacao,sha256,hash do arquivo sem metadados,bytea,sim,32,SHA-256,—,—,não,—,não
+ENT-025 PaginaAplicacao,registro_ok,registro da imagem pelos marcadores (DEC-048),boolean,sim,—,—,true/false,false,não,—,não
+ENT-025 PaginaAplicacao,criado_em,data do upload,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-025 PaginaAplicacao,expurgada_em,data do expurgo físico,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
+ENT-026 Exportacao,id,identificador da exportação,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-026 Exportacao,tenant_id,tenant,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-026 Exportacao,usuario_id,quem pediu,uuid,sim,36,UUID v4,—,—,não,Usuario.id,não
+ENT-026 Exportacao,projeto_ids,projetos incluídos,uuid[],sim,—,UUID v4,—,—,não,—,não
+ENT-026 Exportacao,formato,formato,enum,sim,—,—,csv; xlsx,—,não,—,não
+ENT-026 Exportacao,escopo,escopo,enum,sim,—,—,agregado; linha_a_linha,—,não,—,não
+ENT-026 Exportacao,status,situação,enum,sim,—,—,enfileirada; em_andamento; concluida; falhou; cancelada,enfileirada,não,—,não
+ENT-026 Exportacao,chave_storage,objeto gerado (NULL até concluir ou após expurgo),varchar,não,500,—,—,NULL,não,—,não
+ENT-026 Exportacao,criado_em,data do pedido,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-026 Exportacao,expira_em,data de expurgo do arquivo,timestamp,não,—,ISO 8601 UTC,—,concluida + retencao_exportacao_dias,não,—,não
+ENT-027 Sessao,id,identificador da sessão,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-027 Sessao,tenant_id,tenant do usuário,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-027 Sessao,usuario_id,usuário,uuid,sim,36,UUID v4,—,—,não,Usuario.id,não
+ENT-027 Sessao,tipo,tipo,enum,sim,—,—,pre_sessao; plena,pre_sessao,não,—,não
+ENT-027 Sessao,segredo_hash,hash do segredo do cookie,bytea,sim,32,SHA-256,—,—,sim,—,sensível
+ENT-027 Sessao,criada_em,criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-027 Sessao,ultima_atividade_em,última atividade,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-027 Sessao,expira_absoluta_em,expiração absoluta (24 h; pré-sessão 5 min),timestamp,sim,—,ISO 8601 UTC,—,—,não,—,não
+ENT-027 Sessao,revogada_em,encerramento,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
+ENT-027 Sessao,ip,IP de criação,inet,não,—,IPv4/IPv6,—,NULL,não,—,pessoal
+ENT-028 TokenUsoUnico,id,identificador do token,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-028 TokenUsoUnico,tenant_id,tenant do usuário,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-028 TokenUsoUnico,usuario_id,usuário,uuid,sim,36,UUID v4,—,—,não,Usuario.id,não
+ENT-028 TokenUsoUnico,tipo,finalidade,enum,sim,—,—,convite; recuperacao_senha; reset_mfa,—,não,—,não
+ENT-028 TokenUsoUnico,token_hash,hash do token enviado por e-mail,bytea,sim,32,SHA-256,—,—,sim,—,sensível
+ENT-028 TokenUsoUnico,expira_em,expiração (convite 24 h; recuperação 60 min),timestamp,sim,—,ISO 8601 UTC,—,—,não,—,não
+ENT-028 TokenUsoUnico,usado_em,uso (uso único),timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
+ENT-029 ChaveIdempotencia,id,identificador,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-029 ChaveIdempotencia,tenant_id,tenant,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-029 ChaveIdempotencia,usuario_id,usuário,uuid,sim,36,UUID v4,—,—,não,Usuario.id,não
+ENT-029 ChaveIdempotencia,chave,valor do header Idempotency-Key,varchar,sim,64,—,—,—,sim (por usuário e operação),—,não
+ENT-029 ChaveIdempotencia,operacao,operationId,varchar,sim,100,—,—,—,não,—,não
+ENT-029 ChaveIdempotencia,hash_requisicao,"HMAC do corpo (detecta reuso com outro conteúdo, ERR-019)",bytea,sim,32,HMAC-SHA256,—,—,não,—,não
+ENT-029 ChaveIdempotencia,resposta,"status HTTP e ID do recurso criado ou alterado; nunca o corpo (o replay devolve o estado atual do recurso, já sujeito a eliminação e autorização)",jsonb,sim,—,JSON,—,—,não,—,não
+ENT-029 ChaveIdempotencia,expira_em,expiração,timestamp,sim,—,ISO 8601 UTC,—,criado_em + 24 h,não,—,não
+ENT-030 FalhaLogin,id,identificador,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-030 FalhaLogin,email_hmac,HMAC do e-mail normalizado (exista ou não a conta),bytea,sim,32,HMAC-SHA256,—,—,sim,—,pessoal (indireto)
+ENT-030 FalhaLogin,tentativas,falhas na janela,int,sim,—,—,0..100,0,não,—,não
+ENT-030 FalhaLogin,janela_inicio,início da janela de 15 min,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-030 FalhaLogin,bloqueado_ate,fim do bloqueio,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não

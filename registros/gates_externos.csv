@@ -1,2 +1,2 @@
 id,descricao,tipo,responsavel_externo,condicao_de_cumprimento,bloqueia,status,evidencia,data
-GX-001,Parecer jurídico sobre tratamento de dados (DPA) e transferência internacional (LGPD Art. 33),jurídico,Advogado/Consultoria LGPD,Documento formal de parecer e minuta de DPA aprovada,produção,pendente,,2026-10-24
+GX-001,Parecer jurídico sobre tratamento de dados (DPA) e transferência internacional (LGPD Art. 33) para o provedor de IA.,jurídico,Advogado/Consultoria LGPD,"Documento formal de parecer e minuta de DPA aprovada, garantindo que o provedor de IA não usa dados para treino e que a transferência internacional está legalmente amparada.",produção (Fase 6 e Piloto),pendente,—,24/10/2026
