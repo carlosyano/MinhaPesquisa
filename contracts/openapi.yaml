@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.2.6
+  version: 0.2.7
   description: |
     API do SaaS MinhaPesquisa — digitalização de pesquisas em papel com leitura por IA,
     revisão humana e dashboards anonimizados, em conformidade com a LGPD.
-    Fonte normativa: REQ v1.9 e PLANO.md v2.10. Contract-first — este arquivo valida
+    Fonte normativa: REQ v1.10 e PLANO.md v2.11. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: rotas públicas declaram `security: []`; rotas de MFA usam a pré-sessão (DEC-050);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -505,7 +505,7 @@ paths:
       summary: Concede acesso individual por 90 dias, com justificativa
       description: |
         Vale enquanto ativo e dentro de `valido_ate` (90 dias, DEC-031). Já existindo concessão
-        vigente para o par usuário/projeto, ou usuário sem o perfil `analista` → ERR-018 (CA-025, DEC-080).
+        vigente para o par usuário/projeto, ou usuário sem o perfil `analista_individual` → ERR-018 (CA-025, DEC-080, Q-030).
       x-trace: [RF-001, CA-025, DEC-031]
       security:
         - sessionCookie: []

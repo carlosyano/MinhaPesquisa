@@ -1,9 +1,9 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-007 aceitas
-Versão: 1.9
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-008 aceitas
+Versão: 1.10
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado)
 Responsável: Carlos Yano
@@ -173,7 +173,7 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-077 | 29/10/2026 | negócio | Valores de aplicação descartada | Apagar no descarte; manter até a retenção | No descarte, `valor_ia` e `valor_final` dos itens são apagados com as imagens e a aplicação vai para a ListaEliminacoes (motivo `descarte_aplicacao`) para reaplicação após restore; fica a auditoria | Minimização (LGPD) (Q-024) | definitivo | Médio | RF-008, CA-033, RN-030 |
 | DEC-078 | 29/10/2026 | negócio | Respondente sem aplicação após reabertura | Anonimizar; manter até a retenção | Respondente que fica sem aplicação concluída após reabertura é anonimizado e registrado na ListaEliminacoes só para reaplicação após restore (motivo `anonimizacao_reabertura`), com auditoria | Sem finalidade para manter (Q-025) | definitivo | Médio | RF-005, CA-042 |
 | DEC-079 | 29/10/2026 | negócio | Campo obrigatório ilegível | Bloquear conclusão; concluir sem vínculo | Nome, nascimento, data ou local ilegível, rasurado ou não se aplica → ERR-006 até informar o valor; CPF ilegível → `aguardando_cpf` | Integridade mínima (DEC-020) (Q-026) | definitivo | Médio | RF-008, DEC-020, CA-032 |
-| DEC-080 | 29/10/2026 | negócio | Concessão individual sem perfil | Recusar; permitir | Concessão recusada (ERR-018) se o usuário não tiver o perfil `analista` | Evita concessão sem efeito ou indevida (Q-027) | definitivo | Baixo | RF-001, CA-025 |
+| DEC-080 | 29/10/2026 | negócio | Concessão individual sem perfil | Recusar; permitir | Concessão recusada (ERR-018) se o usuário não tiver o perfil `analista_individual` (DEC-060; texto corrigido pela Q-030) | Evita concessão sem efeito ou indevida (Q-027, Q-030) | definitivo | Baixo | RF-001, CA-025 |
 | DEC-081 | 29/10/2026 | negócio | Faixa abaixo de 60 | Criar faixa; excluir | Faixa `<60` com o mesmo mínimo das demais; complementa a DEC-071 | Público pode ter menos de 60 (Q-028) | definitivo | Baixo | RF-009, DEC-071 |
 | DEC-082 | 29/10/2026 | negócio | Novo MFA após reset | Link por e-mail; próximo login | Após o reset, o novo cadastro só começa pelo link de uso único (24 h) enviado ao e-mail, com a senha; login com `mfa_ativo = false` não cria pré-sessão (ERR-013) | Quem tem só a senha não cadastra MFA (Q-029) | definitivo | Alto | RF-001, RF-002, CA-037b, CA-026b |
 
@@ -834,7 +834,7 @@ Filtros e comparações entre versões (RN-018) usam este formato.
 **RF-001 — Gestão de usuários, perfis e vínculo a projetos**
 Quem executa: Administrador do tenant.
 Quando pode: Quando o usuário tem o perfil `admin_tenant` no tenant.
-Quando não pode: Quando não tem o perfil ou tenta acessar outro tenant; desativar ou retirar o perfil `admin_tenant` do último administrador ativo do tenant (ERR-018); conceder acesso individual a usuário sem o perfil `analista` (ERR-018, DEC-080).
+Quando não pode: Quando não tem o perfil ou tenta acessar outro tenant; desativar ou retirar o perfil `admin_tenant` do último administrador ativo do tenant (ERR-018); conceder acesso individual a usuário sem o perfil `analista_individual` (ERR-018, DEC-080, Q-030).
 Entradas: dados do usuário (e-mail, nome, um ou mais perfis), projeto(s) a vincular; concessão e revogação de acesso individual (justificativa).
 Sucesso: usuário criado ou atualizado, vínculo salvo, convite enviado.
 Erro e timeout: ERR-001 (validação), ERR-002 (recurso não encontrado), ERR-016 (sem permissão), ERR-017 (edição concorrente), timeout de 30 s no envio de e-mail.
@@ -1477,7 +1477,7 @@ Quando o acesso é concedido com justificativa
 Então o acesso vale por 90 dias
 E expira sozinho
 E cada abertura de ficha fica auditada
-E concessão a usuário sem o perfil `analista` é recusada com ERR-018 (DEC-080)
+E concessão a usuário sem o perfil `analista_individual` é recusada com ERR-018 (DEC-060, DEC-080, Q-030)
 
 CA-026 — Autenticação
 Dado que o usuário tenta fazer login
@@ -1706,6 +1706,7 @@ Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, f
 | Q-027 | 29/10/2026 | Concessão individual a usuário sem perfil de analista | Hoje nada impede conceder acesso linha a linha a um usuário que não tem perfil para ver dados individuais (B-N7) | A: recusar a concessão se o usuário não tiver o perfil exigido | B: permitir; a concessão só vale se o perfil for dado depois | — | A | Concessão individual só para usuário com o perfil exigido; caso contrário é recusada. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, CA-025 |
 | Q-028 | 29/10/2026 | Idade abaixo de 60 nos filtros | As faixas da DEC-071 começam em 60-64; respondentes com menos de 60 não têm faixa definida (B-N6) | A: criar a faixa "menos de 60" | B: respondentes com menos de 60 ficam fora dos filtros de idade | — | A | Há a faixa "menos de 60", sujeita ao mesmo mínimo das demais. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-009, DEC-071 |
 | Q-029 | 29/10/2026 | Novo cadastro de MFA após reset | Após o reset pelo administrador, quem tiver só a senha cadastra o próprio MFA antes do titular (risco residual da correção A-01) | A: após o reset, o novo cadastro exige link de uso único enviado por e-mail, como no convite | B: manter o cadastro no próximo login e aceitar o risco | — | A | Após o reset de MFA, o novo cadastro só começa por link de uso único enviado ao e-mail do usuário, válido por 24 horas. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, RF-002, CA-037b, CA-026b |
+| Q-030 | 29/10/2026 | Perfil exigido para a concessão individual | A DEC-060 exige o perfil `analista_individual` para o acesso individual, mas a DEC-080, o RF-001 e o CA-025 recusam a concessão só a quem não tem o perfil `analista`; com `analista`, a concessão ficaria sem efeito | A: exigir `analista_individual` (coerente com a DEC-060) | B: exigir `analista` | — | A | A concessão individual só é aceita para usuário com o perfil `analista_individual`; caso contrário, ERR-018. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, CA-025, DEC-060, DEC-080 |
 
 10. Gates externos (GX)
 
@@ -1734,7 +1735,7 @@ Testes sentinela são casos de teste de alto nível que validam os riscos críti
 
 Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tools/validar_consistencia.py`; o resultado do script prevalece sobre este texto.
 
-- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-048, ENT-001 a ENT-030, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 47 CAs (CA-001 a CA-044, CA-014b, CA-026b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-082 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), Q-001 a Q-029 e GX-001. Verificado por script (IDs citados existem nos registros).
+- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-048, ENT-001 a ENT-030, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 47 CAs (CA-001 a CA-044, CA-014b, CA-026b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-082 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), Q-001 a Q-030 e GX-001. Verificado por script (IDs citados existem nos registros).
 - [x] 2. BDD com dados concretos: tabelas de exemplos nos CAs de alto risco CA-002, CA-008, CA-010, CA-012, CA-023, CA-029, CA-030, CA-032 e CA-043 (adicionadas na v1.3; na v1.2 só o CA-029 tinha tabela).
 - [x] 3. Estados e fluxos fechados: FL-001 com tabela de criação e entradas em `aguardando_cota`; FL-002 com ordem de avaliação explícita. Estados verificados por script contra o dicionário e o contrato.
 - [x] 4. Dicionário de dados completo: 30 entidades com as 11 propriedades; `registros/dicionario_dados.csv` idêntico, verificado por script.
@@ -1745,7 +1746,7 @@ Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tool
 - [x] 9. Testes sentinela cobrindo riscos: TS-001 a TS-008.
 - [x] 10. Gates externos registrados: GX-001 (bloqueia piloto e produção).
 - [x] 11. Nenhum trecho exige "bom senso": lacunas resolvidas pelas DEC-054 a DEC-060 e DEC-064 a DEC-072.
-- [x] 12. Toda Q respondida: Q-001 a Q-029.
+- [x] 12. Toda Q respondida: Q-001 a Q-030.
 - [ ] 13. Consenso DEV/TEST sem divergência bloqueante: depende da próxima rodada de revisão independente.
 - [x] 14. REQ autocontida: referências externas (MeuRemedio, Kit v3) são informativas; o Bloco P está em `docs/spec/BLOCO_P.md`.
 - [ ] 15. Última revisão independente sem achado bloqueante ou alto, com médios e baixos registrados (DEC-061, DEC-073): pendente (REV-REQ-007).
