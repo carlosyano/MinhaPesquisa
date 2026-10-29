@@ -1,6 +1,6 @@
 # CI (PLANO §9.4): consistência, contrato, testes de integração com PostgreSQL 17 real,
 # segredos (gitleaks), análise estática (Semgrep, DEC-089), dependências e SBOM.
-# Pendentes: ESLint e mutação (DEC-052) no próximo PR do IMP-001; E2E com as telas.
+# ESLint e mutação (DEC-052) no job qualidade. Pendente: E2E com as telas.
 name: ci
 
 on:
@@ -111,3 +111,17 @@ jobs:
         with:
           name: sbom
           path: sbom.cdx.json
+
+  qualidade:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: Teste de mutação (Stryker, DEC-052; mínimo 80%)
+        run: npm run test:mutacao
