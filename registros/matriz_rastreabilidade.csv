@@ -1,6 +1,6 @@
 requisito,regra,entidade,fluxo,historia,criterio,teste_sentinela,operation_id,componente,incremento
 RF-001,"RN-001, RN-003, RN-004","ENT-002, ENT-003, ENT-014, ENT-015, ENT-022",FL-001,US-010,"CA-012, CA-016, CA-025, CA-035, CA-037, CA-037b, CA-038",TS-001,"listUsers, createTenantUser, getUser, updateUser, inviteUser, resetMfa, grantIndividualAccess, listIndividualAccessGrants, revokeAccess",CMP-Auth,IMP-001
-RF-002,RN-048,"ENT-002, ENT-027, ENT-028, ENT-030",FL-001,US-010,"CA-026, CA-026b, CA-037, CA-037b",—,"login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite",CMP-Auth,IMP-001
+RF-002,RN-048,"ENT-002, ENT-027, ENT-028, ENT-030",FL-001,US-010,"CA-026, CA-026b, CA-037, CA-037b",—,"login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite, acceptMfaReset",CMP-Auth,IMP-001
 RF-003,RN-027,"ENT-004, ENT-020, ENT-021",FL-001,US-006,CA-027,—,"listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject",CMP-Projects,IMP-002
 RF-004,"RN-017, RN-018, RN-019, RN-021, RN-042, RN-047","ENT-005, ENT-006, ENT-007, ENT-008, ENT-016, ENT-024",FL-001,US-007,"CA-001, CA-028, CA-036",TS-006,"listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf",CMP-Forms,IMP-002
 RF-005,"RN-011, RN-012, RN-014, RN-015","ENT-009, ENT-010","FL-001, FL-002",US-003,"CA-002, CA-014, CA-014b, CA-032",—,linkRespondent (interna),CMP-Respondents,IMP-003
