@@ -832,10 +832,10 @@ Estado final: usuário ativo ou inativo, vínculo criado ou removido.
 **RF-002 — Autenticação, sessões, recuperação de senha e MFA**
 Quem executa: Qualquer usuário.
 Quando pode: Com credenciais válidas.
-Quando não pode: Após 5 falhas em 15 min (bloqueio de 15 min), ou sessão expirada (30 min inatividade ou 24 h).
+Quando não pode: Após 5 falhas em 15 min (bloqueio de 15 min), ou sessão expirada (30 min inatividade ou 24 h). Cadastrar MFA (`startMfaSetup`, `setupMfa`) só é permitido com pré-sessão na etapa `mfa_cadastro` e `mfa_ativo = false` no momento da chamada; verificar MFA (`verifyMfa`) só na etapa `mfa_verificacao`; fora disso → ERR-018 (CA-026b).
 Entradas: e-mail, senha, código MFA; token de convite ou de recuperação (uso único).
 Sucesso: sessão criada, MFA verificado, no máximo 3 sessões ativas.
-Erro e timeout: ERR-013 (credenciais inválidas), ERR-014 (bloqueio por tentativas, aplicado por e-mail exista ou não a conta), ERR-012 (código MFA inválido), ERR-011 (link inválido ou expirado), ERR-015 (sessão expirada), ERR-021 (limite de 3 sessões ativas).
+Erro e timeout: ERR-013 (credenciais inválidas), ERR-014 (bloqueio por tentativas, aplicado por e-mail exista ou não a conta), ERR-012 (código MFA inválido), ERR-011 (link inválido ou expirado), ERR-015 (sessão expirada), ERR-021 (limite de 3 sessões ativas), ERR-018 (operação de MFA fora da etapa da pré-sessão).
 Registros alterados: Usuario (ultimo_login, situacao), Sessao, TokenUsoUnico, FalhaLogin, Auditoria.
 Mensagens: exatamente as do catálogo para ERR-011 a ERR-015 e ERR-021 (genéricas, sem revelar se a conta existe).
 Estado final: autenticado ou bloqueado.
@@ -1396,7 +1396,7 @@ Então o sistema gera os dados do respondente em formato CSV ou JSON
 E a auditoria registra a execução sem conter os dados pessoais
 
 **US-010 — Como administrador do tenant, quero gerenciar usuários e perfis para controlar o acesso ao sistema.**
-Relacionado a: RF-001, RF-002, CA-012, CA-013, CA-014, CA-014b, CA-016, CA-021, CA-025, CA-026, CA-030, CA-033, CA-035, CA-037, CA-037b, CA-038, CA-039, CA-040, CA-041, CA-042, CA-043, CA-044
+Relacionado a: RF-001, RF-002, CA-012, CA-013, CA-014, CA-014b, CA-016, CA-021, CA-025, CA-026, CA-026b, CA-030, CA-033, CA-035, CA-037, CA-037b, CA-038, CA-039, CA-040, CA-041, CA-042, CA-043, CA-044
 
 CA-012 — Isolamento entre tenants
 Dado que o usuário "user-A" pertence ao tenant "tenant-A"
@@ -1455,6 +1455,23 @@ Quando ele erra a senha 5 vezes em 15 minutos
 Então novas tentativas são bloqueadas por 15 minutos
 E a resposta não revela se a conta existe
 E o MFA é obrigatório após o login bem-sucedido
+
+CA-026b — Cadastro de MFA só na etapa de cadastro
+Dado que o login com senha criou uma pré-sessão com a etapa definida pelo servidor (`mfa_cadastro` se `mfa_ativo = false`, senão `mfa_verificacao`)
+Quando o usuário chama `startMfaSetup` ou `setupMfa`
+Então a operação só é aceita se a pré-sessão estiver em `mfa_cadastro` e o usuário ainda tiver `mfa_ativo = false`
+E fora disso a resposta é ERR-018, o segredo TOTP existente não é alterado e nenhuma sessão é criada
+E `verifyMfa` só é aceito na etapa `mfa_verificacao`
+E ao concluir `setupMfa` as demais pré-sessões do usuário são encerradas
+
+| Exemplo | Situação | Chamada | Resultado esperado |
+|---|---|---|---|
+| 1 | Primeiro acesso: `mfa_ativo = false`, pré-sessão em `mfa_cadastro` | `startMfaSetup` e depois `setupMfa` com código válido | Segredo gerado; MFA ativo; sessão plena criada |
+| 2 | Usuário com `mfa_ativo = true` (atacante com a senha), pré-sessão em `mfa_verificacao` | `startMfaSetup` | ERR-018; segredo atual mantido; nada gravado |
+| 3 | Usuário com `mfa_ativo = true`, pré-sessão em `mfa_verificacao` | `setupMfa` com qualquer código | ERR-018; nenhuma sessão criada |
+| 4 | Duas pré-sessões em `mfa_cadastro`; a primeira conclui `setupMfa` | `startMfaSetup` na segunda | ERR-018 (pré-sessão encerrada e `mfa_ativo = true`) |
+| 5 | `mfa_ativo = false`, pré-sessão em `mfa_cadastro` | `verifyMfa` | ERR-018 |
+| 6 | Após reset pelo administrador (CA-037b), novo login | `startMfaSetup` na etapa `mfa_cadastro` | Segredo gerado (fluxo do exemplo 1) |
 
 CA-030 — Teto de custo de IA
 Dado que o tenant atingiu o teto mensal de R$ 500,00
@@ -1563,7 +1580,7 @@ A matriz completa é mantida em `registros/matriz_rastreabilidade.csv`, idêntic
 | Requisito | Regra | Entidade | Fluxo | História | Critério | Teste Sentinela | Operation ID | Componente | Incremento |
 |---|---|---|---|---|---|---|---|---|---|
 | RF-001 | RN-001, RN-003, RN-004 | ENT-002, ENT-003, ENT-014, ENT-015, ENT-022 | FL-001 | US-010 | CA-012, CA-016, CA-025, CA-035, CA-037, CA-037b, CA-038 | TS-001 | listUsers, createTenantUser, getUser, updateUser, inviteUser, resetMfa, grantIndividualAccess, listIndividualAccessGrants, revokeAccess | CMP-Auth | IMP-001 |
-| RF-002 | RN-048 | ENT-002, ENT-027, ENT-028, ENT-030 | FL-001 | US-010 | CA-026, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite | CMP-Auth | IMP-001 |
+| RF-002 | RN-048 | ENT-002, ENT-027, ENT-028, ENT-030 | FL-001 | US-010 | CA-026, CA-026b, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite | CMP-Auth | IMP-001 |
 | RF-003 | RN-027 | ENT-004, ENT-020, ENT-021 | FL-001 | US-006 | CA-027 | — | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject | CMP-Projects | IMP-002 |
 | RF-004 | RN-017, RN-018, RN-019, RN-021, RN-042, RN-047 | ENT-005, ENT-006, ENT-007, ENT-008, ENT-016, ENT-024 | FL-001 | US-007 | CA-001, CA-028, CA-036 | TS-006 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf | CMP-Forms | IMP-002 |
 | RF-005 | RN-011, RN-012, RN-014, RN-015 | ENT-009, ENT-010 | FL-001, FL-002 | US-003 | CA-002, CA-014, CA-014b, CA-032 | — | linkRespondent (interna) | CMP-Respondents | IMP-003 |
@@ -1596,7 +1613,7 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 | ERR-015 | SESSION_REQUIRED | 401 | Sessão ausente, expirada (30 min de inatividade ou 24 h) ou encerrada. | Sua sessão expirou. Entre novamente. | info: session_required | Nada é gravado | RF-002, CA-026 | ativo |
 | ERR-016 | FORBIDDEN | 403 | Perfil sem permissão para a ação, ou token CSRF ausente ou inválido. | Você não tem permissão para realizar esta ação. | warn: forbidden_action | Nada é gravado | RF-001, RF-002 | ativo |
 | ERR-017 | STALE_VERSION | 412 | If-Match diferente do ETag atual (edição concorrente); If-Match ausente é erro de validação (ERR-001). | Os dados foram alterados por outra pessoa. Recarregue e tente novamente. | info: stale_etag | Nada é gravado | RF-008, CA-043 | ativo |
-| ERR-018 | INVALID_STATE | 409 | Ação não permitida no estado atual do recurso (FL-001, pedido do titular já executado). | Esta ação não é permitida no estado atual. | info: invalid_state_transition | Nada é gravado | RF-008, RF-010 | ativo |
+| ERR-018 | INVALID_STATE | 409 | Ação não permitida no estado atual do recurso (FL-001, pedido do titular já executado, operação de MFA fora da etapa da pré-sessão). | Esta ação não é permitida no estado atual. | info: invalid_state_transition | Nada é gravado | RF-002, RF-008, RF-010, CA-026b | ativo |
 | ERR-019 | IDEMPOTENCY_CONFLICT | 409 | Chave de idempotência reutilizada com conteúdo diferente. | Esta solicitação já foi enviada com outros dados. Gere uma nova solicitação. | warn: idempotency_conflict | Nada é gravado | RF-006, Bloco P.8 | ativo |
 | ERR-020 | DEPENDENCY_UNAVAILABLE | 503 | Storage, e-mail ou outro serviço interno indisponível após as retentativas. | Serviço temporariamente indisponível. Tente novamente em instantes. | error: dependency_unavailable (serviço) | Nada é gravado | RF-004, RF-006 | ativo |
 | ERR-021 | SESSION_LIMIT_REACHED | 409 | Usuário já tem 3 sessões ativas (Bloco P P.2). | Você já tem 3 sessões ativas. Saia em outro dispositivo ou aguarde até 30 minutos sem uso para entrar. | info: session_limit_reached | Nenhuma sessão nova | RF-002 | ativo |
@@ -1663,7 +1680,7 @@ Testes sentinela são casos de teste de alto nível que validam os riscos críti
 
 Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tools/validar_consistencia.py`; o resultado do script prevalece sobre este texto.
 
-- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-048, ENT-001 a ENT-030, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 46 CAs (CA-001 a CA-044, CA-014b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-073 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), Q-001 a Q-020 e GX-001. Verificado por script (IDs citados existem nos registros).
+- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-048, ENT-001 a ENT-030, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 47 CAs (CA-001 a CA-044, CA-014b, CA-026b, CA-037b), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-073 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), Q-001 a Q-020 e GX-001. Verificado por script (IDs citados existem nos registros).
 - [x] 2. BDD com dados concretos: tabelas de exemplos nos CAs de alto risco CA-002, CA-008, CA-010, CA-012, CA-023, CA-029, CA-030, CA-032 e CA-043 (adicionadas na v1.3; na v1.2 só o CA-029 tinha tabela).
 - [x] 3. Estados e fluxos fechados: FL-001 com tabela de criação e entradas em `aguardando_cota`; FL-002 com ordem de avaliação explícita. Estados verificados por script contra o dicionário e o contrato.
 - [x] 4. Dicionário de dados completo: 30 entidades com as 11 propriedades; `registros/dicionario_dados.csv` idêntico, verificado por script.

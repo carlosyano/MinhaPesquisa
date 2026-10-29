@@ -152,6 +152,8 @@ entidade=Usuario, registro_id=<usuario_id>.
 1. `login` (rota pública) valida e-mail e senha. Falha → ERR-013; 5 falhas em 15 min para o mesmo e-mail (exista ou não a conta, contadas pelo HMAC do e-mail) → ERR-014.
 2. Sucesso cria **pré-sessão** (cookie próprio, 5 min, válida só para `/auth/mfa/*`) e informa a etapa: `mfa_verificacao` ou `mfa_cadastro`.
 3. `startMfaSetup` gera o segredo TOTP **no servidor**, grava cifrado e devolve a URI otpauth; `setupMfa` confirma com um código. `verifyMfa` valida o código para quem já tem MFA. Código errado → ERR-012 (conta como falha de login).
+   - **Guarda de etapa (CA-026b):** a etapa fica gravada na pré-sessão no servidor (nunca vem do cliente). `startMfaSetup` e `setupMfa` exigem etapa `mfa_cadastro` **e** `mfa_ativo = false` relido do banco na chamada (na mesma transação que grava o segredo); `verifyMfa` exige `mfa_verificacao`. Fora disso → ERR-018, sem alterar o segredo nem criar sessão. Sem isso, quem tem só a senha cadastraria um novo TOTP e contornaria o MFA.
+   - Ao concluir `setupMfa`, as demais pré-sessões do usuário são encerradas (evita a corrida entre duas pré-sessões em `mfa_cadastro`).
 4. Só então a sessão plena é criada (30 min de inatividade, 24 h no máximo). Com 3 sessões ativas, a nova é recusada com ERR-021 (mesmo comportamento validado no MeuRemedio, Bloco P P.2).
 5. Identificação do usuário: e-mail único global (DEC-054).
 
@@ -367,7 +369,7 @@ fundação (`.github/workflows/ci.yml`).
 | Erro silencioso | conjunto-ouro | gabarito humano | DEC-004 |
 | Acessibilidade | E2E | Playwright + axe | RNF-012 |
 | Concorrência/reserva | integração | requisições paralelas | CA-043 |
-| Autenticação/MFA/reset MFA | E2E + integração | Playwright + Testcontainers | CA-026, CA-037, CA-037b |
+| Autenticação/MFA/reset MFA | E2E + integração | Playwright + Testcontainers | CA-026, CA-026b, CA-037, CA-037b |
 | Vínculo de respondente (novo/existente) | integração | Testcontainers | CA-002, CA-014, CA-014b |
 | Reabertura com reversão | integração | Testcontainers | CA-042 |
 | Dashboard com gráfico cruzado e k-anon | integração + propriedade | Testcontainers + fast-check | CA-017, CA-034 |
@@ -402,7 +404,7 @@ validada a cada merge.
 
 | IMP | Escopo | CAs cobertos | Entrada | Saída / evidência esperada |
 | --- | --- | --- | --- | --- |
-| IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA |
+| IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-026b, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA |
 | IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada |
 | IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-015, CA-018, CA-019, CA-020, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 aceito | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` |
 | IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-010, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031, CA-034 | IMP-003 aceito | TS-004/TS-005/TS-008; k-anon por célula; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações; grupo mínimo entre projetos |
@@ -413,10 +415,10 @@ incremento inteiro → Gate 2 (aceite do responsável).
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 46 CAs da REQ v1.8
+### 11.1 Cobertura dos 47 CAs da REQ v1.8
 
-A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 46 critérios
-de aceite da REQ v1.8 (CA-001 a CA-044, incluindo CA-014b e CA-037b). O validador
+A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 47 critérios
+de aceite da REQ v1.8 (CA-001 a CA-044, incluindo CA-014b, CA-026b e CA-037b). O validador
 confere que cada CA está no incremento do seu RF.
 
 **CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
@@ -535,7 +537,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 46 CAs da REQ v1.8
+- [x] Estratégia de testes cobre todos os 47 CAs da REQ v1.8
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
@@ -558,7 +560,7 @@ REQ §8.1; o CI falha se divergirem.
 | Requisito | Regra | Entidade | Fluxo | História | Critério | Teste Sentinela | Operation ID | Componente | Incremento |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | RF-001 | RN-001, RN-003, RN-004 | ENT-002, ENT-003, ENT-014, ENT-015, ENT-022 | FL-001 | US-010 | CA-012, CA-016, CA-025, CA-035, CA-037, CA-037b, CA-038 | TS-001 | listUsers, createTenantUser, getUser, updateUser, inviteUser, resetMfa, grantIndividualAccess, listIndividualAccessGrants, revokeAccess | CMP-Auth | IMP-001 |
-| RF-002 | RN-048 | ENT-002, ENT-027, ENT-028, ENT-030 | FL-001 | US-010 | CA-026, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite | CMP-Auth | IMP-001 |
+| RF-002 | RN-048 | ENT-002, ENT-027, ENT-028, ENT-030 | FL-001 | US-010 | CA-026, CA-026b, CA-037, CA-037b | — | login, verifyMfa, startMfaSetup, setupMfa, logout, getCurrentSession, resetPassword, confirmPasswordReset, acceptInvite | CMP-Auth | IMP-001 |
 | RF-003 | RN-027 | ENT-004, ENT-020, ENT-021 | FL-001 | US-006 | CA-027 | — | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject | CMP-Projects | IMP-002 |
 | RF-004 | RN-017, RN-018, RN-019, RN-021, RN-042, RN-047 | ENT-005, ENT-006, ENT-007, ENT-008, ENT-016, ENT-024 | FL-001 | US-007 | CA-001, CA-028, CA-036 | TS-006 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf | CMP-Forms | IMP-002 |
 | RF-005 | RN-011, RN-012, RN-014, RN-015 | ENT-009, ENT-010 | FL-001, FL-002 | US-003 | CA-002, CA-014, CA-014b, CA-032 | — | linkRespondent (interna) | CMP-Respondents | IMP-003 |

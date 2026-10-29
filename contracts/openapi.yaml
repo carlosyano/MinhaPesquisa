@@ -77,8 +77,10 @@ paths:
       operationId: verifyMfa
       tags: [auth]
       summary: Segunda etapa do login (código TOTP)
-      description: Valida o código TOTP de quem já tem MFA e cria a sessão plena (DEC-050).
-      x-trace: [RF-002, CA-026, DEC-050]
+      description: |
+        Valida o código TOTP de quem já tem MFA e cria a sessão plena (DEC-050).
+        Só na etapa `mfa_verificacao` da pré-sessão; fora dela → ERR-018 (CA-026b).
+      x-trace: [RF-002, CA-026, CA-026b, DEC-050]
       security:
         - preSessionCookie: []
           csrfToken: []
@@ -100,7 +102,7 @@ paths:
               schema: { $ref: '#/components/schemas/SessionInfo' }
         '400': { $ref: '#/components/responses/MfaInvalid' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '409': { $ref: '#/components/responses/SessionLimit' }
+        '409': { $ref: '#/components/responses/MfaConflict' }
         '429': { $ref: '#/components/responses/LoginThrottled' }
 
   /auth/mfa/setup/start:
@@ -111,7 +113,9 @@ paths:
       description: |
         O segredo é gerado pelo servidor, gravado cifrado e devolvido uma única vez para
         cadastro no aplicativo autenticador (DEC-050, CA-035, CA-037b).
-      x-trace: [RF-002, CA-035, CA-037b, DEC-050]
+        Só na etapa `mfa_cadastro` da pré-sessão e com `mfa_ativo = false` no momento da chamada;
+        fora disso → ERR-018, sem alterar o segredo existente (CA-026b).
+      x-trace: [RF-002, CA-026b, CA-035, CA-037b, DEC-050]
       security:
         - preSessionCookie: []
           csrfToken: []
@@ -132,8 +136,11 @@ paths:
       operationId: setupMfa
       tags: [auth]
       summary: Confirma o cadastro do MFA com um código e cria a sessão
-      description: Confirma o segredo gerado em startMfaSetup (CA-035, CA-037b).
-      x-trace: [RF-002, CA-035, CA-037b, DEC-050]
+      description: |
+        Confirma o segredo gerado em startMfaSetup (CA-035, CA-037b). Só na etapa `mfa_cadastro`
+        e com `mfa_ativo = false`; fora disso → ERR-018, sem criar sessão (CA-026b). Ao concluir,
+        as demais pré-sessões do usuário são encerradas.
+      x-trace: [RF-002, CA-026b, CA-035, CA-037b, DEC-050]
       security:
         - preSessionCookie: []
           csrfToken: []
@@ -155,7 +162,7 @@ paths:
               schema: { $ref: '#/components/schemas/SessionInfo' }
         '400': { $ref: '#/components/responses/MfaInvalid' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '409': { $ref: '#/components/responses/SessionLimit' }
+        '409': { $ref: '#/components/responses/MfaConflict' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /auth/logout:
@@ -1966,15 +1973,17 @@ components:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-039', title: QR inválido, status: 400, detail: QR code inválido para o contexto atual. Informe manualmente., errorCode: ERR-039, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
-    SessionLimit:
-      description: Limite de 3 sessões ativas (ERR-021)
+    MfaConflict:
+      description: Operação de MFA fora da etapa da pré-sessão (ERR-018, CA-026b) ou limite de 3 sessões ativas (ERR-021)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
-          schema:
-            allOf:
-              - $ref: '#/components/schemas/ProblemDetails'
-              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-021', title: Limite de sessões, status: 409, detail: Você já tem 3 sessões ativas. Saia em outro dispositivo ou aguarde até 30 minutos sem uso para entrar., errorCode: ERR-021, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+          examples:
+            etapaInvalida:
+              value: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-018', title: Estado inválido, status: 409, detail: Esta ação não é permitida no estado atual., errorCode: ERR-018, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+            limiteSessoes:
+              value: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-021', title: Limite de sessões, status: 409, detail: Você já tem 3 sessões ativas. Saia em outro dispositivo ou aguarde até 30 minutos sem uso para entrar., errorCode: ERR-021, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     ServiceUnavailable:
       description: Dependência indisponível após retentativas (ERR-020)
       headers:
