@@ -6,8 +6,8 @@
 **Fontes normativas:** REQ v1.11 (CHG-009 aceita em 03/11/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.14
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002
+**Versão do plano:** 2.15
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103)
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -409,7 +409,7 @@ validada a cada merge.
 | IMP | Escopo | CAs cobertos | Entrada | Saída / evidência esperada | Status |
 | --- | --- | --- | --- | --- | --- |
 | IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-026b, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA | aceito (Gate 2, 29/10/2026; E2E com navegador pendente) |
-| IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada | planejado |
+| IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada | em desenvolvimento |
 | IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-015, CA-018, CA-019, CA-020, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 aceito | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` | planejado |
 | IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-010, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031, CA-034 | IMP-003 aceito | TS-004/TS-005/TS-008; k-anon por célula; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações; grupo mínimo entre projetos | planejado |
 
@@ -525,6 +525,9 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-092 | 03/11/2026 | técnica | Processo de trabalho alinhado ao kit v3 | Manter o processo de 29/10/2026; adotar o kit v3 integralmente; adotar o kit v3 com o merge sempre pelo responsável | Adotar o kit v3 com três ajustes: (1) todo PR é juntado só pelo responsável, inclusive os não normativos; (2) mudança retroativa proporcional (CHG classificada como esclarecimento ou normativa, impacto pela matriz, bloqueio seletivo, propagação de cima para baixo), com as colunas fase_origem, classificacao e trabalho_bloqueado em controle_mudancas.csv; (3) ciclo de verificação com revisor novo a cada rodada e regra anti-oscilação, mantido o critério de parada da DEC-073. O status de cada IMP passa a vir do §11 | Escolha do responsável (03/11/2026): ele faz todos os merges para economizar tokens; o critério da DEC-073 continua valendo no lugar do critério do kit (sem médios) | definitivo | | Médio | AGENTS.md §3, §5 e §7; DEC-053, DEC-061, DEC-073 |
 | DEC-099 | 03/11/2026 | técnica | Alcance do getPageImage (M-07) | Qualquer perfil do projeto; só digitalizador com regras por estado | Só digitalizador vinculado ao projeto (outro perfil → ERR-016; sem vínculo → ERR-002). Em `identificacao_pendente`, qualquer digitalizador vinculado; nos estados com reserva (IMP-003), só o titular da reserva ativa; nos demais estados → ERR-018. Todo acesso concedido é auditado com o id da imagem em `registro_id` | Minimização do acesso à imagem inteira (RN-029, DEC-034); escolha do responsável em 03/11/2026 (CHG-009, item 6) | definitivo | | Médio | RF-006, RN-029, DEC-034 |
 | DEC-100 | 03/11/2026 | técnica | Versão de outro tenant informada no identifyApplication (B-N8) | 404 ERR-002; 400 ERR-039 | 400 ERR-039, igual a versão inexistente, sem revelar que a versão existe; a tentativa é auditada | Mesmo tratamento do QR de outro tenant (CA-039); escolha do responsável em 03/11/2026 (CHG-009, item 7) | definitivo | | Baixo | CA-039, ERR-039, RN-002 |
+| DEC-101 | 03/11/2026 | técnica | Armazenamento das imagens no IMP-002 | Integrar o S3 agora; interface agora, S3 na implantação | Interface Armazenamento (gravar, apagar, link assinado, contagem); chave `tenant/<tenant>/aplicacao/<aplicação>/<imagem>.jpg`, sem dado pessoal; nos testes, implementação em memória com links assinados por HMAC e expiração pelo relógio injetado; o adaptador do Amazon S3 (sa-east-1, bucket privado, sem versionamento, fora do backup) entra na implantação | Mesmo padrão do e-mail (DEC-088): a API não sobe fora de teste sem o adaptador real | definitivo | | Médio | RN-029, RN-030, DEC-034, DEC-088 |
+| DEC-102 | 03/11/2026 | técnica | Antimalware nos testes e em produção (DEC-042) | ClamAV em contêiner no CI; equivalente que reconhece o EICAR | Produção: cliente clamd (INSTREAM, 30 s; resposta inesperada ou tempo esgotado é falha, nunca "limpo"). Testes: equivalente que reconhece a assinatura EICAR, sem baixar a base de vírus. O cliente clamd é verificado contra um ClamAV real antes do piloto | CI rápido; a base de vírus tem centenas de MB | definitivo | | Médio | DEC-042, CA-029 |
+| DEC-103 | 03/11/2026 | técnica | Itens de resposta (ItemResposta) na criação da aplicação | Criar `pendente_leitura` no upload; criar na leitura | Os itens nascem com a leitura, no IMP-003; no IMP-002 a aplicação em `em_leitura` tem só as páginas e o evento `leitura.solicitada` no outbox | A versão só fica certa quando a aplicação sai de `identificacao_pendente`; evita criar e apagar itens | definitivo | | Baixo | RF-006, RF-007, FL-001 |
 
 ---
 
@@ -648,4 +651,4 @@ REQ §8.1; o CI falha se divergirem.
 
 ---
 
-**Fim do documento `PLANO.md` v2.14**
+**Fim do documento `PLANO.md` v2.15**

@@ -160,11 +160,12 @@ export class FiltroErros implements ExceptionFilter {
       type: `https://api.minhapesquisa.example.com.br/errors/${api.errId}`,
       title: def.titulo,
       status: def.status,
-      detail: def.mensagem,
+      detail: api.extras.substituir !== undefined ? def.mensagem.replace(/\[[^\]]+\]/, api.extras.substituir) : def.mensagem,
       errorCode: api.errId,
       correlationId: req.correlationId,
     };
     if (api.extras.campos?.length) corpo.campos = api.extras.campos;
+    if (api.extras.motivo) corpo.motivo = api.extras.motivo;
     if (api.extras.retryAfter !== undefined) res.header('Retry-After', String(api.extras.retryAfter));
     res.status(def.status).header('Content-Type', 'application/problem+json; charset=utf-8').send(JSON.stringify(corpo));
   }
