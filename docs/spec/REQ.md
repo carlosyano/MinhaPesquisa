@@ -1,9 +1,9 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-008 aceitas
-Versão: 1.10
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-009 aceitas
+Versão: 1.11
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado)
 Responsável: Carlos Yano
@@ -104,6 +104,9 @@ Um filtro estreito (ex.: projeto X, idade 91, viúva) pode identificar uma pesso
 | retencao_dias | tenant | NULL (sem expurgo por tempo até GX-001) | 1..3650 | Administrador da plataforma, por script, com auditoria | RN-030, Q-002, DEC-059 |
 | cotacao_usd_brl | plataforma, por mês civil | — (obrigatória para o mês corrente; sem ela, nenhuma leitura é feita) | > 0 | Administrador da plataforma, por script, com auditoria | DEC-058 |
 | retencao_exportacao_dias | plataforma | 7 (DEC-069) | 1..90 | Administrador da plataforma, por script, com auditoria | RN-030, Q-017 |
+| termo_consentimento | tenant | texto padrão abaixo [PROVISÓRIO até o GX-001] | texto de 1 a 1000 caracteres | Administrador da plataforma, por script, com auditoria | DEC-094, RN-041, GX-001 |
+
+Texto padrão de `termo_consentimento` [PROVISÓRIO até o parecer do GX-001; o tenant, como controlador (RN-041), pode substituí-lo]: "Termo de consentimento. Autorizo o uso das minhas respostas a este formulário, inclusive as de saúde, pela instituição responsável pela pesquisa, para fins de acompanhamento e análise, conforme a Lei Geral de Proteção de Dados (Lei 13.709/2018). Posso pedir acesso, correção ou eliminação dos meus dados a qualquer momento." Abaixo do texto, o PDF traz o campo "Assinatura do respondente" (DEC-094).
 
 Fonte única: todos os parâmetros vivem em ParametroConfiguracao (ENT-020). Ausente no nível mais específico, vale o nível acima (projeto → tenant → plataforma); ausente em todos, vale o padrão desta tabela.
 
@@ -176,6 +179,12 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-080 | 29/10/2026 | negócio | Concessão individual sem perfil | Recusar; permitir | Concessão recusada (ERR-018) se o usuário não tiver o perfil `analista_individual` (DEC-060; texto corrigido pela Q-030) | Evita concessão sem efeito ou indevida (Q-027, Q-030) | definitivo | Baixo | RF-001, CA-025 |
 | DEC-081 | 29/10/2026 | negócio | Faixa abaixo de 60 | Criar faixa; excluir | Faixa `<60` com o mesmo mínimo das demais; complementa a DEC-071 | Público pode ter menos de 60 (Q-028) | definitivo | Baixo | RF-009, DEC-071 |
 | DEC-082 | 29/10/2026 | negócio | Novo MFA após reset | Link por e-mail; próximo login | Após o reset, o novo cadastro só começa pelo link de uso único (24 h) enviado ao e-mail, com a senha; login com `mfa_ativo = false` não cria pré-sessão (ERR-013) | Quem tem só a senha não cadastra MFA (Q-029) | definitivo | Alto | RF-001, RF-002, CA-037b, CA-026b |
+| DEC-093 | 03/11/2026 | negócio | CA-003 enviava só a página 2 e esperava `em_leitura`, contra a linha 3 da criação da FL-001 (página faltante) | Ajustar a FL-001; esclarecer o CA-003 | Esclarecimento: no CA-003 o digitalizador envia as 4 páginas da versão em JPEG e a página 2 é identificada pelo QR; a FL-001 não muda | Encontrado no IA-TEST do IMP-002 (CHG-009, item 1) | definitivo | Baixo | CA-003, FL-001 |
+| DEC-094 | 03/11/2026 | negócio | Texto do termo de consentimento da página 1 (CA-028) | Texto fixo do sistema; texto por tenant | Texto por tenant no parâmetro `termo_consentimento` (seção 2.9), definido por script, com texto padrão provisório até o GX-001 | O tenant é o controlador e responde pela base legal (RN-041) (CHG-009, item 2) | provisório | Médio | CA-028, RN-041, GX-001 |
+| DEC-095 | 03/11/2026 | negócio | Validação das regras de salto (M-09) | Validar na publicação; validar no rascunho | No rascunho (`updateVersion`), ERR-001 quando: a origem não é `sim_nao` nem `escolha_unica`; a opção não existe na origem; origem e destino são a mesma pergunta; a regra fecha um ciclo; o destino vem antes da origem (`ordem`) | Erro apontado na hora da edição (CHG-009, item 3) | definitivo | Médio | RN-021, RF-004 |
+| DEC-096 | 03/11/2026 | negócio | Erro da estrutura da RN-047 (M-19) | ERR-001 no rascunho; ERR-036 na publicação | Mantém a recusa na publicação com ERR-036; `campos` traz os códigos das perguntas com estrutura inválida (matriz sem linhas, múltipla escolha sem `nenhuma_das_anteriores`), junto com os campos da RN-017 que faltarem | Preserva a RN-047 e diz ao administrador qual pergunta corrigir (CHG-009, item 4) | definitivo | Baixo | RN-047, CA-036, ERR-036 |
+| DEC-097 | 03/11/2026 | negócio | Sensibilidade `identificacao` em pergunta comum (M-14) | Livre; reservada | `identificacao` é reservada às perguntas com `campo_respondente` ou `campo_aplicacao = aplicador` (definida automaticamente); nas demais o administrador escolhe `saude` ou `outro`; `identificacao` nelas → ERR-001 | Evita que dado de saúde vá na chamada de identificação (RN-039) (CHG-009, item 5) | definitivo | Médio | RN-039, RN-047 |
+| DEC-098 | 03/11/2026 | negócio | Páginas de aplicação já aberta em projeto arquivado | Recusar; permitir | `addApplicationPages` continua permitido em projeto arquivado; só `uploadImages` (nova aplicação) é recusado com ERR-001 | Completar aplicação já aberta não é novo upload (CA-027) (CHG-009, item 8) | definitivo | Baixo | CA-027, RF-006 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -270,7 +279,7 @@ RN-020 — Estados distintos
 Resposta em branco, ilegível, rasurada e "não se aplica" SÃO estados distintos, e nenhum deles vira zero ou "não".
 
 RN-021 — Regra de salto na v1
-Uma condição por pergunta ("mostrar se a pergunta X = valor Y"), impressa no formulário como instrução. Pergunta pulada conforme a regra recebe "não se aplica" e NÃO vai para revisão, exceto quando estiver preenchida, caso em que vai para revisão como inconsistência (CA-019).
+Uma condição por pergunta ("mostrar se a pergunta X = valor Y"), impressa no formulário como instrução. A pergunta de origem é `sim_nao` ou `escolha_unica`, a opção existe nela, origem e destino são perguntas diferentes, o destino vem depois da origem e as regras não formam ciclo; caso contrário, o rascunho é recusado com ERR-001 (DEC-095). Pergunta pulada conforme a regra recebe "não se aplica" e NÃO vai para revisão, exceto quando estiver preenchida, caso em que vai para revisão como inconsistência (CA-019).
 
 RN-022 — Ranking fora da v1
 Ranking (ordenar itens) NÃO é suportado na v1.
@@ -345,7 +354,7 @@ RN-045 — Contrato do motor de leitura
 O motor de leitura (DEC-007) DEVE receber uma imagem recortada e um schema dos campos esperados (tipo, opções, faixa), e DEVE devolver, por campo: o valor lido, a confiança e a região da imagem de onde veio (bounding box). O motor NÃO decide o que vai para revisão; quem chama é que decide. O motor NÃO conhece formulário, pesquisa, tenant nem receita.
 
 RN-047 — Estrutura de perguntas de matriz e múltipla escolha (DEC-010)
-Pergunta do tipo `matriz` DEVE ter linhas com código estável (ENT-024) e opções comuns; gera um item de resposta por linha (RN-009). Pergunta do tipo `multipla_escolha` DEVE ter a opção "nenhuma das anteriores" com código `nenhuma_das_anteriores`. Pergunta do tipo `sim_nao` tem as opções fixas `sim` e `nao`, criadas automaticamente. Pergunta com `campo_respondente` ou `campo_aplicacao = aplicador` DEVE ter `sensibilidade = identificacao` (RN-039), definida automaticamente e não editável. Sem isso, a publicação é recusada (ERR-036).
+Pergunta do tipo `matriz` DEVE ter linhas com código estável (ENT-024) e opções comuns; gera um item de resposta por linha (RN-009). Pergunta do tipo `multipla_escolha` DEVE ter a opção "nenhuma das anteriores" com código `nenhuma_das_anteriores`. Pergunta do tipo `sim_nao` tem as opções fixas `sim` e `nao`, criadas automaticamente. Pergunta com `campo_respondente` ou `campo_aplicacao = aplicador` DEVE ter `sensibilidade = identificacao` (RN-039), definida automaticamente e não editável. Nas demais perguntas, `sensibilidade` é `saude` ou `outro`; `identificacao` nelas é recusada com ERR-001 (DEC-097). Sem a estrutura exigida, a publicação é recusada (ERR-036), com os códigos das perguntas com problema em `campos` (DEC-096).
 
 RN-048 — Autenticação e sessão (Bloco P P.2, DEC-025, DEC-054)
 Senha de 10 a 72 caracteres, com minúscula, maiúscula e dígito, fora da lista de senhas vazadas, guardada com Argon2id. Após 5 falhas em 15 minutos para o mesmo e-mail, exista ou não a conta, novas tentativas são bloqueadas por 15 minutos. Sessão expira após 30 minutos de inatividade ou 24 horas; no máximo 3 sessões ativas por usuário. Convite válido por 24 horas e recuperação de senha por 60 minutos, ambos de uso único. MFA obrigatório para todos os perfis.
@@ -467,7 +476,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | obrigatorio | campo obrigatório | boolean | sim | — | — | true/false | false | não | — | não |
 | campo_respondente | alimenta atributo do respondente | varchar | não | 50 | — | nome; data_nascimento; cpf; endereco | NULL | não | — | não |
 | campo_aplicacao | marca a pergunta de data, local ou aplicador da aplicação (RN-016, RN-017) | varchar | não | 50 | — | data_aplicacao; local_aplicacao; aplicador | NULL | não | — | não |
-| sensibilidade | grupo de envio à IA (RN-039): identificação nunca vai junto com saúde/outro | enum | sim | — | — | identificacao; saude; outro | saude | não | — | não |
+| sensibilidade | grupo de envio à IA (RN-039): identificação nunca vai junto com saúde/outro; `identificacao` só nas perguntas da RN-047 (DEC-097) | enum | sim | — | — | identificacao; saude; outro | saude | não | — | não |
 | valor_min | valor mínimo (escala/número) | decimal | não | 10,2 | — | — | NULL | não | — | não |
 | valor_max | valor máximo (escala/número) | decimal | não | 10,2 | — | — | NULL | não | — | não |
 | unidade | unidade (número) | varchar | não | 20 | — | — | NULL | não | — | não |
@@ -668,7 +677,7 @@ Nota: Esta entidade não tem FK para `Respondente` porque o respondente foi anon
 | id | identificador do parâmetro | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
 | tenant_id | tenant do parâmetro (NULL = plataforma) | uuid | não | 36 | UUID v4 | — | NULL | não | Tenant.id | não |
 | projeto_id | projeto do parâmetro (NULL = tenant/plataforma) | uuid | não | 36 | UUID v4 | — | NULL | não | Projeto.id | não |
-| chave | nome do parâmetro | varchar | sim | 100 | ^[a-z_]+$ | retencao_dias; custo_ia_teto; limite_confianca; grupo_minimo; cotacao_usd_brl; retencao_exportacao_dias | — | não | — | não |
+| chave | nome do parâmetro | varchar | sim | 100 | ^[a-z_]+$ | retencao_dias; custo_ia_teto; limite_confianca; grupo_minimo; cotacao_usd_brl; retencao_exportacao_dias; termo_consentimento | — | não | — | não |
 | competencia | mês civil a que o valor se refere (obrigatório para cotacao_usd_brl, NULL nas demais) | date | não | — | YYYY-MM-01 | — | NULL | não | — | não |
 | valor | valor do parâmetro | text | sim | 1000 | — | — | — | não | — | sensível (depende da chave) |
 | alterado_em | data da alteração | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
@@ -1152,8 +1161,8 @@ Relacionado a: RF-006, RF-008, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040
 
 CA-003 — Upload identifica o formulário e a página
 Dado que o digitalizador está na tela de upload do projeto "Saúde Idoso"
-Quando ele envia um arquivo JPEG de 2 MB contendo um QR code legível da versão 1, página 2
-Então o sistema identifica o formulário, a versão e a página sem digitação
+Quando ele envia as 4 páginas da versão 1 em JPEG, uma por arquivo, todas com QR code legível
+Então o sistema identifica o formulário, a versão e cada página sem digitação, inclusive a página 2 (DEC-093)
 E a aplicação entra no estado "Em leitura"
 
 CA-004 — Upload sem QR legível
@@ -1298,7 +1307,7 @@ CA-027 — Ciclo de vida do projeto
 Dado que o administrador do tenant criou o projeto "Saúde Idoso" com status "ativo"
 Quando ele arquiva o projeto
 Então novos uploads são recusados com ERR-001
-E as aplicações em andamento seguem a revisão normalmente
+E as aplicações em andamento seguem a revisão normalmente, inclusive o acréscimo de páginas (DEC-098)
 E os relatórios continuam disponíveis
 E o histórico registra: data, hora e usuário da mudança
 
@@ -1365,7 +1374,7 @@ CA-028 — PDF imprimível
 Dado que a versão 1 do formulário "Demografia" está publicada
 Quando o administrador gera o PDF
 Então cada página traz um QR com identificador opaco da versão e o número da página
-E a primeira página traz o termo de consentimento com campo de assinatura
+E a primeira página traz o termo de consentimento do tenant (`termo_consentimento`) com campo de assinatura (DEC-094)
 E versão em rascunho não gera PDF
 
 CA-036 — Publicação exige campos obrigatórios
@@ -1641,7 +1650,7 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 
 | err_id | codigo | http_status | quando_ocorre | mensagem_ao_usuario | log_gerado | estado_resultante | requisitos | status |
 |---|---|---|---|---|---|---|---|---|
-| ERR-001 | VALIDATION_FAILED | 400 | Campo obrigatório ausente, formato inválido, regra de negócio violada ou upload em projeto arquivado. | Revise os campos destacados e tente novamente. | warn: validation_failed (sem dados pessoais) | Nada é gravado | RF-004, RF-006, CA-027 | ativo |
+| ERR-001 | VALIDATION_FAILED | 400 | Campo obrigatório ausente, formato inválido, regra de negócio violada (inclusive regra de salto inválida, DEC-095, e sensibilidade `identificacao` fora da RN-047, DEC-097) ou upload em projeto arquivado. | Revise os campos destacados e tente novamente. | warn: validation_failed (sem dados pessoais) | Nada é gravado | RF-004, RF-006, CA-027 | ativo |
 | ERR-002 | RESOURCE_NOT_FOUND | 404 | Recurso inexistente, de outro tenant ou de projeto não vinculado ao usuário. | O recurso solicitado não existe ou você não tem acesso. | warn: resource_not_found_or_out_of_scope (auditoria acionada) | Nada é gravado | RN-002, CA-012, CA-016 | ativo |
 | ERR-003 | AI_QUOTA_EXCEEDED | — | Teto de custo de IA do tenant atingido; aviso exibido na tela e enviado por e-mail (estado assíncrono, não é resposta HTTP de erro). | O processamento deste tenant está pausado. Contate o administrador. | info: ai_quota_exceeded (tenant_id) | Aplicação em `aguardando_cota` | RF-007, CA-030, DEC-035 | ativo |
 | ERR-004 | INVALID_QR_CODE | 400 | QR ilegível ou ausente, registro da imagem impossível, ou páginas faltantes, repetidas ou excedentes. | Não foi possível identificar o formulário nesta página. Informe manualmente. | warn: qr_invalid_or_missing | Aplicação em `identificacao_pendente` | RF-006, CA-004, CA-013, CA-040 | ativo |
@@ -1666,8 +1675,8 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 | ERR-023 | EMAIL_UNAVAILABLE | 400 | E-mail informado na criação de usuário já pertence a um usuário da plataforma (DEC-054); a mesma resposta vale para qualquer tenant (DEC-065). | Este e-mail não pode ser usado. Informe outro e-mail. | warn: email_unavailable (auditado) | Nada é gravado | RF-001, DEC-054 | ativo |
 | ERR-024 | QUERY_REFUSED | 400 | Consulta agregada, exportação agregada ou grupo cujo complemento do filtro no projeto tem menos respondentes que o mínimo (DEC-071). | Esta combinação de filtros identificaria poucas pessoas e não pode ser exibida. | info: query_refused_small_complement (auditado) | Nada é gravado | RF-009, RF-010, DEC-071 | ativo |
 | ERR-029 | FILE_REJECTED_LIMIT | 400 | Upload recusado. Motivos exatos: "excede o limite de 20 MB"; "excede o limite de 50 páginas"; "tipo de arquivo não permitido"; "risco de segurança detectado". | Arquivo recusado: [motivo]. | warn: file_rejected (motivo) | Nada é gravado | RF-006, CA-029, RN-040 | ativo |
-| ERR-036 | MISSING_PUBLISH_FIELDS | 400 | Tentativa de publicar versão sem campos obrigatórios (nome, nascimento, CPF, data, local). | Publicação recusada: faltam [lista dos campos]. | warn: missing_publish_fields | Versão permanece em `rascunho` | RF-004, CA-036, RN-017 | ativo |
-| ERR-039 | QR_INVALID_CONTEXT | 400 | QR aponta para versão inexistente, de outro tenant ou de projeto diferente do envio. | QR code inválido para o contexto atual. Informe manualmente. | warn: qr_invalid_context | Aplicação em `identificacao_pendente` | RF-006, CA-039 | ativo |
+| ERR-036 | MISSING_PUBLISH_FIELDS | 400 | Tentativa de publicar versão sem campos obrigatórios (nome, nascimento, CPF, data, local) ou com pergunta fora da estrutura da RN-047; `campos` traz os campos que faltam e os códigos das perguntas com problema (DEC-096). | Publicação recusada: faltam [lista dos campos]. | warn: missing_publish_fields | Versão permanece em `rascunho` | RF-004, CA-036, RN-017 | ativo |
+| ERR-039 | QR_INVALID_CONTEXT | 400 | QR, ou versão informada no `identifyApplication`, aponta para versão inexistente, de outro tenant ou de projeto diferente do envio (DEC-100). | QR code inválido para o contexto atual. Informe manualmente. | warn: qr_invalid_context | Aplicação em `identificacao_pendente` | RF-006, CA-039 | ativo |
 | ERR-041 | AI_READING_FAILED | — | A leitura falhou em 3 tentativas automáticas consecutivas (estado assíncrono, exibido na fila). | Erro de leitura. O digitalizador pode mandar ler de novo. | error: ai_reading_failed (3 retries) | Aplicação em `erro_leitura` | RF-007, CA-041 | ativo |
 | ERR-043 | RESERVATION_CONFLICT | 409 | Aplicação em uso por outro digitalizador ou reserva expirada. A resposta inclui quem reservou (RN-043). | Esta aplicação está em uso ou a reserva expirou. | info: reservation_conflict | Nada é gravado | RF-008, CA-043, RN-043 | ativo |
 

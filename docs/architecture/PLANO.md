@@ -3,11 +3,11 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.10 (CHG-007 e CHG-008 aceitas em 29/10/2026) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v1.11 (CHG-009 aceita em 03/11/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.13
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092)
+**Versão do plano:** 2.14
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -426,10 +426,10 @@ para economizar custo); fica recomendada antes do piloto.
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 47 CAs da REQ v1.10
+### 11.1 Cobertura dos 47 CAs da REQ v1.11
 
 A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 47 critérios
-de aceite da REQ v1.10 (CA-001 a CA-044, incluindo CA-014b, CA-026b e CA-037b). O validador
+de aceite da REQ v1.11 (CA-001 a CA-044, incluindo CA-014b, CA-026b e CA-037b). O validador
 confere que cada CA está no incremento do seu RF.
 
 **CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
@@ -477,6 +477,7 @@ validado pelo CI a cada merge.
 | CHG-006 — achado alto da REV-REQ-007 (DEC-071 no contrato e nos CAs) | mudança normativa | aceita em 29/10/2026 (REQ v1.8) |
 | CHG-007 — altos A-01 e A-02 da REV-REQ-008; Q-021 a Q-029 | mudança normativa | aceita em 29/10/2026 (REQ v1.9, DEC-074 a DEC-082) |
 | CHG-008 — perfil exigido na concessão individual (Q-030) | mudança normativa | aceita em 29/10/2026 (REQ v1.10, Q-030) |
+| CHG-009 — CA-003 esclarecido e lacunas do IA-TEST do IMP-002 (DEC-093 a DEC-100) | mudança normativa | aceita em 03/11/2026 (REQ v1.11) |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
@@ -522,6 +523,8 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-090 | 29/10/2026 | técnica | Dono das funções SECURITY DEFINER (refina DEC-046) | mp_owner; papel próprio com BYPASSRLS | Papel mp_auth (NOLOGIN, BYPASSRLS) é dono só das funções auth_* (login, falhas, tokens, resolução de sessão), com search_path fixo e grants mínimos; mp_app só tem EXECUTE nelas | Com FORCE ROW LEVEL SECURITY o próprio mp_owner é filtrado pela RLS, então as funções de login não enxergariam o usuário | definitivo | | Alto | DEC-046, DEC-040 |
 | DEC-091 | 29/10/2026 | técnica | Proteção dos testes aprovados no plano gratuito (complementa DEC-053) | Regra da main no GitHub (plano pago); processo com job de CI | Repositório privado no plano gratuito: o GitHub não aplica a regra da main e, com uma só pessoa, o CODEOWNERS não bloqueia. Valem o job testes-congelados e a regra de que nenhuma junção ocorre sem a autorização do responsável; reavaliar o GitHub Pro com um segundo revisor | Escolha do responsável (opção A, 29/10/2026) | definitivo | | Médio | DEC-053 |
 | DEC-092 | 03/11/2026 | técnica | Processo de trabalho alinhado ao kit v3 | Manter o processo de 29/10/2026; adotar o kit v3 integralmente; adotar o kit v3 com o merge sempre pelo responsável | Adotar o kit v3 com três ajustes: (1) todo PR é juntado só pelo responsável, inclusive os não normativos; (2) mudança retroativa proporcional (CHG classificada como esclarecimento ou normativa, impacto pela matriz, bloqueio seletivo, propagação de cima para baixo), com as colunas fase_origem, classificacao e trabalho_bloqueado em controle_mudancas.csv; (3) ciclo de verificação com revisor novo a cada rodada e regra anti-oscilação, mantido o critério de parada da DEC-073. O status de cada IMP passa a vir do §11 | Escolha do responsável (03/11/2026): ele faz todos os merges para economizar tokens; o critério da DEC-073 continua valendo no lugar do critério do kit (sem médios) | definitivo | | Médio | AGENTS.md §3, §5 e §7; DEC-053, DEC-061, DEC-073 |
+| DEC-099 | 03/11/2026 | técnica | Alcance do getPageImage (M-07) | Qualquer perfil do projeto; só digitalizador com regras por estado | Só digitalizador vinculado ao projeto (outro perfil → ERR-016; sem vínculo → ERR-002). Em `identificacao_pendente`, qualquer digitalizador vinculado; nos estados com reserva (IMP-003), só o titular da reserva ativa; nos demais estados → ERR-018. Todo acesso concedido é auditado com o id da imagem em `registro_id` | Minimização do acesso à imagem inteira (RN-029, DEC-034); escolha do responsável em 03/11/2026 (CHG-009, item 6) | definitivo | | Médio | RF-006, RN-029, DEC-034 |
+| DEC-100 | 03/11/2026 | técnica | Versão de outro tenant informada no identifyApplication (B-N8) | 404 ERR-002; 400 ERR-039 | 400 ERR-039, igual a versão inexistente, sem revelar que a versão existe; a tentativa é auditada | Mesmo tratamento do QR de outro tenant (CA-039); escolha do responsável em 03/11/2026 (CHG-009, item 7) | definitivo | | Baixo | CA-039, ERR-039, RN-002 |
 
 ---
 
@@ -537,19 +540,19 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | M-04 | REV-REQ-007 | médio | Pedido do titular sem Respondente (CPF só em aplicações em andamento ou já anonimizado) | Carlos Yano (decisão) + IA-DEV (CMP-LGPD) | antes do IMP-004 |
 | M-05 | REV-REQ-007 | médio | Correções do pedido do titular sem coluna no dicionário; ENT-023.aplicacao_id NOT NULL | IA-DEV (CMP-LGPD) | IMP-004 |
 | M-06 | REV-REQ-007 | médio | Formato, colunas e retenção dos arquivos de acesso, portabilidade e linha a linha | Carlos Yano (decisão) + IA-DEV (CMP-LGPD) | antes do IMP-004 |
-| M-07 | REV-REQ-007 | médio | getPageImage expõe a página inteira sem reserva e em qualquer estado | IA-DEV (CMP-Upload, CMP-Revisao) | IMP-002 |
+| M-07 | REV-REQ-007 | médio | getPageImage expõe a página inteira sem reserva e em qualquer estado | — (decidido: DEC-099, incorporado na CHG-009) | IMP-002 |
 | M-08 | REV-REQ-007 | médio | Reabertura: vínculo e anonimização do respondente órfão | IA-DEV (CMP-Respondents); decidido: DEC-078 | IMP-003 |
-| M-09 | REV-REQ-007 | médio | Regras de salto: tipos de origem, ciclos e auto-referência | IA-DEV (CMP-Forms) | IMP-002 |
+| M-09 | REV-REQ-007 | médio | Regras de salto: tipos de origem, ciclos e auto-referência | — (decidido: DEC-095, incorporado na CHG-009) | IMP-002 |
 | M-10 | REV-REQ-007 | médio | Tipos agregáveis, cruzáveis e filtráveis; linha de matriz na consulta e na ficha | IA-DEV (CMP-Dashboard) | IMP-004 |
 | M-11 | REV-REQ-007 | médio | Constraint de unicidade sem `competencia` | — (corrigido na CHG-006; registrado pela M-N6 da REV-REQ-008) | — |
 | M-12 | REV-REQ-007 | médio | Desenho técnico de tenant inativo (DEC-070) no login, sessão e jobs | — (decidido: DEC-083) | IMP-001 |
 | M-13 | REV-REQ-007 | médio | Injeção de instrução que altera outros campos da mesma chamada; subconjunto adversarial no conjunto-ouro | IA-DEV (CMP-MotorIA) | IMP-003 |
-| M-14 | REV-REQ-007 | médio | Sensibilidade identificacao em pergunta de saúde | IA-DEV (CMP-Forms) | IMP-002 |
+| M-14 | REV-REQ-007 | médio | Sensibilidade identificacao em pergunta de saúde | — (decidido: DEC-097, incorporado na CHG-009) | IMP-002 |
 | M-15 | REV-REQ-007 | médio | Ordem e atomicidade da eliminação (registro externo primeiro, passos idempotentes) | IA-DEV (CMP-LGPD) | IMP-004 |
 | M-16 | REV-REQ-007 | médio | Imagens órfãs no bucket após restore do banco | IA-DEV (CMP-Infra) | IMP-004 |
 | M-17 | REV-REQ-007 | médio | Aviso da volta de sem_assinatura para em_revisao usa ERR-018 | IA-DEV (CMP-Revisao) | IMP-003 |
 | M-18 | REV-REQ-007 | médio | Ausência dos outros quatro campos obrigatórios quando ilegível, rasurado ou não se aplica | IA-DEV (CMP-Revisao); decidido: DEC-079 | IMP-003 |
-| M-19 | REV-REQ-007 | médio | ERR-036 não cobre os casos da RN-047 | IA-DEV (CMP-Forms) | IMP-002 |
+| M-19 | REV-REQ-007 | médio | ERR-036 não cobre os casos da RN-047 | — (decidido: DEC-096, incorporado na CHG-009) | IMP-002 |
 | M-20 | REV-REQ-007 | médio | Consulta à lista de senhas vazadas sem DEC, timeout e comportamento em falha | — (decidido: DEC-084) | IMP-001 |
 | M-21 | REV-REQ-007 | médio | findRespondent: 404 para respondente fora do escopo da concessão | IA-DEV (CMP-Dashboard) | IMP-004 |
 | M-22 | REV-REQ-007 | médio | Aplicação em andamento sem cpf_hash recria titular eliminado | Carlos Yano (decisão: aceitar risco ou barrar por janela) | antes do IMP-004 |
@@ -579,7 +582,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | B-N5 | REV-REQ-008 | baixo | CPF mascarado no CA-002 × formato canônico do dicionário | IA-DEV (CMP-Respondents) | IMP-003 |
 | B-N6 | REV-REQ-008 | baixo | Faixa de idade abaixo de 60 ausente da DEC-071 | — (decidido: DEC-081, incorporado na CHG-007) | antes do IMP-004 |
 | B-N7 | REV-REQ-008 | baixo | Concessão individual a usuário sem o perfil exigido | — (decidido: DEC-080, incorporado na CHG-007) | IMP-001 |
-| B-N8 | REV-REQ-008 | baixo | `versao_id` de outro tenant no `identifyApplication`: 404 (TS-001) × ERR-039 | IA-DEV (CMP-Upload) | IMP-002 |
+| B-N8 | REV-REQ-008 | baixo | `versao_id` de outro tenant no `identifyApplication`: 404 (TS-001) × ERR-039 | — (decidido: DEC-100, incorporado na CHG-009) | IMP-002 |
 | B-N9 | REV-REQ-008 | baixo | Reuso do mesmo código TOTP na janela de tempo e parâmetros do Argon2id | — (decidido: DEC-085) | IMP-001 |
 | B-N10 | REV-REQ-008 | baixo | Erro de `saveReview` em item `aguardando_condicao` não definido | IA-DEV (CMP-Revisao) | IMP-003 |
 | B-N11 | REV-REQ-008 | baixo | Cópia de data, local e aplicador para a aplicação na conclusão | IA-DEV (CMP-Revisao) | IMP-003 |
@@ -593,7 +596,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 47 CAs da REQ v1.10
+- [x] Estratégia de testes cobre todos os 47 CAs da REQ v1.11
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
@@ -645,4 +648,4 @@ REQ §8.1; o CI falha se divergirem.
 
 ---
 
-**Fim do documento `PLANO.md` v2.13**
+**Fim do documento `PLANO.md` v2.14**

@@ -1,8 +1,8 @@
 // PDF imprimível (CA-028, DEC-005, DEC-048, T-14). O QR é lido pelos testes a partir do PDF
 // renderizado, sem conhecer o formato: basta ser legível, distinto por página e por versão e
 // não carregar identificadores internos (identificador opaco).
-// O texto do termo de consentimento não está definido na REQ; aqui se exige só que a página 1
-// traga o termo e o campo de assinatura (ver a questão aberta no PR do IA-TEST do IMP-002).
+// O termo da página 1 é o parâmetro `termo_consentimento` do tenant, com texto padrão
+// provisório na REQ seção 2.9 (DEC-094).
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { lerPdf } from '../../support/arquivos.js';
@@ -38,6 +38,7 @@ afterAll(async () => {
 });
 
 const semHifen = (id: string) => id.replace(/-/g, '');
+const normalizar = (t: string) => t.replace(/\s+/g, ' ').trim();
 
 describe('CA-028 — PDF imprimível', () => {
   // @trace CA-028, DEC-005
@@ -65,6 +66,25 @@ describe('CA-028 — PDF imprimível', () => {
     expect(texto).toContain('consentimento');
     expect(texto).toContain('assinatura');
     for (const p of f.paginas.slice(1)) expect(p.texto.toLowerCase(), `página ${p.numero}`).not.toContain('consentimento');
+  });
+
+  // @trace CA-028, DEC-094
+  it('sem parâmetro do tenant, a página 1 traz o texto padrão do termo e o campo "Assinatura do respondente"', () => {
+    const texto = normalizar(f.paginas[0].texto);
+    expect(texto).toContain('Termo de consentimento.');
+    expect(texto).toContain('Autorizo o uso das minhas respostas a este formulário');
+    expect(texto).toContain('Assinatura do respondente');
+  });
+
+  // @trace CA-028, DEC-094, RN-041
+  it('com termo_consentimento do tenant, o PDF usa o texto do tenant', async () => {
+    const termo = 'Termo do Tenant Fictício: autorizo a Clínica Exemplo a usar estas respostas.';
+    await h.seed.parametro({ tenantId: T.tenantId, chave: 'termo_consentimento', valor: termo });
+    const outro = await formularioPublicado(admin, projeto, 'Demografia com termo do tenant');
+    const texto = normalizar(outro.paginas[0].texto);
+    expect(texto).toContain(termo);
+    expect(texto).not.toContain('Autorizo o uso das minhas respostas a este formulário');
+    expect(texto).toContain('Assinatura do respondente');
   });
 
   // @trace CA-028, RF-004

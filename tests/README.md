@@ -56,9 +56,7 @@ Ficam para depois (PLANO §11.1):
 dashboards e relatórios do CA-016 e auditoria de abertura de ficha do CA-025 (IMP-004);
 E2E com navegador (segundo PR de IA-TEST, quando as telas tiverem desenho); consulta à
 lista de senhas vazadas (aguarda DEC, item M-20). Do IMP-002: revisão e relatórios de projeto
-arquivado (CA-027, IMP-003 e IMP-004); vínculo das respostas lidas à versão 1 (CA-001, IMP-003);
-e os itens que aguardam decisão: texto do termo de consentimento, validação das regras de salto
-(M-09), erro da RN-047 (M-19), alcance do `getPageImage` (M-07) e versão de outro tenant no
-`identifyApplication` (B-N8).
+arquivado (CA-027, IMP-003 e IMP-004); vínculo das respostas lidas à versão 1 (CA-001, IMP-003).
+As decisões da CHG-009 (DEC-093 a DEC-100) têm testes nos arquivos do IMP-002.
 
 Todos os dados são sintéticos (Q-001): e-mails em `exemplo.test`, nomes fictícios.

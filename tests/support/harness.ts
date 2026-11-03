@@ -109,6 +109,11 @@ export interface Harness {
       todosProjetos?: boolean;
       projetos?: string[];
     }): Promise<{ usuarioId: string; segredoTotp: string }>;
+    /**
+     * Parâmetro de configuração gravado pelo mesmo caminho do script do administrador da
+     * plataforma (REQ seção 2.9), com auditoria. Ex.: `termo_consentimento` do tenant (DEC-094).
+     */
+    parametro(dados: { tenantId: string | null; projetoId?: string; chave: string; valor: string }): Promise<void>;
   };
 
   inspect: {

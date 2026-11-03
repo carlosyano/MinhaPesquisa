@@ -100,6 +100,107 @@ describe('RF-004 — rascunho e publicação', () => {
   });
 });
 
+describe('DEC-095 / DEC-097 — validação no rascunho (RN-021, RN-047)', () => {
+  type Regra = Conteudo['regras_salto'][number];
+  const regra = (origem: string, destino: string, opcao: string): Regra => ({
+    pergunta_origem_codigo: origem,
+    pergunta_destino_codigo: destino,
+    opcao_codigo: opcao,
+  });
+  const invalidas: [string, Regra[]][] = [
+    ['origem que não é sim_nao nem escolha_unica', [regra('QUAIS_MEDICAMENTOS', 'HORAS_SONO', 'sim')]],
+    ['opção inexistente na origem', [regra('USA_MEDICAMENTO', 'QUAIS_MEDICAMENTOS', 'talvez')]],
+    ['autorreferência', [regra('USA_MEDICAMENTO', 'USA_MEDICAMENTO', 'sim')]],
+    ['destino antes da origem', [regra('USA_MEDICAMENTO', 'PRESSAO_ALTA', 'sim')]],
+    ['ciclo entre duas regras', [regra('USA_MEDICAMENTO', 'ESTADO_CIVIL', 'sim'), regra('ESTADO_CIVIL', 'USA_MEDICAMENTO', 'casado')]],
+  ];
+
+  // @trace DEC-095, RN-021, ERR-001
+  it.each(invalidas)('regra de salto com %s → ERR-001; rascunho inalterado', async (_caso, regras) => {
+    const { formId, versaoId } = await criarFormulario(admin, projeto, 'Saltos inválidos');
+    expect((await salvarConteudo(admin, formId, versaoId, conteudoValido())).status).toBe(200);
+    const antes = (await admin.get(caminhoVersao(formId, versaoId))).corpo;
+    esperarErro(await salvarConteudo(admin, formId, versaoId, { ...conteudoValido(), regras_salto: regras }), 'ERR-001');
+    expect((await admin.get(caminhoVersao(formId, versaoId))).corpo).toEqual(antes);
+  });
+
+  // @trace DEC-095, RN-021
+  it('regra com origem escolha_unica, opção existente e destino posterior é aceita', async () => {
+    const { formId, versaoId } = await criarFormulario(admin, projeto, 'Salto válido');
+    const c = { ...conteudoValido(), regras_salto: [...conteudoValido().regras_salto, regra('ESTADO_CIVIL', 'HORAS_SONO', 'viuvo')] };
+    const s = await salvarConteudo(admin, formId, versaoId, c);
+    expect(s.status, s.texto).toBe(200);
+    expect(s.corpo.conteudo.regras_salto).toEqual(c.regras_salto);
+  });
+
+  // @trace DEC-097, RN-039, ERR-001
+  it('sensibilidade identificacao em pergunta comum → ERR-001; saude e outro são aceitas', async () => {
+    const { formId, versaoId } = await criarFormulario(admin, projeto, 'Sensibilidade');
+    const com = (valor: string): Conteudo => ({
+      ...conteudoValido(),
+      perguntas: conteudoValido().perguntas.map((p) => (p.codigo === 'PRESSAO_ALTA' ? { ...p, sensibilidade: valor } : p)),
+    });
+    esperarErro(await salvarConteudo(admin, formId, versaoId, com('identificacao')), 'ERR-001');
+    for (const valor of ['outro', 'saude']) {
+      const s = await salvarConteudo(admin, formId, versaoId, com(valor));
+      expect(s.status, s.texto).toBe(200);
+      expect(s.corpo.conteudo.perguntas.find((p: { codigo: string }) => p.codigo === 'PRESSAO_ALTA').sensibilidade).toBe(valor);
+    }
+  });
+});
+
+describe('DEC-096 — estrutura da RN-047 na publicação', () => {
+  const matrizSemLinhas = {
+    codigo: 'SINTOMAS',
+    tipo: 'matriz',
+    enunciado: 'Com que frequência sente',
+    pagina: 4,
+    ordem: 40,
+    opcoes: [
+      { codigo: 'nunca', rotulo: 'Nunca', ordem: 1 },
+      { codigo: 'sempre', rotulo: 'Sempre', ordem: 2 },
+    ],
+  };
+  const multiplaSemNenhuma = (c: Conteudo): Conteudo => ({
+    ...c,
+    perguntas: c.perguntas.map((p) =>
+      p.codigo === 'ALIMENTOS' ? { ...p, opcoes: (p.opcoes as { codigo: string }[]).filter((o) => o.codigo !== 'nenhuma_das_anteriores') } : p,
+    ),
+  });
+
+  async function publicarCom(c: Conteudo): Promise<{ formId: string; versaoId: string; r: Awaited<ReturnType<typeof publicar>> }> {
+    const { formId, versaoId } = await criarFormulario(admin, projeto, 'Estrutura RN-047');
+    const s = await salvarConteudo(admin, formId, versaoId, c);
+    expect(s.status, s.texto).toBe(200);
+    return { formId, versaoId, r: await publicar(admin, formId, versaoId) };
+  }
+
+  // @trace DEC-096, RN-047, ERR-036
+  it('matriz sem linhas → ERR-036 com o código da pergunta em campos', async () => {
+    const c = conteudoValido();
+    c.perguntas.push(matrizSemLinhas);
+    const { formId, versaoId, r } = await publicarCom(c);
+    expect(r.status, r.texto).toBe(400);
+    expect(r.corpo).toMatchObject({ errorCode: 'ERR-036', campos: ['SINTOMAS'] });
+    expect((await admin.get(caminhoVersao(formId, versaoId))).corpo.resumo.status).toBe('rascunho');
+  });
+
+  // @trace DEC-096, RN-047, ERR-036
+  it('múltipla escolha sem nenhuma_das_anteriores → ERR-036 com o código da pergunta', async () => {
+    const { r } = await publicarCom(multiplaSemNenhuma(conteudoValido()));
+    expect(r.status, r.texto).toBe(400);
+    expect(r.corpo).toMatchObject({ errorCode: 'ERR-036', campos: ['ALIMENTOS'] });
+  });
+
+  // @trace DEC-096, RN-017, RN-047
+  it('falta de campo da RN-017 e estrutura inválida vêm juntas em campos', async () => {
+    const { r } = await publicarCom(multiplaSemNenhuma(sem(conteudoValido(), 'LOCAL_APLICACAO')));
+    expect(r.status, r.texto).toBe(400);
+    expect(r.corpo.errorCode).toBe('ERR-036');
+    expect([...r.corpo.campos].sort()).toEqual(['ALIMENTOS', 'local_aplicacao']);
+  });
+});
+
 describe('CA-036 — publicação exige os campos obrigatórios (RN-017)', () => {
   // @trace CA-036, RN-017, ERR-036
   it('sem pergunta data_aplicacao → ERR-036 com campos = [data_aplicacao]; versão continua em rascunho', async () => {

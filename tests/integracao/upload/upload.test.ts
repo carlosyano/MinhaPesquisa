@@ -181,6 +181,43 @@ describe('RN-040 — metadados removidos no upload', () => {
   });
 });
 
+describe('DEC-099 — quem vê a imagem da página (getPageImage)', () => {
+  async function pendente(): Promise<{ id: string; imagem: string }> {
+    const imgs = await jpegs();
+    imgs[1] = arquivo('pagina-2.jpg', 'image/jpeg', await semQr(f.paginas[1]));
+    const r = await enviar(dig, projeto, imgs);
+    expect(r.corpo.estado).toBe('identificacao_pendente');
+    return { id: r.corpo.aplicacao_id, imagem: r.corpo.paginas[1].imagem_id };
+  }
+
+  // @trace DEC-099, RN-029, RN-027
+  it('digitalizador vinculado vê a imagem em identificacao_pendente; o acesso é auditado com o id da imagem', async () => {
+    const { id, imagem } = await pendente();
+    const outro = await entrar(h, await pessoa(h, T.tenantId, ['digitalizador'], 'dig.outro', { projetos: [projeto] }));
+    const r = await outro.get(`/applications/${id}/pages/${imagem}/image`);
+    expect(r.status, r.texto).toBe(200);
+    expect(await h.inspect.auditoria(T.tenantId)).toContainEqual(expect.objectContaining({ registro_id: imagem }));
+  });
+
+  // @trace DEC-099, ERR-016, ERR-002
+  it('analista e administrador sem perfil digitalizador → ERR-016; digitalizador sem vínculo → ERR-002', async () => {
+    const { id, imagem } = await pendente();
+    const analista = await entrar(h, await pessoa(h, T.tenantId, ['analista'], 'analista.img', { projetos: [projeto] }));
+    esperarErro(await analista.get(`/applications/${id}/pages/${imagem}/image`), 'ERR-016');
+    esperarErro(await admin.get(`/applications/${id}/pages/${imagem}/image`), 'ERR-016');
+    const outroProjeto = await projetoCriado(admin, 'Projeto de outro digitalizador');
+    const semVinculo = await entrar(h, await pessoa(h, T.tenantId, ['digitalizador'], 'dig.sem.vinculo', { projetos: [outroProjeto] }));
+    esperarErro(await semVinculo.get(`/applications/${id}/pages/${imagem}/image`), 'ERR-002');
+  });
+
+  // @trace DEC-099, ERR-018
+  it('aplicação em_leitura (sem reserva possível) → ERR-018', async () => {
+    const r = await enviar(dig, projeto, await jpegs());
+    expect(r.corpo.estado).toBe('em_leitura');
+    esperarErro(await dig.get(`/applications/${r.corpo.aplicacao_id}/pages/${r.corpo.paginas[0].imagem_id}/image`), 'ERR-018');
+  });
+});
+
 describe('RF-006 — permissão, vínculo e idempotência', () => {
   // @trace RF-006, ERR-016
   it('administrador sem o perfil digitalizador não envia (ERR-016)', async () => {
