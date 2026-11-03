@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.2.7
+  version: 0.2.8
   description: |
     API do SaaS MinhaPesquisa — digitalização de pesquisas em papel com leitura por IA,
     revisão humana e dashboards anonimizados, em conformidade com a LGPD.
-    Fonte normativa: REQ v1.10 e PLANO.md v2.13. Contract-first — este arquivo valida
+    Fonte normativa: REQ v1.11 e PLANO.md v2.14. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: rotas públicas declaram `security: []`; rotas de MFA usam a pré-sessão (DEC-050);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -829,8 +829,10 @@ paths:
       operationId: updateVersion
       tags: [forms]
       summary: Substitui o conteúdo de uma versão em rascunho
-      description: Versão publicada é imutável → ERR-009 (CA-001, TS-006).
-      x-trace: [RF-004, CA-001, CA-015, RN-042, TS-006]
+      description: |
+        Versão publicada é imutável → ERR-009 (CA-001, TS-006). Regra de salto inválida
+        (DEC-095) ou sensibilidade `identificacao` fora das perguntas da RN-047 (DEC-097) → ERR-001.
+      x-trace: [RF-004, CA-001, CA-015, RN-042, TS-006, RN-021, DEC-095, DEC-097]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -867,8 +869,10 @@ paths:
       summary: Publica versão (exige os campos obrigatórios)
       description: |
         Exige perguntas marcadas como nome, data de nascimento, CPF (tipo `cpf`), data e local
-        da aplicação (RN-017); sem elas → ERR-036 (CA-036). Grava o mapa de layout (DEC-048).
-      x-trace: [RF-004, CA-036, RN-017, DEC-048]
+        da aplicação (RN-017); sem elas → ERR-036 (CA-036). Matriz sem linhas ou múltipla escolha
+        sem `nenhuma_das_anteriores` (RN-047) → ERR-036 com os códigos das perguntas em `campos`
+        (DEC-096). Grava o mapa de layout (DEC-048).
+      x-trace: [RF-004, CA-036, RN-017, RN-047, DEC-048, DEC-096]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -897,9 +901,10 @@ paths:
       summary: Gera PDF imprimível com QR e marcadores por página
       description: |
         Cada página traz QR com identificador opaco da versão e número da página, e marcadores
-        fiduciais (DEC-048). A página 1 traz o termo de consentimento com campo de assinatura.
+        fiduciais (DEC-048). A página 1 traz o termo de consentimento do tenant
+        (`termo_consentimento`, DEC-094) com campo de assinatura.
         Versão em rascunho não gera PDF → ERR-018 (CA-028).
-      x-trace: [RF-004, CA-028, DEC-005, DEC-048]
+      x-trace: [RF-004, CA-028, DEC-005, DEC-048, DEC-094]
       parameters:
         - $ref: '#/components/parameters/FormId'
         - $ref: '#/components/parameters/VersionId'
@@ -964,8 +969,9 @@ paths:
       summary: Identificação manual de versão e páginas (aplicação em identificacao_pendente)
       description: |
         O digitalizador informa a versão e o número de cada página, ou corrige as páginas.
-        Continua inválido → 400 ERR-004 ou ERR-039. Próximo estado conforme FL-001.
-      x-trace: [RF-006, CA-004, CA-013, CA-039, CA-040]
+        Continua inválido → 400 ERR-004 ou ERR-039. Versão de outro tenant, de outro projeto ou
+        inexistente → 400 ERR-039, auditado (DEC-100). Próximo estado conforme FL-001.
+      x-trace: [RF-006, CA-004, CA-013, CA-039, CA-040, DEC-100]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -999,8 +1005,8 @@ paths:
       summary: Acrescenta páginas a uma aplicação em identificacao_pendente (CA-013)
       description: |
         Corrige página faltante: mesmas validações do upload (ERR-029, RN-040, DEC-042) e
-        reavaliação da tabela de criação da FL-001.
-      x-trace: [RF-006, CA-013, CA-040, RN-040]
+        reavaliação da tabela de criação da FL-001. Permitido também em projeto arquivado (DEC-098).
+      x-trace: [RF-006, CA-013, CA-040, RN-040, DEC-098]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1036,8 +1042,9 @@ paths:
       description: |
         Usada para identificar páginas em `identificacao_pendente` e para conferir a assinatura
         (RN-044). Na página 1 devolve a região da assinatura do mapa de layout (DEC-048).
-        Acesso auditado.
-      x-trace: [RF-006, CA-004, CA-013, CA-044, RN-044, DEC-034]
+        Só digitalizador vinculado ao projeto: em `identificacao_pendente`, qualquer um; nos
+        estados com reserva, só o titular; nos demais → ERR-018. Acesso auditado (DEC-099).
+      x-trace: [RF-006, CA-004, CA-013, CA-044, RN-044, DEC-034, DEC-099]
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
         - $ref: '#/components/parameters/PageId'
@@ -1052,6 +1059,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidState' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /tenant/quota:
@@ -2320,7 +2328,7 @@ components:
         obrigatorio: { type: boolean, default: false }
         campo_respondente: { type: string, enum: [nome, data_nascimento, cpf, endereco], nullable: true }
         campo_aplicacao: { type: string, enum: [data_aplicacao, local_aplicacao, aplicador], nullable: true, description: Marca as perguntas de data e local exigidas pela RN-017 }
-        sensibilidade: { type: string, enum: [identificacao, saude, outro], default: saude, description: 'Grupo de envio à IA (RN-039); forçado a identificacao quando há campo_respondente ou campo_aplicacao = aplicador (RN-047)' }
+        sensibilidade: { type: string, enum: [identificacao, saude, outro], default: saude, description: 'Grupo de envio à IA (RN-039); forçado a identificacao quando há campo_respondente ou campo_aplicacao = aplicador (RN-047); nas demais perguntas só saude ou outro (DEC-097)' }
         linhas:
           type: array
           description: Obrigatório para tipo matriz (RN-047)

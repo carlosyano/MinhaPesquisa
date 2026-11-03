@@ -184,6 +184,17 @@ describe('FL-001 — saída de identificacao_pendente pelo digitalizador', () =>
     expect(await h.inspect.leiturasSolicitadas(id)).toBe(0);
   });
 
+  // @trace DEC-100, CA-039, ERR-039, RN-002
+  it('identificar com versão de outro tenant → 400 ERR-039 (não 404), auditado', async () => {
+    const r = await enviar(dig, projeto, await paginas(f, [1, 2, 4]));
+    const id = await esperarPendente(r, 'ERR-004');
+    const imagens = (r.corpo.paginas as { imagem_id: string }[]).map((p) => p.imagem_id);
+    const antes = (await h.inspect.auditoria(A.tenantId)).filter((e) => e.usuario_id === digId).length;
+    esperarErro(await identificar(id, { versao_id: formOutroTenant.versaoId, paginas: imagens.map((imagem_id, i) => ({ imagem_id, numero_pagina: i + 1 })) }), 'ERR-039');
+    expect((await h.inspect.auditoria(A.tenantId)).filter((e) => e.usuario_id === digId).length).toBeGreaterThan(antes);
+    expect(await h.inspect.leiturasSolicitadas(id)).toBe(0);
+  });
+
   // @trace CA-013, FL-001, RN-040
   it('addApplicationPages com a página faltante → aplicação completa vai para em_leitura', async () => {
     const r = await enviar(dig, projeto, await paginas(f, [1, 2, 4]));

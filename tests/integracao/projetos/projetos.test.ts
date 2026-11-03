@@ -147,6 +147,26 @@ describe('CA-027 — ciclo de vida do projeto', () => {
     expect(r.corpo.estado).toBe('em_leitura');
   });
 
+  // @trace CA-027, DEC-098
+  it('em projeto arquivado, a aplicação já aberta aceita a página faltante (addApplicationPages)', async () => {
+    const id = await projetoCriado(admin, 'Projeto com página faltante');
+    const form = await formularioPublicado(admin, id, 'Demografia');
+    const dig = await entrar(h, await pessoa(h, T.tenantId, ['digitalizador'], 'dig.faltante', { projetos: [id] }));
+    const tres = await Promise.all([0, 1, 3].map(async (i) => arquivo(`p${i + 1}.jpg`, 'image/jpeg', await jpeg(form.paginas[i]))));
+    const envio = await enviar(dig, id, tres);
+    expect(envio.status, envio.texto).toBe(202);
+    expect(envio.corpo).toMatchObject({ estado: 'identificacao_pendente', aviso: 'ERR-004' });
+
+    expect((await admin.post(`/projects/${id}/archive`)).status).toBe(200);
+    const add = await dig.enviarArquivos(
+      `/applications/${envio.corpo.aplicacao_id}/pages`,
+      [arquivo('p3.jpg', 'image/jpeg', await jpeg(form.paginas[2]))],
+      { 'idempotency-key': chaveIdempotencia() },
+    );
+    expect(add.status, add.texto).toBe(200);
+    expect(add.corpo.estado).toBe('em_leitura');
+  });
+
   // @trace CA-027, RF-003, ERR-016
   it('só o administrador arquiva e reativa', async () => {
     const id = await projetoCriado(admin, 'Projeto protegido');
