@@ -96,10 +96,10 @@ saidas["gates_externos.csv"] = para_csv(t[0], t[1:])
 
 # Incrementos (PLANO §11) com RF e TS derivados da matriz
 inc = []
-for imp, escopo, cas, entrada, saida in tabela_apos(PLANO, "## 11. Incrementos")[1:]:
+for imp, escopo, cas, entrada, saida, status in tabela_apos(PLANO, "## 11. Incrementos")[1:]:
     rfs = [r["requisito"] for r in matriz if r["incremento"] == imp]
     ts = sorted({x.strip() for r in matriz if r["incremento"] == imp for x in r["teste_sentinela"].split(",") if x.strip() != "—"})
-    inc.append([imp, escopo, ", ".join(rfs), cas, ", ".join(ts), entrada, saida, "planejado"])
+    inc.append([imp, escopo, ", ".join(rfs), cas, ", ".join(ts), entrada, saida, status])
 saidas["plano_incrementos.csv"] = para_csv(
     ["imp_id", "escopo", "rf_cobertos", "cas_cobertos", "ts_cobertos", "pre_requisitos", "criterio_aceite", "status"], inc)
 

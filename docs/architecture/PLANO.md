@@ -6,8 +6,8 @@
 **Fontes normativas:** REQ v1.10 (CHG-007 e CHG-008 aceitas em 29/10/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.12
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11)
+**Versão do plano:** 2.13
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092)
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -406,12 +406,12 @@ validada a cada merge.
 
 ## 11. Incrementos
 
-| IMP | Escopo | CAs cobertos | Entrada | Saída / evidência esperada |
-| --- | --- | --- | --- | --- |
-| IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-026b, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA |
-| IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada |
-| IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-015, CA-018, CA-019, CA-020, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 aceito | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` |
-| IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-010, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031, CA-034 | IMP-003 aceito | TS-004/TS-005/TS-008; k-anon por célula; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações; grupo mínimo entre projetos |
+| IMP | Escopo | CAs cobertos | Entrada | Saída / evidência esperada | Status |
+| --- | --- | --- | --- | --- | --- |
+| IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-026b, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA | aceito (Gate 2, 29/10/2026; E2E com navegador pendente) |
+| IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada | planejado |
+| IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-015, CA-018, CA-019, CA-020, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 aceito | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` | planejado |
+| IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-010, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031, CA-034 | IMP-003 aceito | TS-004/TS-005/TS-008; k-anon por célula; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações; grupo mínimo entre projetos | planejado |
 
 Cada IMP: IA-TEST escreve testes vermelhos → IA-DEV implementa → verificações
 completas → ciclo de revisão por PR → merge pelo responsável → ciclo sobre o
@@ -521,6 +521,7 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-089 | 29/10/2026 | técnica | Análise estática de segurança no CI | CodeQL; Semgrep; nenhuma | Semgrep (regras públicas para TypeScript/Node) no lugar do CodeQL, que exige plano pago em repositório privado | Escolha do responsável (opção 3A, 29/10/2026); mesma função no plano gratuito | definitivo | | Médio | PLANO §9.4 |
 | DEC-090 | 29/10/2026 | técnica | Dono das funções SECURITY DEFINER (refina DEC-046) | mp_owner; papel próprio com BYPASSRLS | Papel mp_auth (NOLOGIN, BYPASSRLS) é dono só das funções auth_* (login, falhas, tokens, resolução de sessão), com search_path fixo e grants mínimos; mp_app só tem EXECUTE nelas | Com FORCE ROW LEVEL SECURITY o próprio mp_owner é filtrado pela RLS, então as funções de login não enxergariam o usuário | definitivo | | Alto | DEC-046, DEC-040 |
 | DEC-091 | 29/10/2026 | técnica | Proteção dos testes aprovados no plano gratuito (complementa DEC-053) | Regra da main no GitHub (plano pago); processo com job de CI | Repositório privado no plano gratuito: o GitHub não aplica a regra da main e, com uma só pessoa, o CODEOWNERS não bloqueia. Valem o job testes-congelados e a regra de que nenhuma junção ocorre sem a autorização do responsável; reavaliar o GitHub Pro com um segundo revisor | Escolha do responsável (opção A, 29/10/2026) | definitivo | | Médio | DEC-053 |
+| DEC-092 | 03/11/2026 | técnica | Processo de trabalho alinhado ao kit v3 | Manter o processo de 29/10/2026; adotar o kit v3 integralmente; adotar o kit v3 com o merge sempre pelo responsável | Adotar o kit v3 com três ajustes: (1) todo PR é juntado só pelo responsável, inclusive os não normativos; (2) mudança retroativa proporcional (CHG classificada como esclarecimento ou normativa, impacto pela matriz, bloqueio seletivo, propagação de cima para baixo), com as colunas fase_origem, classificacao e trabalho_bloqueado em controle_mudancas.csv; (3) ciclo de verificação com revisor novo a cada rodada e regra anti-oscilação, mantido o critério de parada da DEC-073. O status de cada IMP passa a vir do §11 | Escolha do responsável (03/11/2026): ele faz todos os merges para economizar tokens; o critério da DEC-073 continua valendo no lugar do critério do kit (sem médios) | definitivo | | Médio | AGENTS.md §3, §5 e §7; DEC-053, DEC-061, DEC-073 |
 
 ---
 
@@ -644,4 +645,4 @@ REQ §8.1; o CI falha se divergirem.
 
 ---
 
-**Fim do documento `PLANO.md` v2.9**
+**Fim do documento `PLANO.md` v2.13**

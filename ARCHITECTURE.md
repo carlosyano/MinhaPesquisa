@@ -1,7 +1,7 @@
 # Arquitetura do Projeto MinhaPesquisa
 
 > Mapa do repositório para pessoas e agentes de IA. Resume o que está decidido em
-> `docs/architecture/PLANO.md` (v2.12) e aponta a fonte de verdade de cada artefato.
+> `docs/architecture/PLANO.md` (v2.13) e aponta a fonte de verdade de cada artefato.
 > Em conflito, vale a precedência do PLANO: decisões de negócio → REQ → PLANO/DEC técnicas → Bloco P.
 
 ## 1. Situação atual
