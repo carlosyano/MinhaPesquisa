@@ -6,8 +6,8 @@
 **Fontes normativas:** REQ v1.11 (CHG-009 aceita em 03/11/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.15
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026)
+**Versão do plano:** 2.16
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104)
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -534,6 +534,7 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-101 | 03/11/2026 | técnica | Armazenamento das imagens no IMP-002 | Integrar o S3 agora; interface agora, S3 na implantação | Interface Armazenamento (gravar, apagar, link assinado, contagem); chave `tenant/<tenant>/aplicacao/<aplicação>/<imagem>.jpg`, sem dado pessoal; nos testes, implementação em memória com links assinados por HMAC e expiração pelo relógio injetado; o adaptador do Amazon S3 (sa-east-1, bucket privado, sem versionamento, fora do backup) entra na implantação | Mesmo padrão do e-mail (DEC-088): a API não sobe fora de teste sem o adaptador real | definitivo | | Médio | RN-029, RN-030, DEC-034, DEC-088 |
 | DEC-102 | 03/11/2026 | técnica | Antimalware nos testes e em produção (DEC-042) | ClamAV em contêiner no CI; equivalente que reconhece o EICAR | Produção: cliente clamd (INSTREAM, 30 s; resposta inesperada ou tempo esgotado é falha, nunca "limpo"). Testes: equivalente que reconhece a assinatura EICAR, sem baixar a base de vírus. O cliente clamd é verificado contra um ClamAV real antes do piloto | CI rápido; a base de vírus tem centenas de MB | definitivo | | Médio | DEC-042, CA-029 |
 | DEC-103 | 03/11/2026 | técnica | Itens de resposta (ItemResposta) na criação da aplicação | Criar `pendente_leitura` no upload; criar na leitura | Os itens nascem com a leitura, no IMP-003; no IMP-002 a aplicação em `em_leitura` tem só as páginas e o evento `leitura.solicitada` no outbox | A versão só fica certa quando a aplicação sai de `identificacao_pendente`; evita criar e apagar itens | definitivo | | Baixo | RF-006, RF-007, FL-001 |
+| DEC-104 | 03/11/2026 | técnica | Modo de demonstração local para testar o IMP-002 com foto real, antes das telas (TL-xxx) | Esperar as telas; script de demonstração local fora da API | `npm run demo` (`apps/api/src/demo`): PostgreSQL 17 descartável, a API real com o armazenamento em memória (DEC-101), e-mail só no terminal e o equivalente EICAR (DEC-102), ou um clamd real com `MP_CLAMD_HOST`; uma usuária sintética com MFA, um projeto e um formulário publicado de duas páginas; uma página simples (entrar, baixar o PDF, enviar e identificar) que só usa operações do contrato, repassadas a partir da mesma origem. Escuta só em 127.0.0.1, recusa NODE_ENV=production, gera segredos a cada execução e não grava nada fora do contêiner; depende de pacotes de desenvolvimento, então não roda na imagem de produção. Não substitui o E2E com navegador nem as telas TL-xxx | Escolha do responsável em 03/11/2026: testar a leitura do QR e o registro com fotos reais antes do IMP-003. Só dados sintéticos enquanto a GX-001 estiver pendente | definitivo | | Baixo | DEC-101, DEC-102, DEC-088, RF-006, GX-001 |
 
 ---
 
@@ -657,4 +658,4 @@ REQ §8.1; o CI falha se divergirem.
 
 ---
 
-**Fim do documento `PLANO.md` v2.15**
+**Fim do documento `PLANO.md` v2.16**
