@@ -7,7 +7,7 @@
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
 **Versão do plano:** 2.15
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103)
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026)
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -409,13 +409,19 @@ validada a cada merge.
 | IMP | Escopo | CAs cobertos | Entrada | Saída / evidência esperada | Status |
 | --- | --- | --- | --- | --- | --- |
 | IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-026b, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA | aceito (Gate 2, 29/10/2026; E2E com navegador pendente) |
-| IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada | em desenvolvimento |
+| IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada | aceito (Gate 2, 03/11/2026; E2E com navegador pendente) |
 | IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-015, CA-018, CA-019, CA-020, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 aceito | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` | planejado |
 | IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-010, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031, CA-034 | IMP-003 aceito | TS-004/TS-005/TS-008; k-anon por célula; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações; grupo mínimo entre projetos | planejado |
 
 Cada IMP: IA-TEST escreve testes vermelhos → IA-DEV implementa → verificações
 completas → ciclo de revisão por PR → merge pelo responsável → ciclo sobre o
 incremento inteiro → Gate 2 (aceite do responsável).
+
+**Aceite do IMP-002 (03/11/2026, Carlos Yano):** aceito com o CI verde (PRs #13, #14 e #15) e a
+CHG-009 incorporada. Pendentes: o E2E com navegador, quando houver telas; e, antes do piloto,
+a renderização de PDF em processo isolado, o limite total por envio, a verificação do clamd e do
+S3 contra os serviços reais e a extensão do teste de mutação às regras novas (DEC-052). Sem
+revisão independente do incremento, por escolha do responsável.
 
 **Aceite do IMP-001 (29/10/2026, Carlos Yano):** aceito com 105 testes verdes no CI (74 de
 integração com PostgreSQL 17 e 31 unitários) e mutação de 90% em criptografia e autorização
