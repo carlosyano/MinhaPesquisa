@@ -10,6 +10,13 @@ export interface Resposta {
   texto: string;
 }
 
+export interface Arquivo {
+  nome: string;
+  /** MIME declarado pelo cliente; a API decide pelo conteúdo (DEC-042). */
+  tipo: string;
+  bytes: Buffer;
+}
+
 export interface OpcoesRequisicao {
   corpo?: unknown;
   headers?: Record<string, string>;
@@ -44,6 +51,42 @@ export class Cliente {
 
   async delete(caminho: string, opcoes: OpcoesRequisicao = {}): Promise<Resposta> {
     return this.requisitar('DELETE', caminho, opcoes);
+  }
+
+  /** Upload multipart no campo `arquivos` (UploadRequest), com o CSRF e o Origin das mutações. */
+  async enviarArquivos(caminho: string, arquivos: Arquivo[], headers: Record<string, string> = {}): Promise<Resposta> {
+    const form = new FormData();
+    for (const a of arquivos) form.append('arquivos', new Blob([new Uint8Array(a.bytes)], { type: a.tipo }), a.nome);
+    const h: Record<string, string> = {
+      accept: 'application/json, application/problem+json',
+      'x-forwarded-for': this.ip,
+      origin: this.baseUrl,
+      ...headers,
+    };
+    if (this.cookies.size > 0) h.cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
+    const csrf = this.cookies.get('mp_csrf');
+    if (csrf) h['x-csrf-token'] = csrf;
+    const res = await fetch(this.baseUrl + caminho, { method: 'POST', headers: h, body: form, redirect: 'manual' });
+    this.guardarCookies(res.headers.getSetCookie());
+    const texto = await res.text();
+    let corpo: any = undefined;
+    if (texto) {
+      try {
+        corpo = JSON.parse(texto);
+      } catch {
+        corpo = texto;
+      }
+    }
+    return { status: res.status, headers: res.headers, corpo, texto };
+  }
+
+  /** GET binário (ex.: PDF de generatePdf). */
+  async baixar(caminho: string): Promise<{ status: number; headers: Headers; bytes: Buffer; texto: string }> {
+    const headers: Record<string, string> = { 'x-forwarded-for': this.ip };
+    if (this.cookies.size > 0) headers.cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
+    const res = await fetch(this.baseUrl + caminho, { headers, redirect: 'manual' });
+    const bytes = Buffer.from(await res.arrayBuffer());
+    return { status: res.status, headers: res.headers, bytes, texto: bytes.toString('utf8') };
   }
 
   async requisitar(metodo: string, caminho: string, opcoes: OpcoesRequisicao = {}): Promise<Resposta> {

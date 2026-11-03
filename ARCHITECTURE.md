@@ -6,9 +6,9 @@
 
 ## 1. Situação atual
 
-Fase 3 (arquitetura) concluída (REV-PLANO-010 aprovada); IMP-001 na etapa IA-TEST. Existem hoje
-apenas especificação, contrato, registros, ferramentas de validação e CI. As pastas
-`apps/`, `packages/`, `infra/` e `tests/` são criadas no IMP-001.
+IMP-001 aceito em 29/10/2026 (Gate 2), com o E2E com navegador pendente; IMP-002 na etapa
+IA-TEST. Existem `apps/api`, `packages/db` e `tests/`; `apps/web`, `apps/worker`,
+`packages/motor-leitura`, `packages/contratos` e `infra/` ainda não foram criados.
 
 ## 2. Fontes de verdade (DEC-049)
 

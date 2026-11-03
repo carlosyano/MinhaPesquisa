@@ -62,6 +62,21 @@ export function esperarErro(res: Resposta, errId: string): void {
   expect(res.texto).not.toMatch(/\bat .+:\d+:\d+|stack|Error:/);
 }
 
+/**
+ * Erro cujo texto do catálogo tem um marcador entre colchetes (ex.: "Arquivo recusado: [motivo].").
+ * O marcador é trocado por `valor` e o resto da mensagem tem de ser idêntico.
+ */
+export function esperarErroCom(res: Resposta, errId: string, valor: string): void {
+  const erro = CATALOGO.get(errId);
+  if (!erro) throw new Error(`${errId} não está ativo no catálogo`);
+  if (!/\[[^\]]+\]/.test(erro.mensagem)) throw new Error(`${errId} não tem marcador na mensagem`);
+  expect(res.status, `status de ${errId}; corpo: ${res.texto}`).toBe(erro.http_status);
+  expect(res.headers.get('content-type') ?? '').toMatch(/^application\/problem\+json/);
+  expect(res.corpo).toMatchObject({ status: erro.http_status, errorCode: errId, detail: erro.mensagem.replace(/\[[^\]]+\]/, valor) });
+  expect(res.corpo.correlationId).toBe(res.headers.get('x-correlation-id'));
+  expect(res.texto).not.toMatch(/\bat .+:\d+:\d+|stack|Error:/);
+}
+
 /** Corpo sem os campos que mudam a cada requisição, para comparar respostas que devem ser idênticas. */
 export function semCorrelacao(res: Resposta): unknown {
   const { correlationId: _c, instance: _i, ...resto } = res.corpo ?? {};
