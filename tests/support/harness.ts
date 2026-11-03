@@ -13,6 +13,14 @@
 //   20 requisições por minuto por IP em rotas públicas (Bloco P P.7) não misture testes.
 //   Esse comportamento é só do ambiente de teste; em produção o IP vem do balanceador;
 // - dados 100% sintéticos (Q-001).
+//
+// Acrescentado no IA-TEST do IMP-002:
+// - armazenamento de objetos real ou equivalente (ex.: MinIO em contêiner), privado; os links
+//   assinados de `getPageImage` precisam ser baixáveis pelo processo de teste com `fetch`;
+// - antimalware real ou equivalente que reconheça o arquivo de teste EICAR (DEC-042), rodando
+//   antes da verificação de tipo, sobre todo arquivo;
+// - nenhum provedor de IA: a leitura (IMP-003) só é solicitada pelo outbox; `inspect` expõe as
+//   solicitações para provar quando nada é lido.
 
 export type Perfil = 'admin_tenant' | 'digitalizador' | 'analista' | 'analista_individual';
 
@@ -41,6 +49,20 @@ export interface EstadoUsuario {
   mfa_ativo: boolean;
   /** Hash estável do segredo TOTP gravado (nunca o segredo), ou null se não houver segredo. */
   impressao_segredo_totp: string | null;
+}
+
+export interface MudancaStatusProjeto {
+  status: 'ativo' | 'arquivado';
+  usuario_id: string;
+  registrado_em: Date;
+}
+
+/** Contagens do tenant usadas para provar que um upload recusado não gravou nada (CA-029). */
+export interface ContagemUpload {
+  aplicacoes: number;
+  imagens: number;
+  /** Objetos no armazenamento de imagens do tenant. */
+  objetos: number;
 }
 
 export interface SessaoAtiva {
@@ -93,6 +115,11 @@ export interface Harness {
     usuario(usuarioId: string): Promise<EstadoUsuario>;
     sessoesAtivas(usuarioId: string): Promise<SessaoAtiva[]>;
     auditoria(tenantId: string): Promise<EventoAuditoria[]>;
+    /** HistoricoStatusProjeto em ordem cronológica, incluindo a criação (DEC-027, CA-027). */
+    historicoStatusProjeto(projetoId: string): Promise<MudancaStatusProjeto[]>;
+    contagemUpload(tenantId: string): Promise<ContagemUpload>;
+    /** Quantas vezes `leitura.solicitada` foi registrada no outbox para a aplicação (FL-001). */
+    leiturasSolicitadas(aplicacaoId: string): Promise<number>;
   };
 
   close(): Promise<void>;
