@@ -1,6 +1,8 @@
 // Configuração da API. Em produção vem do ambiente e do gerenciador de segredos; nos testes,
 // do harness. Nenhum segredo fica no repositório.
 
+import type { Antimalware } from './infra/antimalware.js';
+import type { Armazenamento } from './infra/armazenamento.js';
 import type { Mailer } from './infra/mailer.js';
 import type { Relogio } from './infra/relogio.js';
 
@@ -25,6 +27,10 @@ export interface Config {
   confiarProxy: boolean;
   relogio: Relogio;
   mailer: Mailer;
+  /** Imagens das páginas (DEC-101). */
+  armazenamento: Armazenamento;
+  /** Varredura de todo arquivo recebido (DEC-042, DEC-102). */
+  antimalware: Antimalware;
   /** Gera IDs (UUID v4); injetável para testes determinísticos. */
   gerarId: () => string;
 }

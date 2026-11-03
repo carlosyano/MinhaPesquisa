@@ -16,6 +16,8 @@ import { criarApi } from './app.js';
 import type { Config } from './config.js';
 import { linha, linhas, sql } from './infra/banco.js';
 import { cifrar, decifrar, hashSenha, novoSegredoTotp, normalizarEmail, sha256 } from './infra/cripto.js';
+import { AntimalwareEicar } from './infra/antimalware.js';
+import { ArmazenamentoEmMemoria } from './infra/armazenamento.js';
 import { MailerEmMemoria } from './infra/mailer.js';
 import { MINUTO } from './infra/relogio.js';
 import type { Perfil } from './nucleo.js';
@@ -69,6 +71,8 @@ export async function criarHarness() {
   let agora = new Date('2026-11-02T12:00:00.000Z');
   const relogio = { agora: () => new Date(agora) };
   const mailer = new MailerEmMemoria(relogio.agora);
+  const armazenamento = new ArmazenamentoEmMemoria(relogio.agora);
+  await armazenamento.iniciar();
   const config: Config = {
     urlBancoApp: urlComo(banco.superUrl, 'mp_app', senhaApp),
     urlBancoManutencao: urlComo(banco.superUrl, 'mp_manutencao', senhaManut),
@@ -81,6 +85,8 @@ export async function criarHarness() {
     confiarProxy: true,
     relogio,
     mailer,
+    armazenamento,
+    antimalware: new AntimalwareEicar(),
     gerarId: randomUUID,
   };
   const api = await criarApi(config);
@@ -153,6 +159,22 @@ export async function criarHarness() {
         });
         return { usuarioId, segredoTotp };
       },
+
+      /** Mesmo caminho do script do administrador da plataforma: grava e audita (seção 2.9). */
+      async parametro(d: { tenantId: string | null; projetoId?: string; chave: string; valor: string }) {
+        await n.banco.manutencao(async (tx) => {
+          await tx.execute(sql`
+            INSERT INTO parametro_configuracao (id, tenant_id, projeto_id, chave, valor, alterado_em)
+            VALUES (${n.id()}, ${d.tenantId}, ${d.projetoId ?? null}, ${d.chave}, ${d.valor}, ${n.agora()})
+            ON CONFLICT ON CONSTRAINT uq_parametro DO UPDATE SET valor = EXCLUDED.valor, alterado_em = EXCLUDED.alterado_em`);
+          if (d.tenantId) {
+            await tx.execute(sql`
+              INSERT INTO auditoria (id, tenant_id, usuario_id, acao, entidade, registro_id, canal, detalhes, criado_em)
+              VALUES (${n.id()}, ${d.tenantId}, NULL, 'ALTERAR_PARAMETRO', 'ParametroConfiguracao', NULL, 'script',
+                      ${JSON.stringify({ chave: d.chave })}::jsonb, ${n.agora()})`);
+          }
+        });
+      },
     },
 
     inspect: {
@@ -202,10 +224,43 @@ export async function criarHarness() {
         );
         return r.map((e) => ({ ...e, criado_em: new Date(e.criado_em) }));
       },
+
+      async historicoStatusProjeto(projetoId: string) {
+        const r = await n.banco.manutencao((tx) =>
+          linhas<{ status: 'ativo' | 'arquivado'; usuario_id: string; registrado_em: Date }>(
+            tx,
+            sql`SELECT status_novo AS status, alterado_por AS usuario_id, alterado_em AS registrado_em
+                  FROM historico_status_projeto WHERE projeto_id = ${projetoId} ORDER BY alterado_em, id`,
+          ),
+        );
+        return r.map((m) => ({ ...m, registrado_em: new Date(m.registrado_em) }));
+      },
+
+      async contagemUpload(tenantId: string) {
+        const r = await n.banco.manutencao((tx) =>
+          linha<{ aplicacoes: number; imagens: number }>(
+            tx,
+            sql`SELECT (SELECT count(*)::int FROM aplicacao WHERE tenant_id = ${tenantId}) AS aplicacoes,
+                       (SELECT count(*)::int FROM pagina_aplicacao WHERE tenant_id = ${tenantId}) AS imagens`,
+          ),
+        );
+        return { aplicacoes: r!.aplicacoes, imagens: r!.imagens, objetos: await armazenamento.contar(`tenant/${tenantId}/`) };
+      },
+
+      async leiturasSolicitadas(aplicacaoId: string) {
+        const r = await n.banco.manutencao((tx) =>
+          linha<{ n: number }>(
+            tx,
+            sql`SELECT count(*)::int AS n FROM outbox WHERE tipo = 'leitura.solicitada' AND payload ->> 'aplicacao_id' = ${aplicacaoId}`,
+          ),
+        );
+        return r!.n;
+      },
     },
 
     async close() {
       await api.fechar();
+      await armazenamento.fechar();
       await banco.parar();
     },
   };
