@@ -117,7 +117,7 @@ export async function decifrarBackup(origem: string, destino: string, mestra: Bu
   } finally {
     await f.close();
   }
-  const d = createDecipheriv('aes-256-gcm', derivarChaves(mestra).backup, iv);
+  const d = createDecipheriv('aes-256-gcm', derivarChaves(mestra).backup, iv, { authTagLength: TAG });
   d.setAAD(cabecalho(embrulhada, iv));
   d.setAuthTag(tag);
   const temp = `${destino}.parcial`;

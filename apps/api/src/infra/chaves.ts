@@ -60,7 +60,7 @@ export async function embrulharComSenha(mestra: Buffer, senha: string): Promise<
 export async function desembrulharComSenha(pacote: Buffer, senha: string): Promise<Buffer> {
   if (pacote.length !== TAMANHO_PACOTE || !pacote.subarray(0, 4).equals(MAGICO)) throw new Error('cópia da chave inválida');
   const sal = pacote.subarray(4, 20);
-  const d = createDecipheriv('aes-256-gcm', await scrypt(senha, sal), pacote.subarray(20, 32));
+  const d = createDecipheriv('aes-256-gcm', await scrypt(senha, sal), pacote.subarray(20, 32), { authTagLength: 16 });
   d.setAAD(Buffer.concat([MAGICO, sal]));
   d.setAuthTag(pacote.subarray(32, 48));
   try {
