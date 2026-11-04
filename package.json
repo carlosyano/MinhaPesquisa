@@ -12,6 +12,7 @@
     "typecheck:tests": "tsc -p tests",
     "pretest": "npm run build",
     "test": "vitest run",
+    "demo": "npm run build && node apps/api/dist/demo/main.js",
     "lint": "eslint .",
     "test:mutacao": "stryker run"
   },
