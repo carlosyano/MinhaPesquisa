@@ -3,11 +3,11 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.12 (CHG-010 aceita em 03/11/2026) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v2.0 (CHG-011 aceita em 03/11/2026, em propagação) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.17
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104); v2.17 incorpora a CHG-010 (CPF com uma caixa por dígito, DEC-105 e DEC-106)
+**Versão do plano:** 3.0
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104); v2.17 incorpora a CHG-010 (CPF com uma caixa por dígito, DEC-105 e DEC-106); v3.0 incorpora a CHG-011 (aplicação local num notebook, DEC-107 a DEC-112 e DEC-117 na REQ e DEC-113 a DEC-116) e cria o IMP-005
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -25,9 +25,14 @@ respondente por CPF, dashboards, exportação, direitos do titular, auditoria.
 **Fora (v2):** editor visual de layout, biblioteca de perguntas, importação de
 Forms/XLSForm, SPSS/R, permissão por linha, gestão de tenants por tela, cobrança.
 
-**Restrições inegociáveis:** dados em região no Brasil (RNF-011); isolamento por
-tenant desde a v1 (RN-001); nenhum dado real em desenvolvimento enquanto GX-001
-estiver pendente (Q-001).
+**Restrições inegociáveis:** dados guardados só no notebook, com disco cifrado (DEC-107);
+nenhum dado real em desenvolvimento enquanto GX-001 estiver pendente (Q-001).
+
+**Mudança da v3.0 (CHG-011):** o produto passa a ser uma aplicação local num notebook Windows, de uma
+única usuária (DEC-107 a DEC-112 da REQ). Saem a nuvem (DEC-113), a gestão de chaves em nuvem (DEC-114), o
+ClamAV (DEC-115), vários tenants na prática (DEC-116), MFA, e-mail, perfis, concessões e k-anonimato. As seções 2 a 10
+ainda descrevem a arquitetura em nuvem; a propagação segue no IMP-005 (§11) e, onde o texto contradiz
+a DEC-113 a DEC-116, valem as decisões.
 
 ---
 
@@ -410,7 +415,8 @@ validada a cada merge.
 | --- | --- | --- | --- | --- | --- |
 | IMP-001 | Repo, CI, banco com RLS e papéis, auth + MFA, usuários, perfis, vínculos e concessões, esqueleto do contrato | CA-012, CA-016, CA-025, CA-026, CA-026b, CA-035, CA-037, CA-037b, CA-038 | Gate 1 aprovado; REQ e Bloco P no repo | CI verde; TS-001 passando nas operações existentes; migração aplicada em PG17; E2E de login com MFA e reset de MFA | aceito (Gate 2, 29/10/2026; E2E com navegador pendente) |
 | IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada | aceito (Gate 2, 03/11/2026; E2E com navegador pendente) |
-| IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-015, CA-018, CA-019, CA-020, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 aceito | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` | planejado |
+| IMP-005 | Simplificação para a aplicação local (CHG-011): propagar a DEC-107 a DEC-116 à REQ, à matriz, ao contrato e aos testes; retirar MFA, convite, e-mail, perfis, vínculos e concessões; armazenamento em disco local (DEC-113), chaves locais (DEC-114), Microsoft Defender (DEC-115), um tenant fixo criado na instalação (DEC-116); scripts de instalação, de recuperação de senha e de backup diário cifrado (DEC-117) | — (muda CAs de outros incrementos; os CAs retirados saem da matriz) | IMP-002 aceito | CI verde; instalação do zero num notebook Windows limpo; backup e restauração testados; regressão do IMP-001 e do IMP-002 sem MFA | planejado |
+| IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-015, CA-018, CA-019, CA-020, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-043, CA-044 | IMP-002 e IMP-005 aceitos | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` | planejado |
 | IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-010, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031, CA-034 | IMP-003 aceito | TS-004/TS-005/TS-008; k-anon por célula; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações; grupo mínimo entre projetos | planejado |
 
 Cada IMP: IA-TEST escreve testes vermelhos → IA-DEV implementa → verificações
@@ -434,10 +440,10 @@ para economizar custo); fica recomendada antes do piloto.
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 47 CAs da REQ v1.12
+### 11.1 Cobertura dos 47 CAs da REQ v2.0
 
 A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 47 critérios
-de aceite da REQ v1.12 (CA-001 a CA-044, incluindo CA-014b, CA-026b e CA-037b). O validador
+de aceite da REQ v2.0 (CA-001 a CA-044, incluindo CA-014b, CA-026b e CA-037b). O validador
 confere que cada CA está no incremento do seu RF.
 
 **CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
@@ -486,7 +492,8 @@ validado pelo CI a cada merge.
 | CHG-007 — altos A-01 e A-02 da REV-REQ-008; Q-021 a Q-029 | mudança normativa | aceita em 29/10/2026 (REQ v1.9, DEC-074 a DEC-082) |
 | CHG-008 — perfil exigido na concessão individual (Q-030) | mudança normativa | aceita em 29/10/2026 (REQ v1.10, Q-030) |
 | CHG-009 — CA-003 esclarecido e lacunas do IA-TEST do IMP-002 (DEC-093 a DEC-100) | mudança normativa | aceita em 03/11/2026 (REQ v1.11) |
-| CHG-010 — CPF com uma caixa por dígito no PDF (DEC-105, DEC-106) | mudança normativa | aceita em 03/11/2026 (REQ v1.12); propagada no IA-TEST e no IA-DEV |
+| CHG-011 — aplicação local num notebook, de uma única usuária (DEC-107 a DEC-116) | mudança normativa | aceita em 03/11/2026 (REQ v2.0); propagação no IMP-005 |
+| CHG-010 — CPF com uma caixa por dígito no PDF (DEC-105, DEC-106) | mudança normativa | aceita em 03/11/2026 (REQ v2.0); propagada no IA-TEST e no IA-DEV |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
@@ -504,10 +511,10 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | id | data | tipo | problema | alternativas | decisao | premissa_justificativa | status | substituido_por | impacto | relacionados |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | DEC-037 | 24/10/2026 | técnica | Estrutura do monorepo | Repo único; múltiplos repos | apps/web, apps/api, apps/worker, packages/motor-leitura, packages/db, packages/contratos, infra | Simplicidade e contract-first compartilhado | definitivo | | Baixo | PLANO §2 |
-| DEC-038 | 24/10/2026 | técnica | Nuvem do projeto | AWS sa-east-1; Azure Brazil South | AWS sa-east-1 | Paridade com a stack validada no MeuRemedio; região Brasil; resolve DEC-036 | definitivo | | Alto | RNF-011, DEC-036 |
+| DEC-038 | 24/10/2026 | técnica | Nuvem do projeto | AWS sa-east-1; Azure Brazil South | AWS sa-east-1 | Paridade com a stack validada no MeuRemedio; região Brasil; resolve DEC-036 | substituído | DEC-113 | Alto | RNF-011, DEC-036 |
 | DEC-039 | 24/10/2026 | técnica | RPO e RTO da v1 | Valores menores; valores maiores | RPO 24h / RTO 4h | Compatível com volume de 500 formulários/mês | definitivo | | Médio | Bloco P P.13 |
 | DEC-040 | 24/10/2026 | técnica | Isolamento por tenant | RLS puro; schema por tenant; FK composta + RLS com SET LOCAL | SET LOCAL app.tenant_id por transação + RLS com FORCE | Defesa em camadas exigida pela RN-001 | definitivo | | Alto | RN-001, RN-023, TS-001 |
-| DEC-041 | 24/10/2026 | técnica | Cifragem do CPF | Ciframento no app; envelope KMS | AES-256-GCM com envelope no KMS + HMAC-SHA256 com chave por tenant derivada por HKDF | RNF-003 e RN-013 com rotação possível; sem correlação entre tenants (ajustada em 27/10/2026) | definitivo | | Alto | RNF-003, RN-013 |
+| DEC-041 | 24/10/2026 | técnica | Cifragem do CPF | Ciframento no app; envelope KMS | AES-256-GCM com envelope no KMS + HMAC-SHA256 com chave por tenant derivada por HKDF | RNF-003 e RN-013 com rotação possível; sem correlação entre tenants (ajustada em 27/10/2026) | substituído | DEC-114 | Alto | RNF-003, RN-013 |
 | DEC-042 | 24/10/2026 | técnica | Segurança de arquivos no ingresso | Só tipo/tamanho; pipeline completo | Tamanho, antimalware (ClamAV) sobre todo arquivo, tipo por magic bytes e páginas, nessa ordem; remoção de metadados (sharp) antes do storage | CA-029 e RN-040 sem ambiguidade | definitivo | | Alto | CA-029, RN-040, TS-002 |
 | DEC-043 | 24/10/2026 | técnica | Interface do motor de IA | Acoplado ao provedor; interface ReadEngine | Interface ReadEngine com adaptador por provedor | DEC-007: troca sem retrabalho | definitivo | | Alto | DEC-007, RF-007 |
 | DEC-044 | 24/10/2026 | técnica | Sessão e proteção de mutações | JWT stateless; sessão em banco | Sessão em banco + cookie httpOnly + CSRF double-submit | Bloco P P.2 | definitivo | | Alto | RF-002, CA-026 |
@@ -539,6 +546,10 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-103 | 03/11/2026 | técnica | Itens de resposta (ItemResposta) na criação da aplicação | Criar `pendente_leitura` no upload; criar na leitura | Os itens nascem com a leitura, no IMP-003; no IMP-002 a aplicação em `em_leitura` tem só as páginas e o evento `leitura.solicitada` no outbox | A versão só fica certa quando a aplicação sai de `identificacao_pendente`; evita criar e apagar itens | definitivo | | Baixo | RF-006, RF-007, FL-001 |
 | DEC-104 | 03/11/2026 | técnica | Modo de demonstração local para testar o IMP-002 com foto real, antes das telas (TL-xxx) | Esperar as telas; script de demonstração local fora da API | `npm run demo` (`apps/api/src/demo`): PostgreSQL 17 descartável, a API real com o armazenamento em memória (DEC-101), e-mail só no terminal e o equivalente EICAR (DEC-102), ou um clamd real com `MP_CLAMD_HOST`; uma usuária sintética com MFA, um projeto e um formulário publicado de duas páginas; uma página simples (entrar, baixar o PDF, enviar e identificar) que só usa operações do contrato, repassadas a partir da mesma origem. Escuta só em 127.0.0.1, recusa NODE_ENV=production, gera segredos a cada execução e não grava nada fora do contêiner; depende de pacotes de desenvolvimento, então não roda na imagem de produção. Não substitui o E2E com navegador nem as telas TL-xxx | Escolha do responsável em 03/11/2026: testar a leitura do QR e o registro com fotos reais antes do IMP-003. Só dados sintéticos enquanto a GX-001 estiver pendente | definitivo | | Baixo | DEC-101, DEC-102, DEC-088, RF-006, GX-001 |
 | DEC-106 | 03/11/2026 | técnica | Caixas do CPF no PDF e no mapa de layout (DEC-105) | Só a região da pergunta; região da pergunta e de cada caixa | 11 caixas quadradas de 18 pt, com 4 pt entre elas, dentro da área de resposta atual (a altura do bloco e a região da pergunta não mudam). O `mapa_layout` ganha, na pergunta do tipo `cpf`, a lista `caixas` com as 11 regiões normalizadas, na ordem dos dígitos | O IMP-003 recorta e lê dígito a dígito; como a região da pergunta não muda, os mapas já gravados continuam válidos | definitivo | | Médio | DEC-105, DEC-048, RF-004, RF-007, RN-012 |
+| DEC-113 | 03/11/2026 | técnica | Ambiente de execução da aplicação local (DEC-107) | AWS sa-east-1; notebook Windows | Notebook Windows 11 com BitLocker: PostgreSQL 17 local, API e interface web servidas só em 127.0.0.1; imagens em pasta local, pela interface Armazenamento (DEC-101) com um adaptador de disco e links assinados locais de 5 min; e-mail removido; pg-boss e outbox mantidos no PostgreSQL local; sem Terraform | Sem nuvem própria (CHG-011) | definitivo | | Alto | DEC-107, DEC-101, DEC-038, RNF-002, RNF-007 |
+| DEC-114 | 03/11/2026 | técnica | Chaves de cifra do CPF e do MFA sem KMS (DEC-041) | KMS da nuvem; chave mestra local protegida pelo Windows | AES-256-GCM e HMAC-SHA256 por HKDF mantidos; a chave mestra é gerada na instalação e guardada cifrada pelo DPAPI do Windows (escopo da máquina); uma cópia cifrada com senha de recuperação acompanha o backup, para restaurar em outro notebook | Sem KMS (CHG-011); sem a cópia, a perda do notebook tornaria o backup ilegível | definitivo | | Alto | DEC-041, DEC-107, RNF-003, DEC-117 |
+| DEC-115 | 03/11/2026 | técnica | Antimalware no upload da aplicação local (DEC-042, DEC-102) | clamd; Microsoft Defender | Produção: Microsoft Defender pela linha de comando (MpCmdRun), com a mesma regra de falha da DEC-102 (tempo esgotado ou resposta inesperada é falha, nunca "limpo"). Testes: o equivalente EICAR da DEC-102 continua | Já vem no Windows, sem serviço extra (CHG-011) | definitivo | | Médio | DEC-042, DEC-102, RF-006, CA-029 |
+| DEC-116 | 03/11/2026 | técnica | Código de vários tenants já implementado (DEC-107) | Remover tenant_id e RLS; manter com um tenant fixo | Mantém tenant_id, RLS e papéis do banco como estão; a instalação cria o único tenant e a usuária; tabelas novas seguem o mesmo padrão. Os testes de isolamento ficam como regressão até o IMP-005 decidir quais saem | Remover custaria refazer migrações e testes do IMP-001 e do IMP-002 sem ganho para a usuária (escolha do responsável) | definitivo | | Médio | DEC-107, RNF-001, RN-001, DEC-046 |
 
 ---
 
@@ -610,7 +621,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 47 CAs da REQ v1.12
+- [x] Estratégia de testes cobre todos os 47 CAs da REQ v2.0
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
@@ -662,4 +673,4 @@ REQ §8.1; o CI falha se divergirem.
 
 ---
 
-**Fim do documento `PLANO.md` v2.17**
+**Fim do documento `PLANO.md` v3.0**
