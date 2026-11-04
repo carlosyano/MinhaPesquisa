@@ -10,7 +10,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { lerPdf, luminancias } from '../../support/arquivos.js';
 import { chaveIdempotencia, type Cliente } from '../../support/cliente.js';
-import { entrar, tenantComAdmin, type TenantPronto } from '../../support/cenarios.js';
+import { entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import {
   PAGINAS_VERSAO,
   caminhoVersao,
@@ -31,8 +31,8 @@ let f: FormularioPublicado;
 
 beforeAll(async () => {
   h = await criarHarness();
-  T = await tenantComAdmin(h, 'Tenant PDF');
-  admin = await entrar(h, T.admin);
+  T = await tenantComUsuaria(h, 'Tenant PDF');
+  admin = await entrar(h, T.usuaria);
   projeto = await projetoCriado(admin, 'Saúde Idoso');
   f = await formularioPublicado(admin, projeto, 'Demografia');
 });

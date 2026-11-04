@@ -5,7 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { esperarErro } from '../../support/catalogo.js';
 import { chaveIdempotencia, type Cliente } from '../../support/cliente.js';
-import { entrar, pessoa, tenantComAdmin, type TenantPronto } from '../../support/cenarios.js';
+import { entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import {
   caminhoVersao,
   conteudoValido,
@@ -25,8 +25,8 @@ let projeto: string;
 
 beforeAll(async () => {
   h = await criarHarness();
-  T = await tenantComAdmin(h, 'Tenant Formulários');
-  admin = await entrar(h, T.admin);
+  T = await tenantComUsuaria(h, 'Tenant Formulários');
+  admin = await entrar(h, T.usuaria);
   projeto = await projetoCriado(admin, 'Saúde Idoso');
 });
 afterAll(async () => {
@@ -85,18 +85,6 @@ describe('RF-004 — rascunho e publicação', () => {
     const { formId, versaoId } = await criarFormulario(admin, projeto, 'Sem PDF');
     expect((await salvarConteudo(admin, formId, versaoId, conteudoValido())).status).toBe(200);
     esperarErro(await admin.get(`${caminhoVersao(formId, versaoId)}/pdf`), 'ERR-018');
-  });
-
-  // @trace RF-004, ERR-016
-  it('digitalizador e analista não criam formulário nem publicam (ERR-016)', async () => {
-    const { formId, versaoId } = await criarFormulario(admin, projeto, 'Protegido');
-    expect((await salvarConteudo(admin, formId, versaoId, conteudoValido())).status).toBe(200);
-    for (const perfil of ['digitalizador', 'analista'] as const) {
-      const c = await entrar(h, await pessoa(h, T.tenantId, [perfil], `form.${perfil}`));
-      esperarErro(await c.post('/forms', { corpo: { nome: 'X', projeto_id: projeto }, headers: { 'idempotency-key': chaveIdempotencia() } }), 'ERR-016');
-      esperarErro(await publicar(c, formId, versaoId), 'ERR-016');
-    }
-    expect((await admin.get(caminhoVersao(formId, versaoId))).corpo.resumo.status).toBe('rascunho');
   });
 });
 

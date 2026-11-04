@@ -1,37 +1,41 @@
 // Interface do ambiente de teste (IA-TEST, DEC-053).
 //
 // Os testes deste diretório falam com a API só por HTTP, como um cliente real. O que não é
-// observável pela API (relógio, e-mails enviados, auditoria, estado do MFA) chega por esta
+// observável pela API (relógio, scripts locais, auditoria, sessões) chega por esta
 // interface, que o IA-DEV implementa em `@minhapesquisa/api/test-harness` sem alterar este
 // arquivo. Até essa implementação existir, todos os testes falham (vermelho esperado).
 //
 // Requisitos da implementação:
 // - banco PostgreSQL 17 real com as migrações, RLS e papéis da DEC-046 (Testcontainers);
 // - relógio e gerador de IDs injetáveis (PLANO §10.2): a API e o job de expiração usam `clock`;
-// - envio de e-mail substituído por captura em memória; nenhum e-mail sai do processo;
 // - o servidor de teste aceita `X-Forwarded-For` como IP do cliente, para que o limite de
 //   20 requisições por minuto por IP em rotas públicas (Bloco P P.7) não misture testes.
 //   Esse comportamento é só do ambiente de teste; em produção o IP vem do balanceador;
 // - dados 100% sintéticos (Q-001).
 //
+// Revisto no IA-TEST do IMP-005 (CHG-011, DEC-108, DEC-109): sem MFA, convite, e-mail nem
+// perfis. Cada tenant tem uma só usuária; os scripts de instalação e de redefinição de senha
+// rodam pelo mesmo código dos scripts reais, num banco ainda sem tenant.
+//
 // Acrescentado no IA-TEST do IMP-002:
-// - armazenamento de objetos real ou equivalente (ex.: MinIO em contêiner), privado; os links
+// - armazenamento privado das imagens (desde o IMP-005, pasta local, DEC-113); os links
 //   assinados de `getPageImage` precisam ser baixáveis pelo processo de teste com `fetch`;
 // - antimalware real ou equivalente que reconheça o arquivo de teste EICAR (DEC-042), rodando
-//   antes da verificação de tipo, sobre todo arquivo;
+//   antes da verificação de tipo, sobre todo arquivo (desde o IMP-005, Microsoft Defender,
+//   DEC-115; no CI em Linux, um equivalente que use o mesmo adaptador);
 // - nenhum provedor de IA: a leitura (IMP-003) só é solicitada pelo outbox; `inspect` expõe as
 //   solicitações para provar quando nada é lido.
 
-export type Perfil = 'admin_tenant' | 'digitalizador' | 'analista' | 'analista_individual';
+/** Resultado de um script local: código de saída e tudo o que ele escreveu no terminal. */
+export interface SaidaScript {
+  codigo: number;
+  saida: string;
+}
 
-export type TipoEmail = 'convite' | 'recuperacao_senha' | 'reset_mfa';
-
-export interface EmailCapturado {
-  para: string;
-  tipo: TipoEmail;
-  /** Token em claro extraído do link do e-mail. */
-  token: string;
-  enviado_em: Date;
+export interface TenantGravado {
+  tenantId: string;
+  nome: string;
+  usuarios: number;
 }
 
 export interface EventoAuditoria {
@@ -42,13 +46,6 @@ export interface EventoAuditoria {
   registro_id: string | null;
   detalhes: unknown;
   criado_em: Date;
-}
-
-export interface EstadoUsuario {
-  situacao: 'pendente_convite' | 'ativo' | 'inativo';
-  mfa_ativo: boolean;
-  /** Hash estável do segredo TOTP gravado (nunca o segredo), ou null se não houver segredo. */
-  impressao_segredo_totp: string | null;
 }
 
 export interface MudancaStatusProjeto {
@@ -63,11 +60,6 @@ export interface ContagemUpload {
   imagens: number;
   /** Objetos no armazenamento de imagens do tenant. */
   objetos: number;
-}
-
-export interface SessaoAtiva {
-  tipo: 'pre_sessao' | 'plena';
-  etapa: 'mfa_verificacao' | 'mfa_cadastro' | null;
 }
 
 /** Região normalizada de 0 a 1, com y a partir do topo da página (DEC-048). */
@@ -95,35 +87,33 @@ export interface Harness {
     advance(ms: number): Promise<void>;
   };
 
-  mail: {
-    enviados(): EmailCapturado[];
+  scripts: {
+    /**
+     * Script de instalação (CA-035, PLANO §4.5), com a senha como se digitada no terminal.
+     * Código 0 só quando cria o tenant e a conta; recusa (código diferente de 0) sem gravar
+     * nada se o banco já tiver tenant ou se a senha não cumprir a RN-048.
+     */
+    instalar(dados: { instituicao: string; nome: string; email: string; senha: string }): Promise<SaidaScript>;
+    /**
+     * Script de redefinição de senha da única usuária (CA-037, PLANO §4.5): troca a senha,
+     * encerra as sessões e audita `REDEFINICAO_SENHA`. Sem e-mail nem link (DEC-108).
+     */
+    redefinirSenha(novaSenha: string): Promise<SaidaScript>;
   };
 
   seed: {
     /**
-     * Cria o tenant pelo mesmo caminho do script de criação (CA-035): tenant ativo e primeiro
-     * administrador em `pendente_convite`, com convite de 24 h capturado em `mail`.
+     * Tenant ativo com a sua única usuária, sem passar pelo script de instalação. Atalho de
+     * preparação para testes que não são sobre a instalação: dá uma usuária nova a cada
+     * teste e permite dois tenants no mesmo banco para o CA-012 (defesa em profundidade,
+     * DEC-116). Os scripts de `scripts` não são usados depois deste atalho.
      */
-    tenant(dados: { nome: string; emailAdmin: string; nomeAdmin: string }): Promise<{
+    tenant(dados: { nome: string; email: string; nomeUsuaria: string; senha: string }): Promise<{
       tenantId: string;
-      adminId: string;
+      usuarioId: string;
     }>;
-    /** Projeto mínimo do tenant. Até o IMP-002 os projetos só nascem por aqui. */
+    /** Projeto mínimo do tenant. */
     projeto(tenantId: string, nome: string): Promise<{ projetoId: string }>;
-    /**
-     * Usuário já ativo, com senha e MFA cadastrados, sem passar pelo convite. Atalho de
-     * preparação para testes que não são sobre o convite. Sem `todosProjetos` nem `projetos`,
-     * o vínculo é "todos os projetos" (RN-004).
-     */
-    usuarioAtivo(dados: {
-      tenantId: string;
-      email: string;
-      nome: string;
-      senha: string;
-      perfis: Perfil[];
-      todosProjetos?: boolean;
-      projetos?: string[];
-    }): Promise<{ usuarioId: string; segredoTotp: string }>;
     /**
      * Parâmetro de configuração gravado pelo mesmo caminho do script do administrador da
      * plataforma (REQ seção 2.9), com auditoria. Ex.: `termo_consentimento` do tenant (DEC-094).
@@ -132,8 +122,10 @@ export interface Harness {
   };
 
   inspect: {
-    usuario(usuarioId: string): Promise<EstadoUsuario>;
-    sessoesAtivas(usuarioId: string): Promise<SessaoAtiva[]>;
+    /** Tenants gravados, com o número de contas de cada um (CA-035). */
+    tenants(): Promise<TenantGravado[]>;
+    /** Quantas sessões não expiradas a conta tem. */
+    sessoesAtivas(usuarioId: string): Promise<number>;
     auditoria(tenantId: string): Promise<EventoAuditoria[]>;
     /** HistoricoStatusProjeto em ordem cronológica, incluindo a criação (DEC-027, CA-027). */
     historicoStatusProjeto(projetoId: string): Promise<MudancaStatusProjeto[]>;

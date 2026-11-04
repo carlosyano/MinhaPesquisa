@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { jpeg, pdfDeImagens, semQr } from '../../support/arquivos.js';
 import { esperarErro, semCorrelacao } from '../../support/catalogo.js';
 import { chaveIdempotencia, type Cliente, type Resposta } from '../../support/cliente.js';
-import { entrar, pessoa, tenantComAdmin, type Pessoa, type TenantPronto } from '../../support/cenarios.js';
+import { entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import {
   arquivo,
   caminhoVersao,
@@ -23,7 +23,6 @@ import { criarHarness, type Harness } from '../../support/harness.js';
 let h: Harness;
 let A: TenantPronto;
 let B: TenantPronto;
-let usuarioA: Pessoa;
 let a: Cliente;
 let projetoA: string;
 let projetoB: string;
@@ -33,21 +32,19 @@ let aplicacaoB: { id: string; imagemId: string };
 
 beforeAll(async () => {
   h = await criarHarness();
-  A = await tenantComAdmin(h, 'Tenant A');
-  B = await tenantComAdmin(h, 'Tenant B');
-  const adminB = await entrar(h, B.admin);
-  projetoB = await projetoCriado(adminB, 'Saúde Idoso B');
-  formB = await formularioPublicado(adminB, projetoB, 'Demografia B');
-  rascunhoB = await criarFormulario(adminB, projetoB, 'Rascunho B');
-  const digB = await entrar(h, await pessoa(h, B.tenantId, ['digitalizador'], 'b.dig', { projetos: [projetoB] }));
+  A = await tenantComUsuaria(h, 'Tenant A');
+  B = await tenantComUsuaria(h, 'Tenant B');
+  const b = await entrar(h, B.usuaria);
+  projetoB = await projetoCriado(b, 'Saúde Idoso B');
+  formB = await formularioPublicado(b, projetoB, 'Demografia B');
+  rascunhoB = await criarFormulario(b, projetoB, 'Rascunho B');
   const imgs = [await jpeg(formB.paginas[0]), await semQr(formB.paginas[1]), await jpeg(formB.paginas[2]), await jpeg(formB.paginas[3])];
-  const envio = await enviar(digB, projetoB, [arquivo('b.pdf', 'application/pdf', await pdfDeImagens(imgs))]);
+  const envio = await enviar(b, projetoB, [arquivo('b.pdf', 'application/pdf', await pdfDeImagens(imgs))]);
   expect(envio.status, envio.texto).toBe(202);
   aplicacaoB = { id: envio.corpo.aplicacao_id, imagemId: envio.corpo.paginas[1].imagem_id };
 
-  // Usuário de A com todos os perfis, para que a recusa venha do escopo e não do perfil.
-  usuarioA = await pessoa(h, A.tenantId, ['admin_tenant', 'digitalizador', 'analista'], 'a.todos');
-  a = await entrar(h, usuarioA);
+  // A usuária de A pode tudo no próprio tenant (DEC-109): a recusa só pode vir do escopo.
+  a = await entrar(h, A.usuaria);
   projetoA = await projetoCriado(a, 'Saúde Idoso A');
 });
 afterAll(async () => {
@@ -55,7 +52,7 @@ afterAll(async () => {
 });
 
 async function esperarNaoEncontradoAuditado(tentativa: () => Promise<Resposta>): Promise<Resposta> {
-  const doUsuario = async (tenant: string) => (await h.inspect.auditoria(tenant)).filter((e) => e.usuario_id === usuarioA.usuarioId).length;
+  const doUsuario = async (tenant: string) => (await h.inspect.auditoria(tenant)).filter((e) => e.usuario_id === A.usuaria.usuarioId).length;
   const antes = await doUsuario(A.tenantId);
   const r = await tentativa();
   esperarErro(r, 'ERR-002');
@@ -135,10 +132,10 @@ describe('TS-001 — demais operações do IMP-002 com recursos de outro tenant'
 
   // @trace TS-001, RN-042
   it('versões e projeto do tenant-B seguem como estavam', async () => {
-    const adminB = await entrar(h, B.admin);
-    expect((await adminB.get(`/projects/${projetoB}`)).corpo).toMatchObject({ nome: 'Saúde Idoso B', status: 'ativo' });
-    expect((await adminB.get(caminhoVersao(rascunhoB.formId, rascunhoB.versaoId))).corpo.resumo.status).toBe('rascunho');
-    const forms = await adminB.get(`/projects/${projetoB}/forms`);
+    const b = await entrar(h, B.usuaria);
+    expect((await b.get(`/projects/${projetoB}`)).corpo).toMatchObject({ nome: 'Saúde Idoso B', status: 'ativo' });
+    expect((await b.get(caminhoVersao(rascunhoB.formId, rascunhoB.versaoId))).corpo.resumo.status).toBe('rascunho');
+    const forms = await b.get(`/projects/${projetoB}/forms`);
     expect(forms.corpo.itens.map((f: { nome: string }) => f.nome).sort()).toEqual(['Demografia B', 'Rascunho B']);
   });
 });

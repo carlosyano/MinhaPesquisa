@@ -20,7 +20,7 @@ import {
 } from '../../support/arquivos.js';
 import { esperarErro, esperarErroCom } from '../../support/catalogo.js';
 import { chaveIdempotencia, type Arquivo, type Cliente } from '../../support/cliente.js';
-import { entrar, pessoa, tenantComAdmin, type TenantPronto } from '../../support/cenarios.js';
+import { entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import { PAGINAS_VERSAO, arquivo, enviar, formularioPublicado, projetoCriado, type FormularioPublicado } from '../../support/formularios.js';
 import { criarHarness, type Harness } from '../../support/harness.js';
 
@@ -33,11 +33,12 @@ let f: FormularioPublicado;
 
 beforeAll(async () => {
   h = await criarHarness();
-  T = await tenantComAdmin(h, 'Tenant Upload');
-  admin = await entrar(h, T.admin);
+  T = await tenantComUsuaria(h, 'Tenant Upload');
+  admin = await entrar(h, T.usuaria);
   projeto = await projetoCriado(admin, 'Saúde Idoso');
   f = await formularioPublicado(admin, projeto, 'Demografia');
-  dig = await entrar(h, await pessoa(h, T.tenantId, ['digitalizador'], 'dig.upload', { projetos: [projeto] }));
+  // Com a usuária única (DEC-109), o papel de digitalizador é uma segunda sessão da mesma conta.
+  dig = await entrar(h, T.usuaria);
 });
 afterAll(async () => {
   await h?.close();
@@ -190,48 +191,32 @@ describe('DEC-099 — quem vê a imagem da página (getPageImage)', () => {
     return { id: r.corpo.aplicacao_id, imagem: r.corpo.paginas[1].imagem_id };
   }
 
-  // @trace DEC-099, RN-029, RN-027
-  it('digitalizador vinculado vê a imagem em identificacao_pendente; o acesso é auditado com o id da imagem', async () => {
+  // @trace DEC-099, RN-029, RN-027, DEC-109
+  it('a usuária vê a imagem em identificacao_pendente, de qualquer sessão; o acesso é auditado com o id da imagem', async () => {
     const { id, imagem } = await pendente();
-    const outro = await entrar(h, await pessoa(h, T.tenantId, ['digitalizador'], 'dig.outro', { projetos: [projeto] }));
-    const r = await outro.get(`/applications/${id}/pages/${imagem}/image`);
-    expect(r.status, r.texto).toBe(200);
+    for (const c of [dig, admin]) {
+      const r = await c.get(`/applications/${id}/pages/${imagem}/image`);
+      expect(r.status, r.texto).toBe(200);
+    }
     expect(await h.inspect.auditoria(T.tenantId)).toContainEqual(expect.objectContaining({ registro_id: imagem }));
   });
 
-  // @trace DEC-099, ERR-016, ERR-002
-  it('analista e administrador sem perfil digitalizador → ERR-016; digitalizador sem vínculo → ERR-002', async () => {
-    const { id, imagem } = await pendente();
-    const analista = await entrar(h, await pessoa(h, T.tenantId, ['analista'], 'analista.img', { projetos: [projeto] }));
-    esperarErro(await analista.get(`/applications/${id}/pages/${imagem}/image`), 'ERR-016');
-    esperarErro(await admin.get(`/applications/${id}/pages/${imagem}/image`), 'ERR-016');
-    const outroProjeto = await projetoCriado(admin, 'Projeto de outro digitalizador');
-    const semVinculo = await entrar(h, await pessoa(h, T.tenantId, ['digitalizador'], 'dig.sem.vinculo', { projetos: [outroProjeto] }));
-    esperarErro(await semVinculo.get(`/applications/${id}/pages/${imagem}/image`), 'ERR-002');
-  });
-
   // @trace DEC-099, ERR-018
-  it('aplicação em_leitura (sem reserva possível) → ERR-018', async () => {
+  it('aplicação em_leitura → ERR-018', async () => {
     const r = await enviar(dig, projeto, await jpegs());
     expect(r.corpo.estado).toBe('em_leitura');
     esperarErro(await dig.get(`/applications/${r.corpo.aplicacao_id}/pages/${r.corpo.paginas[0].imagem_id}/image`), 'ERR-018');
   });
 });
 
-describe('RF-006 — permissão, vínculo e idempotência', () => {
-  // @trace RF-006, ERR-016
-  it('administrador sem o perfil digitalizador não envia (ERR-016)', async () => {
-    const antes = await h.inspect.contagemUpload(T.tenantId);
-    esperarErro(await enviar(admin, projeto, await jpegs()), 'ERR-016');
-    expect(await h.inspect.contagemUpload(T.tenantId)).toEqual(antes);
-  });
-
-  // @trace RF-006, RN-004, ERR-002
-  it('digitalizador não vinculado ao projeto → 404 ERR-002', async () => {
+describe('RF-006 — projeto e idempotência', () => {
+  // @trace RF-006, RN-004, DEC-109
+  it('a usuária envia para qualquer projeto do tenant, sem vínculo', async () => {
     const outroProjeto = await projetoCriado(admin, 'Projeto sem vínculo');
-    const antes = await h.inspect.contagemUpload(T.tenantId);
-    esperarErro(await enviar(dig, outroProjeto, await jpegs()), 'ERR-002');
-    expect(await h.inspect.contagemUpload(T.tenantId)).toEqual(antes);
+    const g = await formularioPublicado(admin, outroProjeto, 'Demografia do outro projeto');
+    const paginas = await Promise.all(g.paginas.map(async (p) => arquivo(`pagina-${p.numero}.jpg`, 'image/jpeg', await jpeg(p))));
+    const r = await enviar(dig, outroProjeto, paginas);
+    expect(r.status, r.texto).toBe(202);
   });
 
   // @trace REQ §6.5, ERR-019, P.8
