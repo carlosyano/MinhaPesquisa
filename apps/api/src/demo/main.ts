@@ -11,9 +11,15 @@
 //   MP_DEMO_DATABASE_URL  superusuário de um PostgreSQL 17 já em execução (sem Docker)
 //   MP_DEMO_PORTA         porta da página (padrão 8080)
 //   MP_DEFENDER=true      Microsoft Defender (MpCmdRun) em vez do equivalente EICAR
+//   MP_DEMO_CHAVE_IA      chave da API da Anthropic para a leitura real (DEC-125); só em memória,
+//                         nunca gravada. Sem ela, o envio funciona e a leitura fica parada.
+//   MP_DEMO_MODELO        modelo da leitura (padrão: o da instalação, DEC-122)
+//   MP_DEMO_COTACAO       cotação do dólar do mês, fictícia (padrão 5.00, DEC-058)
 
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { aplicarMigracoes, criarPapeis } from '@minhapesquisa/db';
+import { AdaptadorClaude } from '@minhapesquisa/motor-leitura';
+import { sql } from 'drizzle-orm';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, request as requisitarHttp, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -25,6 +31,9 @@ import type { Config } from '../config.js';
 import { AntimalwareDefender, AntimalwareEicar, type Antimalware } from '../infra/antimalware.js';
 import { ArmazenamentoEmMemoria } from '../infra/armazenamento.js';
 import { relogioDoSistema } from '../infra/relogio.js';
+import { competencia } from '../leitura/dominio.js';
+import { WorkerLeitura } from '../leitura/worker.js';
+import { IA_PADRAO } from '../local.js';
 import { criarTenantComUsuaria } from '../scripts/instalacao.js';
 import { PAGINA_DEMO } from './pagina.js';
 
@@ -133,6 +142,17 @@ const antimalware: Antimalware = defender
   ? new AntimalwareDefender({ pastaTemp: join(tmpdir(), 'minhapesquisa-demo-varredura') })
   : new AntimalwareEicar();
 
+// A chave sai do ambiente logo ao ser lida, para não chegar a processos filhos (DEC-125).
+const chaveIa = process.env.MP_DEMO_CHAVE_IA?.trim() || undefined;
+delete process.env.MP_DEMO_CHAVE_IA;
+const ia = { ...IA_PADRAO, modelo: process.env.MP_DEMO_MODELO?.trim() || IA_PADRAO.modelo };
+const cotacao = process.env.MP_DEMO_COTACAO?.trim() || '5.00';
+if (!/^\d+(\.\d{1,4})?$/.test(cotacao)) {
+  console.error('MP_DEMO_COTACAO precisa ser um número com ponto decimal, ex.: 5.00');
+  process.exit(1);
+}
+const motor = chaveIa ? new AdaptadorClaude({ apiKey: chaveIa, ...ia }) : undefined;
+
 const config: Config = {
   urlBancoApp: urlComo(banco.superUrl, 'mp_app', senhaApp),
   urlBancoManutencao: urlComo(banco.superUrl, 'mp_manutencao', senhaManut),
@@ -147,6 +167,7 @@ const config: Config = {
   armazenamento,
   antimalware,
   gerarId: randomUUID,
+  ...(motor ? { motorLeitura: () => motor } : {}),
 };
 const api = await criarApi(config, 0, HOST);
 const n = api.nucleo;
@@ -177,6 +198,29 @@ await chamar('PUT', caminhoVersao, conteudoDemo(), { 'if-match': atual.etag ?? '
 await chamar('POST', `${caminhoVersao}/publish`);
 await chamar('POST', '/auth/logout'); // a sessão da semente não fica aberta
 
+// Cotação do mês corrente e do seguinte (a demonstração pode atravessar a virada do mês).
+const meses = [competencia(n.agora()).inicio, competencia(new Date(n.agora().getTime() + 32 * 86_400_000)).inicio];
+await n.banco.manutencao(async (tx) => {
+  for (const mes of meses) {
+    await tx.execute(sql`
+      INSERT INTO parametro_configuracao (id, tenant_id, projeto_id, chave, valor, competencia, alterado_em)
+      VALUES (${n.id()}, NULL, NULL, 'cotacao_usd_brl', ${cotacao}, ${mes}::date, ${n.agora()})
+      ON CONFLICT ON CONSTRAINT uq_parametro DO UPDATE SET valor = EXCLUDED.valor, alterado_em = EXCLUDED.alterado_em`);
+  }
+});
+
+// Worker de leitura no mesmo processo, como no notebook (DEC-124).
+const worker = new WorkerLeitura(n);
+let rodando = false;
+const ciclo = setInterval(() => {
+  if (rodando) return;
+  rodando = true;
+  worker
+    .processar()
+    .catch((e: unknown) => n.log(`worker_erro tipo=${(e as Error)?.name ?? typeof e}`))
+    .finally(() => (rodando = false));
+}, 1000);
+
 const dadosPagina = JSON.stringify({ projetoId: projeto.corpo.id, formId, versaoId, email: EMAIL });
 const pagina = createServer((req, res) => {
   const caminho = (req.url ?? '/').split('?')[0];
@@ -198,9 +242,12 @@ console.log(`MinhaPesquisa — modo de demonstração (DEC-104). Só dados sint�
   e-mail:  ${EMAIL}
   senha:   ${senha}
   antimalware: ${defender ? 'Microsoft Defender' : 'equivalente EICAR'}
+  leitura por IA: ${motor ? `${ia.modelo} (cada página lida gera custo real na sua conta da Anthropic)` : 'desligada (defina MP_DEMO_CHAVE_IA para ligar)'}
+  cotação do dólar (fictícia): R$ ${cotacao}
 Tudo some ao encerrar (Ctrl+C).`);
 
 async function encerrar(): Promise<void> {
+  clearInterval(ciclo);
   pagina.close();
   await api.fechar();
   await armazenamento.fechar();
