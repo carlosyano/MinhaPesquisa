@@ -70,6 +70,21 @@ export interface SessaoAtiva {
   etapa: 'mfa_verificacao' | 'mfa_cadastro' | null;
 }
 
+/** Região normalizada de 0 a 1, com y a partir do topo da página (DEC-048). */
+export interface RegiaoNormalizada {
+  x: number;
+  y: number;
+  largura: number;
+  altura: number;
+}
+
+/** `Versao.mapa_layout` gravado na publicação (DEC-048, DEC-106). */
+export interface MapaLayoutGravado {
+  total_paginas: number;
+  perguntas: { codigo: string; pagina: number; regiao: RegiaoNormalizada; caixas?: RegiaoNormalizada[] }[];
+  assinatura: { pagina: number; regiao: RegiaoNormalizada };
+}
+
 export interface Harness {
   /** URL base do servidor HTTP já iniciado (ex.: http://127.0.0.1:43210). */
   baseUrl: string;
@@ -125,6 +140,8 @@ export interface Harness {
     contagemUpload(tenantId: string): Promise<ContagemUpload>;
     /** Quantas vezes `leitura.solicitada` foi registrada no outbox para a aplicação (FL-001). */
     leiturasSolicitadas(aplicacaoId: string): Promise<number>;
+    /** `mapa_layout` da versão publicada; null em rascunho (DEC-048, DEC-106). */
+    mapaLayout(versaoId: string): Promise<MapaLayoutGravado | null>;
   };
 
   close(): Promise<void>;

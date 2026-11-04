@@ -52,6 +52,23 @@ export interface PaginaRenderizada {
   texto: string;
 }
 
+/** Luminância (0 a 255) de cada pixel de uma página renderizada. */
+export async function luminancias(png: Buffer): Promise<{ largura: number; altura: number; em(x: number, y: number): number }> {
+  const img = await loadImage(png);
+  const canvas = createCanvas(img.width, img.height);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const d = ctx.getImageData(0, 0, img.width, img.height).data;
+  return {
+    largura: img.width,
+    altura: img.height,
+    em(x, y) {
+      const i = (Math.round(y) * img.width + Math.round(x)) * 4;
+      return 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    },
+  };
+}
+
 /** Renderiza cada página do PDF, lê o QR e extrai o texto. */
 export async function lerPdf(bytes: Buffer): Promise<PaginaRenderizada[]> {
   const tarefa = pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: 0 });
