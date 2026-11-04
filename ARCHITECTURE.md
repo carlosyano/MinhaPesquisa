@@ -1,7 +1,7 @@
 # Arquitetura do Projeto MinhaPesquisa
 
 > Mapa do repositório para pessoas e agentes de IA. Resume o que está decidido em
-> `docs/architecture/PLANO.md` (v3.5) e aponta a fonte de verdade de cada artefato.
+> `docs/architecture/PLANO.md` (v3.6) e aponta a fonte de verdade de cada artefato.
 > Em conflito, vale a precedência do PLANO: decisões de negócio → REQ → PLANO/DEC técnicas → Bloco P.
 
 ## 1. Situação atual
@@ -26,7 +26,7 @@ IMP-001 aceito em 29/10/2026 (Gate 2), com o E2E com navegador pendente; IMP-002
 ## 3. Stack (DEC-037, Bloco P P.1)
 
 Node.js 24 · TypeScript strict · NestJS + Fastify · Next.js + React + Tailwind + shadcn/ui ·
-PostgreSQL 17 + Drizzle (SQL explícito) · pg-boss + Outbox · aplicação local num notebook Windows (DEC-107, DEC-113) ·
+PostgreSQL 17 + Drizzle (SQL explícito) · Outbox + fila em tabela própria (DEC-124) · aplicação local num notebook Windows (DEC-107, DEC-113) ·
 Vitest, Testcontainers, Playwright + axe, Schemathesis, fast-check, Stryker.
 
 ## 4. Estrutura planejada
@@ -62,7 +62,7 @@ packages/contratos <── apps/api, apps/web (tipos)
 - `packages/motor-leitura` não importa `apps/*` nem `packages/db`, não acessa banco, rede,
   storage nem `process.env` (ESLint `no-restricted-imports` + teste de boundary).
 - `apps/web` só fala com `apps/api` por HTTP; nunca acessa banco.
-- `apps/worker` e `apps/api` compartilham `packages/db`; comunicação assíncrona só por outbox + pg-boss.
+- `apps/worker` e `apps/api` compartilham `packages/db`; comunicação assíncrona só por outbox + fila em tabela (DEC-124); no notebook o worker de leitura roda no processo da API.
 
 ## 6. Fluxos críticos (detalhe no PLANO §4)
 

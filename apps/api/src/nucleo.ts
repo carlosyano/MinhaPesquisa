@@ -4,7 +4,8 @@
 import type { Config } from './config.js';
 import { Banco, linha, sql, type Executor } from './infra/banco.js';
 import { Contrato } from './infra/contrato.js';
-import { segredoAleatorio, sha256 } from './infra/cripto.js';
+import { createHmac } from 'node:crypto';
+import { cifrar, decifrar, segredoAleatorio, sha256 } from './infra/cripto.js';
 import { ErroApi, type AuditoriaDeErro } from './infra/erros.js';
 import { HORA, MINUTO, somar } from './infra/relogio.js';
 
@@ -69,11 +70,33 @@ export class Nucleo {
     entidade: string,
     registroId: string | null,
     detalhes?: Record<string, unknown>,
+    campo?: string,
   ): Promise<void> {
     await tx.execute(sql`
-      INSERT INTO auditoria (id, tenant_id, usuario_id, acao, entidade, registro_id, ip, canal, detalhes, criado_em)
-      VALUES (${this.id()}, ${ator.tenantId}, ${ator.usuarioId}, ${acao}, ${entidade}, ${registroId},
+      INSERT INTO auditoria (id, tenant_id, usuario_id, acao, entidade, registro_id, campo, ip, canal, detalhes, criado_em)
+      VALUES (${this.id()}, ${ator.tenantId}, ${ator.usuarioId}, ${acao}, ${entidade}, ${registroId}, ${campo ?? null},
               ${ator.ip}::inet, 'api', ${detalhes ? JSON.stringify(detalhes) : null}::jsonb, ${this.agora()})`);
+  }
+
+  // ───────────────────────────── Cifra de campo e log ─────────────────────────────
+
+  /** Cifra um valor pessoal (AES-256-GCM, DEC-041); null continua null. */
+  cifrar(valor: string | null): string | null {
+    return valor === null ? null : cifrar(this.config.chaveCifraCampo, valor);
+  }
+
+  decifrar(valor: string | null): string | null {
+    return valor === null ? null : decifrar(this.config.chaveCifraCampo, valor);
+  }
+
+  /** HMAC do CPF canônico (busca e vínculo, ENT-009) ou de outro valor pessoal (ENT-023). */
+  hmac(valor: string): Buffer {
+    return createHmac('sha256', this.config.chaveHmacCpf).update(valor).digest();
+  }
+
+  /** Log operacional: só identificadores e situações, nunca valores lidos nem pessoais (RN-028). */
+  log(linha: string): void {
+    (this.config.log ?? ((l: string) => console.error(l)))(linha);
   }
 
   // ───────────────────────────── Sessões ─────────────────────────────

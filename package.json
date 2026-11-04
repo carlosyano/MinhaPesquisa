@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "lint:spec": "spectral lint contracts/openapi.yaml",
-    "build": "npm run build -w @minhapesquisa/db && npm run build -w @minhapesquisa/api",
+    "build": "npm run build -w @minhapesquisa/db && npm run build -w @minhapesquisa/motor-leitura && npm run build -w @minhapesquisa/api",
     "typecheck:tests": "tsc -p tests",
     "pretest": "npm run build",
     "test": "vitest run",

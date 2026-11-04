@@ -30,8 +30,10 @@ export async function projetoNoEscopo(tx: Executor, id: string, bloquear = false
   return p;
 }
 
-/** Valores-padrão da seção 2.9 da REQ para os parâmetros usados no IMP-002. */
+/** Valores-padrão da seção 2.9 da REQ para os parâmetros usados no IMP-002 e no IMP-003. */
 export const PADRAO_PARAMETRO: Record<string, string> = {
+  custo_ia_teto: '500.00', // R$ por tenant e mês civil (CA-030, DEC-035)
+  limite_confianca: '0.90', // DEC-028
   termo_consentimento:
     'Termo de consentimento. Autorizo o uso das minhas respostas a este formulário, inclusive as de saúde, ' +
     'pela instituição responsável pela pesquisa, para fins de acompanhamento e análise, conforme a Lei Geral de ' +

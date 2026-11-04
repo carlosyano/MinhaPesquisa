@@ -6,8 +6,8 @@
 **Fontes normativas:** REQ v2.2 (CHG-011 propagada no IMP-005; CHG-012 aceita em 04/11/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 3.5
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104); v2.17 incorpora a CHG-010 (CPF com uma caixa por dígito, DEC-105 e DEC-106); v3.0 incorpora a CHG-011 (aplicação local num notebook, DEC-107 a DEC-112 e DEC-117 na REQ e DEC-113 a DEC-116) e cria o IMP-005; v3.1 propaga a CHG-011 às seções 3 a 11 e ao contrato (OpenAPI 0.3.0); v3.2 registra os adaptadores locais do IMP-005 (DEC-118) e encerra a propagação da CHG-011; v3.3 incorpora a CHG-012 (DEC-119 da REQ e DEC-120 a DEC-122); v3.4 registra o aceite do IMP-005 (Gate 2, 04/11/2026); v3.5 registra a decisão de testes do IA-TEST do IMP-003 (DEC-123)
+**Versão do plano:** 3.6
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104); v2.17 incorpora a CHG-010 (CPF com uma caixa por dígito, DEC-105 e DEC-106); v3.0 incorpora a CHG-011 (aplicação local num notebook, DEC-107 a DEC-112 e DEC-117 na REQ e DEC-113 a DEC-116) e cria o IMP-005; v3.1 propaga a CHG-011 às seções 3 a 11 e ao contrato (OpenAPI 0.3.0); v3.2 registra os adaptadores locais do IMP-005 (DEC-118) e encerra a propagação da CHG-011; v3.3 incorpora a CHG-012 (DEC-119 da REQ e DEC-120 a DEC-122); v3.4 registra o aceite do IMP-005 (Gate 2, 04/11/2026); v3.5 registra a decisão de testes do IA-TEST do IMP-003 (DEC-123); v3.6 registra as decisões do IA-DEV do IMP-003 (DEC-124)
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -38,7 +38,7 @@ propaga a mudança às seções 3 a 11; o código e os testes seguem no IMP-005 
 ## 2. Stack e estrutura do monorepo (DEC-037)
 
 Node.js 24 · TypeScript strict · NestJS + Fastify · Next.js + React + Tailwind +
-shadcn/ui · PostgreSQL 17 + Drizzle + migrações SQL explícitas · pg-boss + Outbox ·
+shadcn/ui · PostgreSQL 17 + Drizzle + migrações SQL explícitas · Outbox + fila em tabela própria (DEC-124) ·
 npm workspaces. Testes: Vitest, Testcontainers, Playwright + axe, Schemathesis,
 fast-check, Stryker (escopo da DEC-052). CI GitHub Actions: Semgrep (DEC-089), gitleaks, SBOM.
 
@@ -169,7 +169,7 @@ sessões e audita com acao=REDEFINICAO_SENHA, sem a senha. Nenhum dos dois impri
 | Migrações | `mp_owner` (dono das tabelas; nunca usado pela aplicação) | — |
 
 Sem `app.tenant_id` definido, `current_setting('app.tenant_id', true)` é NULL e as
-policies não devolvem nada (falha fechada). Tabelas da fila (pg-boss) e do outbox não
+policies não devolvem nada (falha fechada). Tabelas da fila (`tarefa_leitura`, DEC-124) e do outbox não
 guardam dado pessoal; o payload carrega apenas IDs.
 
 ---
@@ -276,7 +276,7 @@ As tabelas de perfis ficam no banco sem uso (DEC-116); o código de autorizaçã
 
 ## 7. Assíncronos e integrações
 
-Outbox transacional + pg-boss; nenhuma mutação crítica depende de chamada síncrona externa.
+Outbox transacional + fila em tabela própria (DEC-124); nenhuma mutação crítica depende de chamada síncrona externa.
 `ReadEngine` atrás de interface (DEC-043); adaptador mock enquanto GX-001 pendente.
 Confiança: definição e calibração na DEC-047. Registro da imagem e recortes: DEC-048.
 Provedor real escolhido no conjunto-ouro (§10.1); troca sem retrabalho no produto.
@@ -535,6 +535,7 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-121 | 04/11/2026 | técnica | RTO no notebook (substitui o RTO da DEC-039) | 4 h; 1 dia útil | RPO 24 h mantido; RTO de 1 dia útil (instalar noutro notebook e restaurar); o teste de restauração é mensal no próprio notebook (`testar-restauracao`, DEC-117), sem ambiente de staging | Um único notebook, sem equipe de plantão (CHG-011, CHG-012) | definitivo | | Médio | DEC-039, DEC-117, Bloco P P.13 |
 | DEC-122 | 04/11/2026 | técnica | Provedor de IA (ReadEngine, DEC-043) | Escolher no conjunto-ouro; Claude; Gemini | Claude (API da Anthropic) é o primeiro adaptador da interface ReadEngine; o Gemini entra depois, pela mesma interface, para comparação no conjunto-ouro. O modelo é escolhido no IMP-003 pelo conjunto-ouro | Escolha do responsável (CHG-012); a interface isolada (DEC-043) permite trocar sem mudar regras | definitivo | | Médio | DEC-043, DEC-111, DEC-056, DEC-119 |
 | DEC-123 | 04/11/2026 | técnica | Testes da leitura por IA (IMP-003) | Chamar a API real nos testes; gravar respostas; motor simulado no harness | Os testes de integração usam o worker real com um motor simulado no lugar do adaptador Claude, programado por pergunta e que registra cada chamada (campos, recorte e schema); o worker só roda por `worker.processar()` e pelos jobs que o relógio fizer vencer. O adaptador Claude tem testes unitários com o `fetch` injetado no SDK oficial (`@anthropic-ai/sdk`), sem rede: uma tentativa por chamada (`maxRetries` 0, as retentativas da REQ §6.6 são do worker), saída estruturada por JSON schema, sem ferramentas, e qualquer saída fora do schema pedido (campo ausente, extra ou repetido, confiança ou região fora de 0 a 1) vira falha `malformada` da chamada inteira. As regras de estado do item (FL-002) e de CPF ficam em funções puras, base do teste de mutação (DEC-052); propriedades com `fast-check` | Testes determinísticos e sem custo nem dado real (Q-001, DEC-119); a interface isolada (DEC-043) deixa o adaptador ser testado à parte | definitivo | | Médio | DEC-043, DEC-051, DEC-052, DEC-053, DEC-122 |
+| DEC-124 | 04/11/2026 | técnica | Implementação da leitura e da revisão (IMP-003) | pg-boss; fila em tabela própria; worker em processo separado | (1) Fila: tabela `tarefa_leitura` (uma tarefa por página e grupo de envio, RN-039) com a hora da próxima tentativa pelo relógio injetado, no lugar do pg-boss, para que as retentativas (1, 2 e 4 s) e a retomada da cota sigam o relógio dos testes; no notebook o worker roda no mesmo processo da API, a cada segundo. (2) Recorte: regiões do `mapa_layout` (DEC-048) aplicadas à página normalizada, sem correção de perspectiva; as perguntas da tarefa vão empilhadas numa só imagem. O recorte de `getItemImage` é gerado na primeira consulta e guardado ao lado das páginas, apagado no descarte. (3) Revisão: o revisor age sobre itens lidos (a revisar ou resolvidos, inclusive `confirmado_automaticamente`, CA-020); `pendente_leitura` e `aguardando_condicao` → ERR-018. A confirmação automática grava `valor_final` = `valor_ia`. Quando a condição de salto muda, o destino vai a `a_revisar` ou `nao_se_aplica` (FL-002). (4) Cadastro: `respondente.versao` sobe a cada alteração; `aplicacao.cadastro_versao` guarda a versão vista na conclusão sem assinatura e decide, no anexo (CA-044), se o cadastro mudou. A reversão (CA-042) usa a ordem de registro (`seq`) do histórico e confere o HMAC do valor gravado; o respondente antigo é anonimizado na nova conclusão, se não lhe restar aplicação concluída. QR da página anexada que não confere versão e página 1 → ERR-004. (5) `auditoria.seq` e `historico_atributo_respondente.seq` (identidade) desempatam eventos no mesmo instante do relógio injetado. (6) Adaptador Claude: credencial no cabeçalho `x-api-key` (DEC-123), sem ler variáveis de ambiente | Testes determinísticos pelo relógio (DEC-053, DEC-123) sem mudar regra de negócio; menos uma dependência na instalação local (DEC-113) | definitivo | | Médio | DEC-043, DEC-048, DEC-051, DEC-064, DEC-078, DEC-112, DEC-113, DEC-123 |
 
 ---
 
