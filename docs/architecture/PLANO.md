@@ -3,11 +3,11 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v2.1 (CHG-011 aceita em 03/11/2026 e propagada no IMP-005) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v2.2 (CHG-011 propagada no IMP-005; CHG-012 aceita em 04/11/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 3.2
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104); v2.17 incorpora a CHG-010 (CPF com uma caixa por dígito, DEC-105 e DEC-106); v3.0 incorpora a CHG-011 (aplicação local num notebook, DEC-107 a DEC-112 e DEC-117 na REQ e DEC-113 a DEC-116) e cria o IMP-005; v3.1 propaga a CHG-011 às seções 3 a 11 e ao contrato (OpenAPI 0.3.0); v3.2 registra os adaptadores locais do IMP-005 (DEC-118) e encerra a propagação da CHG-011
+**Versão do plano:** 3.3
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104); v2.17 incorpora a CHG-010 (CPF com uma caixa por dígito, DEC-105 e DEC-106); v3.0 incorpora a CHG-011 (aplicação local num notebook, DEC-107 a DEC-112 e DEC-117 na REQ e DEC-113 a DEC-116) e cria o IMP-005; v3.1 propaga a CHG-011 às seções 3 a 11 e ao contrato (OpenAPI 0.3.0); v3.2 registra os adaptadores locais do IMP-005 (DEC-118) e encerra a propagação da CHG-011; v3.3 incorpora a CHG-012 (DEC-119 da REQ e DEC-120 a DEC-122)
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -104,7 +104,7 @@ recebe o recorte já normalizado.
 
 ### 4.2 Falha e cota
 
-Timeout e retentativas conforme tabela abaixo. Após 3 falhas consecutivas em chamada idempotente → `erro_leitura` (ERR-041). Cota mensal atingida → `aguardando_cota` (ERR-003) + aviso ao administrador por e-mail e na tela (`getQuotaStatus`); nada é descartado (DEC-035). Período e conversão de moeda: DEC-058.
+Timeout e retentativas conforme tabela abaixo. Após 3 falhas consecutivas em chamada idempotente → `erro_leitura` (ERR-041). Cota mensal atingida → `aguardando_cota` (ERR-003) + aviso na tela (`getQuotaStatus`), sem e-mail (CHG-011); nada é descartado (DEC-035). Período e conversão de moeda: DEC-058.
 
 #### 4.2.1 Tabela de timeouts por operação
 
@@ -129,7 +129,7 @@ backup (DEC-033, P.13). `executeDataSubjectRequest` responde 202 e
 executa em job; o pedido segue a FL-003 (falha → `falhou`, que pode ser executado de novo).
 As chaves de idempotência (ENT-029) guardam só status e ID; nunca o corpo da resposta.
 
-**Vínculo com continuidade (§9.2):** a reaplicação da eliminação após restore é obrigatória no runbook, sempre a partir do registro externo (DEC-062) e antes de reabrir o banco ao tráfego, cobrindo a janela de RPO de 24 h e a retenção de backup de 90 dias (DEC-033). O teste de restauração (TS-008 + restore) é executado a cada incremento, em staging, e mede o RTO alvo de 4 h.
+**Vínculo com continuidade (§9.2):** a reaplicação da eliminação após restore é obrigatória no runbook, sempre a partir do registro externo (DEC-120) e antes de reabrir o banco ao tráfego, cobrindo a janela de RPO de 24 h e a retenção de backup de 90 dias (DEC-033). O teste de restauração (TS-008 + restore) é mensal, no próprio notebook (DEC-117, DEC-121), e mede a duração da restauração contra o RTO de 1 dia útil.
 
 ### 4.4 Reabertura com reversão de cadastro (CA-042)
 
@@ -409,7 +409,7 @@ Depois do aceite, a CHG-010 (DEC-105, DEC-106) muda só o campo de CPF do PDF e 
 layout; o ajuste seguiu IA-TEST → IA-DEV dentro do IMP-002, antes do IMP-003.
 
 **CHG-011 sobre os incrementos aceitos (v3.1):** o IMP-001 foi aceito com os CA-016, CA-025,
-CA-026b, CA-037b e CA-038, retirados na REQ v2.1; sua lista passa a ter só os CAs que continuam,
+CA-026b, CA-037b e CA-038, retirados pela CHG-011; sua lista passa a ter só os CAs que continuam,
 com CA-026, CA-035 e CA-037 reescritos. O IMP-005 refaz testes e código desses CAs (sem MFA,
 convite, e-mail, perfis e concessões) e retira o grupo_minimo dos projetos do IMP-002.
 
@@ -422,10 +422,10 @@ para economizar custo); fica recomendada antes do piloto.
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 39 CAs da REQ v2.1
+### 11.1 Cobertura dos 39 CAs da REQ v2.2
 
 A soma dos CAs listados nos IMP-001 a IMP-005 cobre integralmente os 39 critérios
-de aceite da REQ v2.1 (CA-001 a CA-044 e CA-014b, sem os oito retirados pela CHG-011). O validador
+de aceite da REQ v2.2 (CA-001 a CA-044 e CA-014b, sem os oito retirados pela CHG-011). O validador
 confere que cada CA está no incremento do seu RF.
 
 **CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
@@ -452,8 +452,8 @@ validado pelo CI a cada merge.
 
 | Item | Tipo | Status |
 | --- | --- | --- |
-| GX-001 parecer jurídico (DPA + Art. 33) | Gate externo | pendente; bloqueia piloto e produção |
-| Provedor de IA | dependência | escolha no conjunto-ouro; interface isolada |
+| GX-001 parecer jurídico (DPA + Art. 33) | Gate externo | pendente; não é exigido enquanto o uso for só de teste com dados sintéticos (DEC-119); bloqueia qualquer uso com dados reais |
+| Provedor de IA | dependência | Claude primeiro, Gemini depois para comparação (DEC-122); interface isolada (DEC-043) |
 | Retenção de produção | jurídico | aguarda GX-001; backups já definidos em 90 dias (DEC-033) |
 | Risco aceito: páginas de pessoas distintas | risco | DEC-008; procedimento operacional na v1 (§2.8 da REQ) |
 | Risco aceito: dados num único notebook | risco | DEC-107, DEC-117 (BitLocker, backup diário cifrado fora do notebook) |
@@ -467,6 +467,7 @@ validado pelo CI a cada merge.
 | CHG-008 — perfil exigido na concessão individual (Q-030) | mudança normativa | aceita em 29/10/2026 (REQ v1.10, Q-030) |
 | CHG-009 — CA-003 esclarecido e lacunas do IA-TEST do IMP-002 (DEC-093 a DEC-100) | mudança normativa | aceita em 03/11/2026 (REQ v1.11) |
 | CHG-011 — aplicação local num notebook, de uma única usuária (DEC-107 a DEC-116) | mudança normativa | aceita em 03/11/2026 (REQ v2.1); propagada no IMP-005 (PLANO v3.2, DEC-118) |
+| CHG-012 — uso só de teste com dados sintéticos, Claude como provedor de IA, eliminações e RTO no notebook (DEC-119 a DEC-122) | mudança normativa | aceita em 04/11/2026 (REQ v2.2, PLANO v3.3) |
 | CHG-010 — CPF com uma caixa por dígito no PDF (DEC-105, DEC-106) | mudança normativa | aceita em 03/11/2026 (REQ v2.1); propagada no IA-TEST e no IA-DEV |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
@@ -486,7 +487,7 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | DEC-037 | 24/10/2026 | técnica | Estrutura do monorepo | Repo único; múltiplos repos | apps/web, apps/api, apps/worker, packages/motor-leitura, packages/db, packages/contratos, infra | Simplicidade e contract-first compartilhado | definitivo | | Baixo | PLANO §2 |
 | DEC-038 | 24/10/2026 | técnica | Nuvem do projeto | AWS sa-east-1; Azure Brazil South | AWS sa-east-1 | Paridade com a stack validada no MeuRemedio; região Brasil; resolve DEC-036 | substituído | DEC-113 | Alto | RNF-011, DEC-036 |
-| DEC-039 | 24/10/2026 | técnica | RPO e RTO da v1 | Valores menores; valores maiores | RPO 24h / RTO 4h | Compatível com volume de 500 formulários/mês | definitivo | | Médio | Bloco P P.13 |
+| DEC-039 | 24/10/2026 | técnica | RPO e RTO da v1 | Valores menores; valores maiores | RPO 24h / RTO 4h | Compatível com volume de 500 formulários/mês | substituído | DEC-121 | Médio | Bloco P P.13 |
 | DEC-040 | 24/10/2026 | técnica | Isolamento por tenant | RLS puro; schema por tenant; FK composta + RLS com SET LOCAL | SET LOCAL app.tenant_id por transação + RLS com FORCE | Defesa em camadas exigida pela RN-001 | definitivo | | Alto | RN-001, RN-023, TS-001 |
 | DEC-041 | 24/10/2026 | técnica | Cifragem do CPF | Ciframento no app; envelope KMS | AES-256-GCM com envelope no KMS + HMAC-SHA256 com chave por tenant derivada por HKDF | RNF-003 e RN-013 com rotação possível; sem correlação entre tenants (ajustada em 27/10/2026) | substituído | DEC-114 | Alto | RNF-003, RN-013 |
 | DEC-042 | 24/10/2026 | técnica | Segurança de arquivos no ingresso | Só tipo/tamanho; pipeline completo | Tamanho, antimalware (ClamAV) sobre todo arquivo, tipo por magic bytes e páginas, nessa ordem; remoção de metadados (sharp) antes do storage | CA-029 e RN-040 sem ambiguidade | definitivo | | Alto | CA-029, RN-040, TS-002 |
@@ -501,7 +502,7 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-051 | 27/10/2026 | técnica | Controle do teto de custo de IA | Checagem após a chamada; reserva prévia | Reserva atômica de orçamento com custo estimado antes de cada chamada e ajuste pelo custo real | Workers em paralelo ultrapassariam o teto | definitivo | | Médio | DEC-035, CA-030, TS-007 |
 | DEC-052 | 27/10/2026 | técnica | Escopo do teste de mutação | Mutação ≥ 80% em todo o código; escopo crítico | Mutação ≥ 80% em motor-leitura, regras de FL-001/FL-002, k-anonimato, CPF e autorização; demais com cobertura de linhas ≥ 80% | Mutação em todo o repositório é lenta e cara sem ganho proporcional; desvio do Bloco P P.1 registrado | definitivo | | Médio | Bloco P P.1 |
 | DEC-053 | 27/10/2026 | técnica | Separação IA-TEST e IA-DEV | Mesmo PR; PRs separados com testes congelados | Testes vermelhos em PR próprio aprovado pelo responsável; PR de implementação não altera testes aprovados (CI + CODEOWNERS) | Evita que a mesma IA ajuste o teste ao código | definitivo | | Alto | Bloco P P.14 |
-| DEC-062 | 28/10/2026 | técnica | Onde guardar a lista de eliminações | Tabela no mesmo banco; registro externo | Registro append-only em bucket S3 separado, com Object Lock (retenção 180 dias), gravado na mesma execução da eliminação; o runbook de restore lê dele e reaplica antes de reabrir o banco | A tabela no banco restaurado é tão antiga quanto o backup e não contém eliminações posteriores (achado B-01 da REV-PLANO-007) | definitivo | | Alto | DEC-033, T-12, TS-008 |
+| DEC-062 | 28/10/2026 | técnica | Onde guardar a lista de eliminações | Tabela no mesmo banco; registro externo | Registro append-only em bucket S3 separado, com Object Lock (retenção 180 dias), gravado na mesma execução da eliminação; o runbook de restore lê dele e reaplica antes de reabrir o banco | A tabela no banco restaurado é tão antiga quanto o backup e não contém eliminações posteriores (achado B-01 da REV-PLANO-007) | substituído | DEC-120 | Alto | DEC-033, T-12, TS-008 |
 | DEC-063 | 28/10/2026 | técnica | Guarda do valor anterior para reversão (CA-042) | Na auditoria; tabela própria cifrada | Tabela HistoricoAtributoRespondente (ENT-023), cifrada como o original, apagada na eliminação; reversão condicionada ao valor atual | A auditoria não pode guardar valores (RN-027) | definitivo | | Alto | CA-042, CA-023, RN-027 |
 | DEC-083 | 29/10/2026 | técnica | Tenant inativo no login e na sessão (M-12, DEC-070) | Checar só no login; checar no login e em toda sessão | A função de login devolve tenant.ativo; tenant inativo → ERR-013 (conta como falha, sem pré-sessão). auth_resolver_sessao recusa sessão e pré-sessão de tenant inativo (ERR-015) sem apagar nada. Jobs do tenant filtram tenant.ativo a partir do IMP-002 | Inativar o tenant deve ter efeito imediato, não só no próximo login | definitivo | | Médio | DEC-070, RF-002, M-12 |
 | DEC-084 | 29/10/2026 | técnica | Lista de senhas vazadas (M-20, Bloco P P.2) | Lista embutida; consulta ao Have I Been Pwned | Lista embutida no código (SecLists 10k-most-common, licença MIT), comparada sem diferenciar maiúsculas; sem chamada externa, sem timeout e sem modo de falha. Atualização da lista por PR | Escolha do responsável (opção 1A, 29/10/2026): nada sai do servidor e não há dependência de terceiro; cobertura menor que a consulta online | definitivo | | Médio | Bloco P P.2, RF-002, M-20 |
@@ -525,6 +526,9 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-115 | 03/11/2026 | técnica | Antimalware no upload da aplicação local (DEC-042, DEC-102) | clamd; Microsoft Defender | Produção: Microsoft Defender pela linha de comando (MpCmdRun), com a mesma regra de falha da DEC-102 (tempo esgotado ou resposta inesperada é falha, nunca "limpo"). Testes: o equivalente EICAR da DEC-102 continua | Já vem no Windows, sem serviço extra (CHG-011) | definitivo | | Médio | DEC-042, DEC-102, RF-006, CA-029 |
 | DEC-116 | 03/11/2026 | técnica | Código de vários tenants já implementado (DEC-107) | Remover tenant_id e RLS; manter com um tenant fixo | Mantém tenant_id, RLS e papéis do banco como estão; a instalação cria o único tenant e a usuária; tabelas novas seguem o mesmo padrão. Os testes de isolamento ficam como regressão até o IMP-005 decidir quais saem | Remover custaria refazer migrações e testes do IMP-001 e do IMP-002 sem ganho para a usuária (escolha do responsável) | definitivo | | Médio | DEC-107, RNF-001, RN-001, DEC-046 |
 | DEC-118 | 04/11/2026 | técnica | Detalhes dos adaptadores locais do IMP-005 (DEC-113 a DEC-115, DEC-117) | Decidir na implantação; fixar no IA-DEV do IMP-005 | Chave mestra: subchaves por HKDF-SHA256 com um rótulo por finalidade (HMAC do e-mail, cifra de campo, backup); cópia de recuperação com scrypt (N=2^15, r=8, p=1) e AES-256-GCM, com a senha de recuperação definida pela usuária na instalação, pela política da RN-048; DPAPI no escopo da máquina pelo Windows PowerShell, que protege também as senhas geradas de mp_app e mp_manutencao e a conexão de superusuário usada no backup (segredos.dpapi). Imagens: pasta local com gravação atômica, chave validada por segmentos simples e links assinados por HMAC num servidor em 127.0.0.1. Defender: MpCmdRun -Scan -ScanType 3 -File -DisableRemediation sobre arquivo temporário de nome aleatório; código 0 = limpo, 2 ou arquivo removido = risco, o resto = falha. Backup: pg_dump (formato custom, como superusuário), imagens e cópia de recuperação num tar do Windows, cifrado com AES-256-GCM pela subchave de backup, com a cópia de recuperação no cabeçalho; diário pelo Agendador de Tarefas; retenção de 90 dias pelo nome do arquivo; o teste mensal pede a senha de recuperação, restaura num banco temporário e confere tenant e imagens. A instalação recusa sem BitLocker, salvo com --sem-bitlocker para testes com dados sintéticos | As imagens entram no backup, porque o notebook é a única cópia (DEC-107); a senha de recuperação pedida no teste mensal confirma que a usuária ainda a sabe | definitivo | | Alto | DEC-113, DEC-114, DEC-115, DEC-117, DEC-101, DEC-033, T-08 |
+| DEC-120 | 04/11/2026 | técnica | Registro externo das eliminações no notebook (substitui a DEC-062) | Bucket na nuvem; arquivo no disco de backup | Arquivo append-only `eliminacoes.log` no disco externo de backup, só com IDs e datas (sem dado pessoal), gravado na mesma execução da eliminação; com o disco desconectado, a linha fica numa fila na pasta de dados e é copiada para o disco no backup seguinte. O arquivo fica fora do .mpbak, para que um backup antigo restaurado encontre as eliminações posteriores; o roteiro de restauração reaplica antes de reabrir o banco | Sem nuvem (CHG-011); o disco de backup já fica longe do notebook. Eliminações feitas depois do último backup e ainda na fila se perdem junto com o notebook, dentro do RPO de 24 h (risco aceito, CHG-012) | definitivo | | Alto | DEC-062, DEC-033, DEC-117, T-12, TS-008 |
+| DEC-121 | 04/11/2026 | técnica | RTO no notebook (substitui o RTO da DEC-039) | 4 h; 1 dia útil | RPO 24 h mantido; RTO de 1 dia útil (instalar noutro notebook e restaurar); o teste de restauração é mensal no próprio notebook (`testar-restauracao`, DEC-117), sem ambiente de staging | Um único notebook, sem equipe de plantão (CHG-011, CHG-012) | definitivo | | Médio | DEC-039, DEC-117, Bloco P P.13 |
+| DEC-122 | 04/11/2026 | técnica | Provedor de IA (ReadEngine, DEC-043) | Escolher no conjunto-ouro; Claude; Gemini | Claude (API da Anthropic) é o primeiro adaptador da interface ReadEngine; o Gemini entra depois, pela mesma interface, para comparação no conjunto-ouro. O modelo é escolhido no IMP-003 pelo conjunto-ouro | Escolha do responsável (CHG-012); a interface isolada (DEC-043) permite trocar sem mudar regras | definitivo | | Médio | DEC-043, DEC-111, DEC-056, DEC-119 |
 
 ---
 
@@ -596,7 +600,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 39 CAs da REQ v2.1
+- [x] Estratégia de testes cobre todos os 39 CAs da REQ v2.2
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas

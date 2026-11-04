@@ -2,7 +2,7 @@ REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
 Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005)
-Versão: 2.1
+Versão: 2.2
 Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado), aplicado no que couber à aplicação local da DEC-107
@@ -194,6 +194,7 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-111 | 03/11/2026 | negócio | Região do provedor de IA (RNF-011) | Só no Brasil; fora do Brasil permitido; decidir no parecer | O provedor de IA pode processar os recortes fora do Brasil, com contrato sem retenção e sem uso para treino (RNF-010) e base legal de transferência internacional (LGPD art. 33), confirmada no GX-001. Os dados guardados continuam só no notebook | Amplia a escolha do provedor no IMP-003 (CHG-011) | definitivo | Alto | RNF-010, RNF-011, Q-001, GX-001 |
 | DEC-112 | 03/11/2026 | negócio | Operação com uma única usuária | Manter DEC-034; simplificar | Avisos só na tela (sem e-mail); link de imagem de 5 minutos mantido, servido só no notebook; sem reserva de aplicação para revisão (a proteção contra gravação concorrente fica no If-Match) | Não há disputa entre revisores (CHG-011) | provisório | Médio | RF-008, RNF-007, DEC-034, CA-043 |
 | DEC-117 | 03/11/2026 | negócio | Backup do notebook (Q-031) | Diário em disco externo; semanal em disco externo; diário em nuvem cifrada | Backup diário, cifrado, em disco externo guardado longe do notebook; retenção de 90 dias (DEC-033); teste de restauração a cada mês | Com tudo num só notebook, o backup é a única proteção contra perda; diário limita a perda a um dia de digitação (CHG-011) | definitivo | Alto | DEC-107, DEC-033, DEC-114, RNF-008, Q-031 |
+| DEC-119 | 04/11/2026 | negócio | Uso do sistema enquanto o GX-001 estiver pendente | Esperar o parecer para usar; usar só para teste | O MinhaPesquisa é usado só para teste, com dados sintéticos (Q-001), sem uso real com dados pessoais; o GX-001 não é exigido enquanto isso valer. Qualquer uso com dados reais exige o GX-001 e uma nova decisão | Escolha do responsável (CHG-012): recortes sintéticos enviados à IA não são dado pessoal, então não há transferência internacional a liberar | definitivo | Alto | GX-001, Q-001, DEC-111, DEC-122, RNF-011 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -201,8 +202,8 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 |---|---|
 | Retenção de dados de produção em ambiente ativo | Aguarda parecer jurídico (GX-001). Backups já decididos em 90 dias (DEC-033). |
 | Retenção da trilha de auditoria (inclui IP) | Aguarda parecer jurídico (GX-001); até lá, a auditoria é mantida e nunca contém valores pessoais (RN-027). |
-| Provedor de IA | Escolhido no conjunto-ouro; pode processar fora do Brasil (DEC-111), com a transferência internacional condicionada a GX-001. |
-| Parecer jurídico (DPA + LGPD Art. 33) | Registrado como GX-001; bloqueia piloto e produção (Fase 6), não o desenvolvimento com dados sintéticos. |
+| Provedor de IA | Claude primeiro e Gemini depois, para comparação no conjunto-ouro (DEC-122); pode processar fora do Brasil (DEC-111), com a transferência internacional de dados reais condicionada a GX-001. |
+| Parecer jurídico (DPA + LGPD Art. 33) | Registrado como GX-001; o sistema é usado só para teste com dados sintéticos (DEC-119), e o GX-001 bloqueia qualquer uso com dados reais. |
 
 4. Glossário e regras de negócio
 

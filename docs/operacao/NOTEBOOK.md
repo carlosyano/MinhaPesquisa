@@ -1,22 +1,40 @@
 # Operação no notebook
 
 Roteiro da instalação, do backup e da restauração do MinhaPesquisa num notebook Windows 11
-(PLANO §4.5 e §9; DEC-113, DEC-114, DEC-115, DEC-117, DEC-118). Enquanto o GX-001 estiver
-pendente, só dados sintéticos (Q-001).
+(PLANO §4.5 e §9; DEC-113, DEC-114, DEC-115, DEC-117, DEC-118, DEC-121). Só dados
+sintéticos (Q-001, DEC-119).
 
 ## Antes de instalar
 
-1. BitLocker ligado no disco do sistema (T-08). Sem ele a instalação é recusada; `--sem-bitlocker`
-   existe só para testar com dados sintéticos.
-2. PostgreSQL 17 instalado no próprio notebook, ouvindo só em 127.0.0.1, com um banco vazio
-   (por exemplo `minhapesquisa`) e a senha do superusuário `postgres` à mão.
-3. Node.js 24 e o repositório com `npm ci`.
-4. Um disco externo para os backups, com a pasta já criada (por exemplo `E:\MinhaPesquisaBackup`).
+1. **Uso.** O sistema é usado só para teste, com dados sintéticos (DEC-119): nomes fictícios e
+   e-mails em `exemplo.test`.
+2. **BitLocker** ligado no disco do sistema (T-08). Sem ele a instalação é recusada; como o uso é
+   só de teste, `--sem-bitlocker` permite instalar mesmo assim.
+3. **Git para Windows** e **Node.js 24** (instalador MSI). Confira com `git --version` e
+   `node -v`. Se o PowerShell recusar o `npm` ("execução de scripts foi desabilitada"), rode uma
+   vez: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+4. **PostgreSQL 17** pelo instalador do postgresql.org (EDB), com "PostgreSQL Server" e
+   "Command Line Tools", porta 5432. A senha do usuário `postgres` deve ter só letras e dígitos,
+   porque vai dentro de um endereço de conexão.
+   - Para ouvir só no notebook: em `C:\Program Files\PostgreSQL\17\data\postgresql.conf`, troque
+     `listen_addresses = '*'` por `listen_addresses = 'localhost'` e reinicie o serviço
+     `postgresql-x64-17` (Serviços do Windows).
+   - Crie o banco vazio:
+     `& "C:\Program Files\PostgreSQL\17\bin\createdb.exe" -U postgres -h 127.0.0.1 minhapesquisa`
+5. **Disco externo** para os backups, com a pasta já criada (por exemplo `E:\MinhaPesquisaBackup`).
+6. **Código:**
+   ```powershell
+   git clone https://github.com/carlosyano/minhapesquisa.git C:\MinhaPesquisa
+   cd C:\MinhaPesquisa
+   npm ci
+   ```
+   Os comandos `npm run` abaixo rodam nessa pasta.
 
 ## Instalação
 
 ```powershell
-npm run local -- instalar
+npm run local -- instalar                 # com BitLocker ligado
+npm run local -- instalar --sem-bitlocker # só teste, sem BitLocker
 ```
 
 O script pede a conexão de superusuário (`postgres://postgres:<senha>@127.0.0.1:5432/minhapesquisa`),
@@ -46,6 +64,15 @@ npm run iniciar
 ```
 
 A API fica em `http://127.0.0.1:8080`, só no notebook.
+Ainda não há telas (a TL-001 entra depois). Para conferir o login, noutra janela do PowerShell:
+
+```powershell
+$corpo = @{ email = 'ana@exemplo.test'; senha = '<sua senha>' } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8080/auth/login -ContentType 'application/json' -Body $corpo
+```
+
+A resposta traz `usuario_id`, `nome` e `expira_em`. Com a senha errada, o PowerShell mostra o
+erro 401 (ERR-013).
 
 ## Senha esquecida
 
@@ -83,8 +110,14 @@ backup avisa quando o último teste aprovado tem mais de 31 dias.
    ```
 
 3. Antes de voltar a usar, reaplique as eliminações feitas depois da data do backup, a partir do
-   registro externo (DEC-062).
+   registro externo no disco de backup (DEC-120).
 4. Agende o backup de novo (`agendar-backup`).
 
 A restauração é recusada se a pasta de dados já tiver uma instalação ou se o banco não estiver
 vazio.
+
+## Refazer do zero (só em teste)
+
+1. `schtasks /Delete /TN MinhaPesquisa\backup /F`
+2. Apague a pasta `%LOCALAPPDATA%\MinhaPesquisa`.
+3. Recrie o banco: `dropdb` e `createdb` (pasta `bin` do PostgreSQL, `-U postgres -h 127.0.0.1 minhapesquisa`).
