@@ -423,7 +423,7 @@ a renderização de PDF em processo isolado, o limite total por envio, a verific
 S3 contra os serviços reais e a extensão do teste de mutação às regras novas (DEC-052). Sem
 revisão independente do incremento, por escolha do responsável.
 Depois do aceite, a CHG-010 (DEC-105, DEC-106) muda só o campo de CPF do PDF e o mapa de
-layout; o ajuste segue IA-TEST → IA-DEV dentro do IMP-002, antes do IMP-003.
+layout; o ajuste seguiu IA-TEST → IA-DEV dentro do IMP-002, antes do IMP-003.
 
 **Aceite do IMP-001 (29/10/2026, Carlos Yano):** aceito com 105 testes verdes no CI (74 de
 integração com PostgreSQL 17 e 31 unitários) e mutação de 90% em criptografia e autorização
@@ -486,7 +486,7 @@ validado pelo CI a cada merge.
 | CHG-007 — altos A-01 e A-02 da REV-REQ-008; Q-021 a Q-029 | mudança normativa | aceita em 29/10/2026 (REQ v1.9, DEC-074 a DEC-082) |
 | CHG-008 — perfil exigido na concessão individual (Q-030) | mudança normativa | aceita em 29/10/2026 (REQ v1.10, Q-030) |
 | CHG-009 — CA-003 esclarecido e lacunas do IA-TEST do IMP-002 (DEC-093 a DEC-100) | mudança normativa | aceita em 03/11/2026 (REQ v1.11) |
-| CHG-010 — CPF com uma caixa por dígito no PDF (DEC-105, DEC-106) | mudança normativa | aceita em 03/11/2026 (REQ v1.12); IA-TEST e IA-DEV pendentes |
+| CHG-010 — CPF com uma caixa por dígito no PDF (DEC-105, DEC-106) | mudança normativa | aceita em 03/11/2026 (REQ v1.12); propagada no IA-TEST e no IA-DEV |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
