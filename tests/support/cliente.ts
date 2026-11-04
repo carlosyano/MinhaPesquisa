@@ -55,8 +55,16 @@ export class Cliente {
 
   /** Upload multipart no campo `arquivos` (UploadRequest), com o CSRF e o Origin das mutações. */
   async enviarArquivos(caminho: string, arquivos: Arquivo[], headers: Record<string, string> = {}): Promise<Resposta> {
+    return this.enviarFormulario(caminho, arquivos.map((a) => ['arquivos', a]), headers);
+  }
+
+  /** Multipart com campos de texto e de arquivo (ex.: SignatureUpload, CA-044). */
+  async enviarFormulario(caminho: string, campos: [string, string | Arquivo][], headers: Record<string, string> = {}): Promise<Resposta> {
     const form = new FormData();
-    for (const a of arquivos) form.append('arquivos', new Blob([new Uint8Array(a.bytes)], { type: a.tipo }), a.nome);
+    for (const [nome, v] of campos) {
+      if (typeof v === 'string') form.append(nome, v);
+      else form.append(nome, new Blob([new Uint8Array(v.bytes)], { type: v.tipo }), v.nome);
+    }
     const h: Record<string, string> = {
       accept: 'application/json, application/problem+json',
       'x-forwarded-for': this.ip,

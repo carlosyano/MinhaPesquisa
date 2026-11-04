@@ -25,6 +25,18 @@
 //   DEC-115; no CI em Linux, um equivalente que use o mesmo adaptador);
 // - nenhum provedor de IA: a leitura (IMP-003) só é solicitada pelo outbox; `inspect` expõe as
 //   solicitações para provar quando nada é lido.
+//
+// Acrescentado no IA-TEST do IMP-003 (DEC-123):
+// - o worker de leitura real (pg-boss), com o motor simulado no lugar do adaptador Claude
+//   (DEC-043, DEC-122). O worker nunca roda sozinho: só em `worker.processar()` e nos jobs que
+//   `clock.advance` fizer vencer (retentativas em 1, 2 e 4 s; retomada da cota na virada do mês).
+//   Assim os testes do IMP-002, que não chamam nenhum dos dois, continuam sem leitura;
+// - o motor simulado devolve o que o teste programou para cada pergunta e registra cada chamada
+//   como o motor real a receberia (recorte e schema), para provar a minimização (RN-038, RN-039);
+// - custo das chamadas em dólar, convertido pela `cotacao_usd_brl` do mês (DEC-058), com a
+//   reserva prévia do custo estimado e o ajuste pelo custo real (DEC-051);
+// - tudo o que a API, o worker e o motor escrevem no log, para provar que não há valores pessoais
+//   (RN-028, CA-008).
 
 /** Resultado de um script local: código de saída e tudo o que ele escreveu no terminal. */
 export interface SaidaScript {
@@ -44,6 +56,8 @@ export interface EventoAuditoria {
   acao: string;
   entidade: string;
   registro_id: string | null;
+  /** Campo afetado (ex.: CORRECAO_CAMPO em data_nascimento, CA-008); desde o IMP-003. */
+  campo: string | null;
   detalhes: unknown;
   criado_em: Date;
 }
@@ -75,6 +89,67 @@ export interface MapaLayoutGravado {
   total_paginas: number;
   perguntas: { codigo: string; pagina: number; regiao: RegiaoNormalizada; caixas?: RegiaoNormalizada[] }[];
   assinatura: { pagina: number; regiao: RegiaoNormalizada };
+}
+
+/**
+ * O que o motor simulado devolve para um campo (RN-045): valor no formato que o provedor leu
+ * (nem sempre canônico, ex.: CPF com máscara), confiança bruta e região. `falha` faz a chamada que
+ * contém o campo falhar as primeiras `vezes` tentativas: tempo esgotado, erro do provedor ou saída
+ * malformada (DEC-123), sempre como falha da chamada inteira.
+ */
+export type LeituraSimulada =
+  | { valor: string | null; confianca: number; regiao?: RegiaoNormalizada }
+  | { falha: { tipo: 'tempo_esgotado' | 'erro' | 'malformada'; vezes: number }; depois?: { valor: string | null; confianca: number } };
+
+/**
+ * Leituras por pergunta de uma aplicação: chave `CODIGO` ou, na matriz, `CODIGO.linha`.
+ * Campo não programado é lido em branco com confiança 0,99.
+ */
+export type RoteiroLeitura = Record<string, LeituraSimulada>;
+
+/** Uma chamada ao motor, como o motor a recebeu (RN-045): recorte e schema, sem contexto. */
+export interface ChamadaMotor {
+  /** Perguntas (e linhas) cujos campos foram nesta chamada, ex.: `PRESSAO_ALTA`, `SINTOMAS.dor`. */
+  campos: string[];
+  /** Página da versão de onde saíram os recortes. */
+  pagina: number;
+  /** Dimensões da imagem enviada, em pixels. */
+  largura: number;
+  altura: number;
+  /** Schema exatamente como foi passado ao motor, serializado em JSON. */
+  schema: string;
+  /** Sucesso ou o tipo da falha programada. */
+  resultado: 'ok' | 'tempo_esgotado' | 'erro' | 'malformada';
+  em: Date;
+}
+
+export interface RespondenteGravado {
+  id: string;
+  /** Decifrados pelo harness; null quando anonimizado. */
+  nome: string;
+  data_nascimento: string | null;
+  endereco: string | null;
+  cpf: string | null;
+  anonimizado: boolean;
+}
+
+export interface AplicacaoGravada {
+  estado: string;
+  respondente_id: string | null;
+  data_aplicacao: string | null;
+  local_aplicacao: string | null;
+  motivo_descarte: string | null;
+  motivo_reabertura: string | null;
+  /** Valores de cada item como estão no banco, decifrados (DEC-077: apagados no descarte). */
+  itens: { pergunta_codigo: string; linha_codigo: string | null; valor_ia: string | null; valor_final: string | null; estado: string }[];
+}
+
+export interface EliminacaoGravada {
+  motivo: 'eliminacao' | 'anonimizacao_reabertura' | 'descarte_aplicacao';
+  respondente_id_original: string | null;
+  aplicacao_id: string | null;
+  eliminado_em: Date;
+  valido_ate: Date;
 }
 
 export interface Harness {
@@ -118,7 +193,28 @@ export interface Harness {
      * Parâmetro de configuração gravado pelo mesmo caminho do script do administrador da
      * plataforma (REQ seção 2.9), com auditoria. Ex.: `termo_consentimento` do tenant (DEC-094).
      */
-    parametro(dados: { tenantId: string | null; projetoId?: string; chave: string; valor: string }): Promise<void>;
+    parametro(dados: { tenantId: string | null; projetoId?: string; chave: string; valor: string; competencia?: string }): Promise<void>;
+    /**
+     * Acrescenta ao custo de IA consumido pelo tenant no mês civil corrente (America/Sao_Paulo,
+     * DEC-058) um valor em reais com duas casas (ex.: '499.00'), como se as chamadas já tivessem
+     * sido feitas (CA-030).
+     */
+    consumoIa(dados: { tenantId: string; valorReais: string }): Promise<void>;
+  };
+
+  /** Motor de leitura simulado (DEC-123), no lugar do adaptador Claude. */
+  motor: {
+    /** Leituras da aplicação; vale para as chamadas feitas depois, inclusive nas retentativas. */
+    programar(aplicacaoId: string, roteiro: RoteiroLeitura): void;
+    /** Custo de cada chamada em dólar: o estimado antes (reserva) e o real depois (DEC-051). Padrão 0. */
+    custo(dados: { estimadoUsd: number; realUsd: number }): void;
+    /** Chamadas feitas ao motor para a aplicação, em ordem. */
+    chamadas(aplicacaoId: string): Promise<ChamadaMotor[]>;
+  };
+
+  worker: {
+    /** Roda os jobs do worker que já venceram no relógio atual até não sobrar nenhum. */
+    processar(): Promise<void>;
   };
 
   inspect: {
@@ -134,6 +230,13 @@ export interface Harness {
     leiturasSolicitadas(aplicacaoId: string): Promise<number>;
     /** `mapa_layout` da versão publicada; null em rascunho (DEC-048, DEC-106). */
     mapaLayout(versaoId: string): Promise<MapaLayoutGravado | null>;
+    /** Respondentes do tenant (RF-005), em ordem de criação. */
+    respondentes(tenantId: string): Promise<RespondenteGravado[]>;
+    aplicacao(aplicacaoId: string): Promise<AplicacaoGravada>;
+    /** ListaEliminacoes do tenant (ENT-019), em ordem de registro. */
+    listaEliminacoes(tenantId: string): Promise<EliminacaoGravada[]>;
+    /** Tudo o que a API, o worker e o motor escreveram no log desde o início do harness (RN-028). */
+    logs(): Promise<string>;
   };
 
   close(): Promise<void>;

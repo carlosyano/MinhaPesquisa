@@ -1,6 +1,6 @@
 # Testes do MinhaPesquisa
 
-IA-TEST do IMP-001, do IMP-002 e do IMP-005 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
+IA-TEST do IMP-001, do IMP-002, do IMP-005 e do IMP-003 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
 implementação (IA-DEV), que não pode alterá-los: o job `testes-congelados` do CI marca de
 vermelho qualquer mudança em teste sem o rótulo `ia-test`, e o responsável só autoriza a
 junção depois de revisar o diff, com as verificações verdes.
@@ -46,6 +46,17 @@ MpCmdRun só existem no Windows e o CI roda em Linux, então os testes trocam os
 equivalentes sintéticos (protetor e executor injetados); a verificação contra o Windows real
 fica para a instalação num notebook limpo (critério de saída do IMP-005).
 
+No IMP-003 (leitura por IA e revisão, DEC-123) a interface ganha `motor` (o motor de leitura
+simulado no lugar do adaptador Claude: roteiro de leituras por pergunta, custo em dólar e as
+chamadas que recebeu), `worker.processar()` (o worker de leitura só roda quando o teste pede ou
+quando `clock.advance` vence uma retentativa ou a virada do mês), `seed.consumoIa`,
+`seed.parametro` com `competencia`, e `inspect.respondentes`, `inspect.aplicacao`,
+`inspect.listaEliminacoes` e `inspect.logs`. Os testes unitários importam do código ainda por
+escrever: `apps/api/src/regras/leitura.ts` (`estadoAposLeitura`, FL-002),
+`apps/api/src/regras/cpf.ts` (`normalizarCpf`, `cpfValido`) e `packages/motor-leitura/src`
+(`AdaptadorClaude`, `ErroLeitura` e os tipos da ReadEngine, DEC-043), este com o SDK oficial
+`@anthropic-ai/sdk` e o `fetch` injetado, sem rede. Propriedades usam `fast-check`.
+
 ## Cobertura
 
 | Arquivo | Rastreio |
@@ -63,6 +74,15 @@ fica para a instalação num notebook limpo (critério de saída do IMP-005).
 | `unit/armazenamento-disco.test.ts` | DEC-113, RN-029 (pasta local, caminho seguro, links assinados de 5 min em 127.0.0.1) |
 | `unit/defender.test.ts` | DEC-115, DEC-102, CA-029 (MpCmdRun, falha nunca é "limpo") |
 | `unit/backup.test.ts` | DEC-117, DEC-033, DEC-114 (nome, retenção de 90 dias, teste mensal, cifra do arquivo) |
+| `integracao/leitura/leitura.test.ts` | RF-007, FL-002, CA-005, TS-003, CA-006, CA-015, CA-018, CA-019, DEC-074, RN-038, RN-039 (minimização) |
+| `integracao/leitura/cota.test.ts` | CA-030, TS-007, DEC-051, DEC-058, ERR-003 (teto, reserva, virada do mês) |
+| `integracao/leitura/falha.test.ts` | CA-041, REQ §6.6, ERR-018 (retentativas, `erro_leitura`, `retryReading`) |
+| `integracao/revisao/revisao.test.ts` | RF-008, RN-013, CA-007, CA-008, CA-018, CA-020, RN-043/ERR-017, TS-001 (operações do IMP-003) |
+| `integracao/revisao/conclusao.test.ts` | CA-032, CA-014b, CA-002, CA-021, CA-044, DEC-064, DEC-079 |
+| `integracao/revisao/descarte-reabertura.test.ts` | CA-033, CA-042, DEC-077, DEC-078, RN-014 |
+| `unit/estado-item.test.ts` | FL-002 (regras 1 a 9), DEC-028, DEC-047, CA-006 |
+| `unit/cpf.test.ts` | RN-012, CA-002, REQ §5.4 |
+| `unit/motor-leitura.test.ts` | DEC-007, DEC-043, DEC-122, DEC-123, RN-045 (fronteira do motor e adaptador Claude) |
 | `support/arquivos.test.ts` | autoteste dos geradores de PDF, QR, EXIF e arquivos de limite |
 | `support/apoio.test.ts` | autoteste do apoio (catálogo de erros, sem os erros descontinuados na REQ v2.1) |
 
