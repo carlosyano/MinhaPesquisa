@@ -2,10 +2,10 @@
 // O vínculo das respostas já lidas à versão 1 (último passo do CA-001) só é observável com a
 // leitura, no IMP-003.
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { esperarErro } from '../../support/catalogo.js';
 import { chaveIdempotencia, type Cliente } from '../../support/cliente.js';
-import { entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
+import { MINUTO, entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import {
   caminhoVersao,
   conteudoValido,
@@ -28,6 +28,11 @@ beforeAll(async () => {
   T = await tenantComUsuaria(h, 'Tenant Formulários');
   admin = await entrar(h, T.usuaria);
   projeto = await projetoCriado(admin, 'Saúde Idoso');
+});
+// Uma só usuária faz todas as requisições do arquivo: avançar o relógio a cada teste evita o
+// limite de 100 requisições por minuto por usuária (Bloco P P.7), que não é o assunto aqui.
+beforeEach(async () => {
+  await h.clock.advance(MINUTO);
 });
 afterAll(async () => {
   await h?.close();

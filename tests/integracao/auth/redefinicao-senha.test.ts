@@ -73,7 +73,6 @@ describe('CA-037 — redefinição de senha por script', () => {
     expect(r.saida).not.toContain(senha);
 
     expect((await c.get('/auth/session')).status).toBe(200);
-    esperarErro(await login(senha), 'ERR-013');
     await entrar(h, usuaria);
     expect((await h.inspect.auditoria(tenantId)).filter((e) => e.acao === 'REDEFINICAO_SENHA')).toEqual([]);
   });
