@@ -17,7 +17,6 @@ import { ErroApi, naoEncontrado } from '../infra/erros.js';
 import { analisarPagina, contarPaginasPdf, normalizarImagem, renderizarPdf } from '../infra/imagens.js';
 import { MINUTO, somar } from '../infra/relogio.js';
 import { ehUuid, Nucleo, type SessaoAtiva } from '../nucleo.js';
-import { exigirPerfil } from '../regras/autorizacao.js';
 import { classificarCriacao, LIMITE_BYTES, LIMITE_PAGINAS, lerConteudoQr, MOTIVO, paginasCompletas, tipoPorConteudo, type Criacao, type VersaoDoQr } from '../regras/upload.js';
 
 interface PaginaProcessada {
@@ -127,7 +126,7 @@ export class UploadController {
     );
     if (!a) throw naoEncontrado('Aplicacao', id);
     try {
-      await projetoNoEscopo(this.n, tx, s, a.projeto_id);
+      await projetoNoEscopo(tx, a.projeto_id);
     } catch {
       throw naoEncontrado('Aplicacao', id);
     }
@@ -169,8 +168,6 @@ export class UploadController {
       estado: a.estado,
       assinatura: a.assinatura,
       aviso: a.aviso,
-      reserva_expira_em: null,
-      reservado_por: null,
       divergencias_cadastro: [],
       paginas: (await this.paginas(tx, a.id)).map((p) => this.corpoPagina(p)),
       cadastro_existente: null,
@@ -223,8 +220,7 @@ export class UploadController {
     if (!chave || chave.length < 16 || chave.length > 64) throw new ErroApi('ERR-001', { campos: ['Idempotency-Key'] });
     // Escopo, perfil e projeto ativo antes de receber os arquivos.
     await this.n.comAtor(s, async (tx) => {
-      const p = await projetoNoEscopo(this.n, tx, s, projetoId);
-      exigirPerfil(s.perfis, 'digitalizador');
+      const p = await projetoNoEscopo(tx, projetoId);
       if (p.status !== 'ativo') throw new ErroApi('ERR-001', { campos: ['projeto'] }); // CA-027
     });
     const paginas = await this.processarArquivos(req);
@@ -232,7 +228,7 @@ export class UploadController {
     const gravadas: string[] = [];
     try {
       return await this.n.comAtor(s, async (tx) => {
-        const p = await projetoNoEscopo(this.n, tx, s, projetoId, true);
+        const p = await projetoNoEscopo(tx, projetoId, true);
         if (p.status !== 'ativo') throw new ErroApi('ERR-001', { campos: ['projeto'] });
         const impressao = { projetoId, arquivos: paginas.map((x) => x.sha256.toString('hex')) };
         const feito = await this.n.idempotente(tx, s, 'uploadImages', chave, impressao, async () => {
@@ -271,7 +267,6 @@ export class UploadController {
     if (!chave || chave.length < 16 || chave.length > 64) throw new ErroApi('ERR-001', { campos: ['Idempotency-Key'] });
     await this.n.comAtor(s, async (tx) => {
       const a = await this.aplicacao(tx, s, id);
-      exigirPerfil(s.perfis, 'digitalizador');
       if (a.estado !== 'identificacao_pendente') throw new ErroApi('ERR-018');
     });
     const novas = await this.processarArquivos(req);
@@ -316,7 +311,6 @@ export class UploadController {
     const removidas: string[] = [];
     const r = await this.n.comAtor(s, async (tx) => {
       const a = await this.aplicacao(tx, s, id, true);
-      exigirPerfil(s.perfis, 'digitalizador');
       const campos = this.n.contrato.validarCorpo('identifyApplication', corpo);
       if (campos) throw new ErroApi('ERR-001', { campos });
       await this.n.idempotente(tx, s, 'identifyApplication', chave, { id, ...corpo }, async () => {
@@ -369,8 +363,7 @@ export class UploadController {
       if (!ehUuid(paginaId)) throw naoEncontrado('PaginaAplicacao', null);
       const p = (await this.paginas(tx, id)).find((x) => x.id === paginaId);
       if (!p) throw naoEncontrado('PaginaAplicacao', paginaId);
-      exigirPerfil(s.perfis, 'digitalizador'); // DEC-099
-      // Sem reserva no IMP-002: só em identificacao_pendente (as reservas chegam no IMP-003).
+      // Sem reserva (DEC-112): a imagem só sai em identificacao_pendente até a revisão do IMP-003.
       if (a.estado !== 'identificacao_pendente') throw new ErroApi('ERR-018');
       const expira = somar(this.n.agora(), 5 * MINUTO); // DEC-034
       let regiao: unknown = null;

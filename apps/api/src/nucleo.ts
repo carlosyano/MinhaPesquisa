@@ -1,33 +1,15 @@
-// Núcleo compartilhado pelos módulos: banco, contrato, relógio, auditoria, sessões, tokens
-// de uso único, outbox de e-mail e idempotência.
+// Núcleo compartilhado pelos módulos: banco, contrato, relógio, auditoria, sessões e
+// idempotência.
 
-import { randomBytes } from 'node:crypto';
 import type { Config } from './config.js';
-import { Banco, linha, linhas, sql, type Executor } from './infra/banco.js';
+import { Banco, linha, sql, type Executor } from './infra/banco.js';
 import { Contrato } from './infra/contrato.js';
 import { segredoAleatorio, sha256 } from './infra/cripto.js';
 import { ErroApi, type AuditoriaDeErro } from './infra/erros.js';
 import { HORA, MINUTO, somar } from './infra/relogio.js';
 
-export type Perfil = 'admin_tenant' | 'digitalizador' | 'analista' | 'analista_individual';
-export const PERFIS: readonly Perfil[] = ['admin_tenant', 'digitalizador', 'analista', 'analista_individual'];
-export const NOMES_PERFIL: Record<Perfil, string> = {
-  admin_tenant: 'Administrador do tenant',
-  digitalizador: 'Digitalizador',
-  analista: 'Analista',
-  analista_individual: 'Analista com acesso individual',
-};
-
-export type TipoToken = 'convite' | 'recuperacao_senha' | 'reset_mfa';
-export const VALIDADE_TOKEN: Record<TipoToken, number> = {
-  convite: 24 * HORA, // DEC-032
-  recuperacao_senha: 60 * MINUTO, // CA-037
-  reset_mfa: 24 * HORA, // DEC-082
-};
-
 export const SESSAO_INATIVIDADE = 30 * MINUTO;
 export const SESSAO_MAXIMA = 24 * HORA;
-export const PRE_SESSAO = 5 * MINUTO;
 
 /** Quem age numa requisição autenticada. */
 export interface Ator {
@@ -38,7 +20,6 @@ export interface Ator {
 
 export interface SessaoAtiva extends Ator {
   sessaoId: string;
-  perfis: Perfil[];
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -62,7 +43,7 @@ export class Nucleo {
   }
 
   /**
-   * Executa no tenant do ator. Erros com `auditar` (fora de escopo, e-mail indisponível)
+   * Executa no tenant do ator. Erros com `auditar` (fora de escopo)
    * são gravados na auditoria numa transação nova, depois do rollback.
    */
   async comAtor<T>(ator: Ator, fn: (tx: Executor) => Promise<T>): Promise<T> {
@@ -97,33 +78,23 @@ export class Nucleo {
 
   // ───────────────────────────── Sessões ─────────────────────────────
 
-  async criarSessao(
-    tx: Executor,
-    dados: { tenantId: string; usuarioId: string; tipo: 'pre_sessao' | 'plena'; etapa?: string; tokenId?: string; ip: string | null },
-  ): Promise<{ segredo: string; expira: Date }> {
+  /** Sessão plena (a única que existe desde o IMP-005; a pré-sessão saiu com o MFA, DEC-108). */
+  async criarSessao(tx: Executor, dados: { tenantId: string; usuarioId: string; ip: string | null }): Promise<{ segredo: string; expira: Date }> {
     const agora = this.agora();
     const segredo = segredoAleatorio();
-    const expira = somar(agora, dados.tipo === 'plena' ? SESSAO_MAXIMA : PRE_SESSAO);
+    const expira = somar(agora, SESSAO_MAXIMA);
     await tx.execute(sql`
-      INSERT INTO sessao (id, tenant_id, usuario_id, tipo, etapa, token_id, segredo_hash, criada_em,
-                          ultima_atividade_em, expira_absoluta_em, ip)
-      VALUES (${this.id()}, ${dados.tenantId}, ${dados.usuarioId}, ${dados.tipo}, ${dados.etapa ?? null},
-              ${dados.tokenId ?? null}, ${sha256(segredo)}, ${agora}, ${agora}, ${expira}, ${dados.ip}::inet)`);
+      INSERT INTO sessao (id, tenant_id, usuario_id, tipo, segredo_hash, criada_em, ultima_atividade_em, expira_absoluta_em, ip)
+      VALUES (${this.id()}, ${dados.tenantId}, ${dados.usuarioId}, 'plena', ${sha256(segredo)}, ${agora}, ${agora}, ${expira},
+              ${dados.ip}::inet)`);
     return { segredo, expira };
   }
 
-  /** Encerra sessões e pré-sessões do usuário (todas, ou só de um tipo, exceto uma). */
-  async revogarSessoes(
-    tx: Executor,
-    usuarioId: string,
-    motivo: string,
-    opcoes: { tipo?: 'pre_sessao' | 'plena'; exceto?: string } = {},
-  ): Promise<void> {
+  /** Encerra todas as sessões do usuário (redefinição de senha, CA-037). */
+  async revogarSessoes(tx: Executor, usuarioId: string, motivo: string): Promise<void> {
     await tx.execute(sql`
       UPDATE sessao SET revogada_em = ${this.agora()}, motivo_revogacao = ${motivo}
-       WHERE usuario_id = ${usuarioId} AND revogada_em IS NULL
-         AND (${opcoes.tipo ?? null}::text IS NULL OR tipo = ${opcoes.tipo ?? null})
-         AND (${opcoes.exceto ?? null}::uuid IS NULL OR id <> ${opcoes.exceto ?? null}::uuid)`);
+       WHERE usuario_id = ${usuarioId} AND revogada_em IS NULL`);
   }
 
   async contarSessoesPlenas(tx: Executor, usuarioId: string): Promise<number> {
@@ -136,68 +107,6 @@ export class Nucleo {
              AND ultima_atividade_em > ${new Date(agora.getTime() - SESSAO_INATIVIDADE)}`,
     );
     return r?.n ?? 0;
-  }
-
-  // ───────────────────── Tokens de uso único e outbox ─────────────────────
-
-  /**
-   * Cria o token e enfileira o e-mail na mesma transação. O segredo do link só nasce no
-   * despacho; até lá o hash guardado é de um valor que ninguém conhece (DEC-088).
-   */
-  async criarTokenComEmail(tx: Executor, tenantId: string, usuarioId: string, tipo: TipoToken): Promise<string> {
-    const agora = this.agora();
-    const tokenId = this.id();
-    await tx.execute(sql`
-      INSERT INTO token_uso_unico (id, tenant_id, usuario_id, tipo, token_hash, expira_em, criado_em)
-      VALUES (${tokenId}, ${tenantId}, ${usuarioId}, ${tipo}, ${randomBytes(32)},
-              ${somar(agora, VALIDADE_TOKEN[tipo])}, ${agora})`);
-    await tx.execute(sql`
-      INSERT INTO outbox (id, tenant_id, tipo, payload, criado_em)
-      VALUES (${this.id()}, ${tenantId}, 'email_token', ${JSON.stringify({ token_id: tokenId })}::jsonb, ${agora})`);
-    return tokenId;
-  }
-
-  /** Invalida tokens ainda não usados do tipo para o usuário (novo convite, novo reset). */
-  async invalidarTokens(tx: Executor, usuarioId: string, tipo: TipoToken): Promise<void> {
-    const agora = this.agora();
-    await tx.execute(sql`
-      UPDATE token_uso_unico SET expira_em = ${agora}
-       WHERE usuario_id = ${usuarioId} AND tipo = ${tipo} AND usado_em IS NULL AND expira_em > ${agora}`);
-  }
-
-  /** Despacha os e-mails pendentes do outbox (no IMP-001, no próprio processo; DEC-088). */
-  async despacharOutbox(): Promise<void> {
-    for (;;) {
-      const enviado = await this.banco.manutencao(async (tx) => {
-        const item = await linha<{ id: string; payload: { token_id: string } }>(
-          tx,
-          sql`SELECT id, payload FROM outbox WHERE processado_em IS NULL AND tipo = 'email_token'
-               ORDER BY criado_em, id LIMIT 1 FOR UPDATE SKIP LOCKED`,
-        );
-        if (!item) return false;
-        const agora = this.agora();
-        const t = await linha<{ tipo: TipoToken; email: string; valido: boolean }>(
-          tx,
-          sql`SELECT t.tipo, u.email, (t.usado_em IS NULL AND t.expira_em > ${agora}) AS valido
-                FROM token_uso_unico t JOIN usuario u ON u.id = t.usuario_id
-               WHERE t.id = ${item.payload.token_id}`,
-        );
-        if (t?.valido) {
-          const token = segredoAleatorio();
-          await tx.execute(sql`UPDATE token_uso_unico SET token_hash = ${sha256(token)} WHERE id = ${item.payload.token_id}`);
-          const rota = { convite: 'convite', recuperacao_senha: 'recuperar-senha', reset_mfa: 'novo-mfa' }[t.tipo];
-          await this.config.mailer.enviar({
-            para: t.email,
-            tipo: t.tipo,
-            token,
-            link: `${this.config.urlWeb}/${rota}#token=${token}`,
-          });
-        }
-        await tx.execute(sql`UPDATE outbox SET processado_em = ${agora}, tentativas = tentativas + 1 WHERE id = ${item.id}`);
-        return true;
-      });
-      if (!enviado) return;
-    }
   }
 
   // ───────────────────────────── Idempotência (P.8) ─────────────────────────────
@@ -234,28 +143,6 @@ export class Nucleo {
       VALUES (${this.id()}, ${ator.tenantId}, ${ator.usuarioId}, ${chave}, ${operacao}, ${hash},
               ${JSON.stringify({ status: r.status, recurso_id: r.recursoId })}::jsonb, ${agora}, ${somar(agora, 24 * HORA)})`);
     return { ...r, repetida: false };
-  }
-
-  /** Perfis do usuário (ordem estável). */
-  async perfisDe(tx: Executor, usuarioId: string): Promise<Perfil[]> {
-    const r = await linhas<{ codigo: Perfil }>(
-      tx,
-      sql`SELECT p.codigo FROM usuario_perfil up JOIN perfil p ON p.id = up.perfil_id
-           WHERE up.usuario_id = ${usuarioId} ORDER BY p.codigo`,
-    );
-    return r.map((x) => x.codigo);
-  }
-
-  /** Projetos efetivos: todos do tenant (vínculo dinâmico, DEC-068) ou os vinculados. */
-  async projetosDe(tx: Executor, usuarioId: string): Promise<string[]> {
-    const r = await linhas<{ id: string }>(
-      tx,
-      sql`SELECT p.id FROM projeto p JOIN usuario u ON u.id = ${usuarioId}
-           WHERE u.todos_projetos
-              OR EXISTS (SELECT 1 FROM vinculo_usuario_projeto v WHERE v.usuario_id = u.id AND v.projeto_id = p.id)
-           ORDER BY p.criado_em, p.id`,
-    );
-    return r.map((x) => x.id);
   }
 
   async fechar(): Promise<void> {

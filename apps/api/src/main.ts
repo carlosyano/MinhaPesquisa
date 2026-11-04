@@ -4,7 +4,6 @@
 import { randomUUID } from 'node:crypto';
 import { criarApi } from './app.js';
 import { relogioDoSistema } from './infra/relogio.js';
-import type { Mailer } from './infra/mailer.js';
 import { AntimalwareClamd } from './infra/antimalware.js';
 import type { Armazenamento } from './infra/armazenamento.js';
 
@@ -19,14 +18,6 @@ function chave32(nome: string): Buffer {
   if (b.length !== 32) throw new Error(`${nome} deve ter 32 bytes em base64`);
   return b;
 }
-
-// O provedor real (Amazon SES) entra com o ambiente na nuvem (DEC-088). Até lá, a API não
-// sobe fora de teste: falhar é melhor que perder convites em silêncio.
-const mailer: Mailer = {
-  async enviar() {
-    throw new Error('provedor de e-mail não configurado (DEC-088)');
-  },
-};
 
 // O adaptador do S3 (sa-east-1) entra com o ambiente na nuvem (DEC-101), como o e-mail.
 const armazenamento: Armazenamento = {
@@ -50,13 +41,10 @@ const api = await criarApi(
     urlBancoManutencao: obrigatoria('MP_DB_MANUTENCAO_URL'),
     raizRepositorio: obrigatoria('MP_RAIZ'),
     chaveHmacEmail: chave32('MP_CHAVE_HMAC_EMAIL'),
-    chaveCifraMfa: chave32('MP_CHAVE_CIFRA_MFA'),
     origensPermitidas: obrigatoria('MP_ORIGENS').split(','),
-    urlWeb: obrigatoria('MP_URL_WEB'),
     cookiesSeguros: true,
     confiarProxy: process.env.MP_CONFIAR_PROXY === 'true',
     relogio: relogioDoSistema,
-    mailer,
     armazenamento,
     // ClamAV como sidecar (DEC-042, DEC-102).
     antimalware: new AntimalwareClamd(obrigatoria('MP_CLAMD_HOST'), Number(process.env.MP_CLAMD_PORTA ?? 3310)),
