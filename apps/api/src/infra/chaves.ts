@@ -16,6 +16,8 @@ export const ARQUIVO_RECUPERACAO = 'chave-mestra.recuperacao';
 export interface ChavesDerivadas {
   hmacEmail: Buffer;
   cifraCampo: Buffer;
+  /** HMAC do CPF para busca e vínculo do respondente (ENT-009, desde o IMP-003). */
+  hmacCpf: Buffer;
   backup: Buffer;
 }
 
@@ -31,7 +33,7 @@ export function novaChaveMestra(): Buffer {
 export function derivarChaves(mestra: Buffer): ChavesDerivadas {
   exigirMestra(mestra);
   const d = (rotulo: string) => Buffer.from(hkdfSync('sha256', mestra, Buffer.alloc(0), `minhapesquisa/${rotulo}/v1`, 32));
-  return { hmacEmail: d('hmac-email'), cifraCampo: d('cifra-campo'), backup: d('backup') };
+  return { hmacEmail: d('hmac-email'), cifraCampo: d('cifra-campo'), hmacCpf: d('hmac-cpf'), backup: d('backup') };
 }
 
 // ───────────────────── cópia com a senha de recuperação ─────────────────────

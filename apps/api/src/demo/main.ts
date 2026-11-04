@@ -138,6 +138,8 @@ const config: Config = {
   urlBancoManutencao: urlComo(banco.superUrl, 'mp_manutencao', senhaManut),
   raizRepositorio: RAIZ,
   chaveHmacEmail: randomBytes(32),
+  chaveCifraCampo: randomBytes(32),
+  chaveHmacCpf: randomBytes(32),
   origensPermitidas: origens,
   cookiesSeguros: false, // HTTP local; por isso a demonstração só escuta em 127.0.0.1
   confiarProxy: false,

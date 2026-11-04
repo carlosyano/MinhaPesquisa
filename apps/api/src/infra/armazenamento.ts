@@ -8,6 +8,8 @@ import { createServer, type Server } from 'node:http';
 
 export interface Armazenamento {
   gravar(chave: string, bytes: Buffer, tipo: string): Promise<void>;
+  /** Bytes do objeto (o worker recorta as páginas para a leitura, RN-038). */
+  ler(chave: string): Promise<Buffer>;
   apagar(chave: string): Promise<void>;
   /** Link assinado de leitura, válido até `expira`. */
   urlAssinada(chave: string, expira: Date): Promise<string>;
@@ -18,6 +20,11 @@ export interface Armazenamento {
 /** Chave do objeto: tenant, aplicação e página, sem nenhum dado pessoal no nome. */
 export function chaveImagem(tenantId: string, aplicacaoId: string, imagemId: string): string {
   return `tenant/${tenantId}/aplicacao/${aplicacaoId}/${imagemId}.jpg`;
+}
+
+/** Recorte de um item para a revisão lado a lado (CA-007), gerado sob demanda. */
+export function chaveRecorte(tenantId: string, aplicacaoId: string, itemId: string): string {
+  return `tenant/${tenantId}/aplicacao/${aplicacaoId}/recorte-${itemId}.jpg`;
 }
 
 /**
@@ -89,6 +96,12 @@ export class ArmazenamentoEmMemoria implements Armazenamento {
 
   async gravar(chave: string, bytes: Buffer, tipo: string): Promise<void> {
     this.objetos.set(chave, { bytes: Buffer.from(bytes), tipo });
+  }
+
+  async ler(chave: string): Promise<Buffer> {
+    const o = this.objetos.get(chave);
+    if (!o) throw new Error('objeto inexistente');
+    return Buffer.from(o.bytes);
   }
 
   async apagar(chave: string): Promise<void> {

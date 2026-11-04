@@ -75,6 +75,10 @@ export class ArmazenamentoEmDisco implements Armazenamento {
     }
   }
 
+  async ler(chave: string): Promise<Buffer> {
+    return readFile(caminhoNoDisco(this.raiz, chave));
+  }
+
   async apagar(chave: string): Promise<void> {
     await rm(caminhoNoDisco(this.raiz, chave), { force: true });
   }

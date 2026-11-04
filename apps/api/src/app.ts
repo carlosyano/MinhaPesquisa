@@ -14,6 +14,7 @@ import { FiltroErros, type Req } from './http.js';
 import { Nucleo } from './nucleo.js';
 import { ProjetosController } from './projetos/projetos.controller.js';
 import { LIMITE_BYTES } from './regras/upload.js';
+import { RevisaoController } from './revisao/revisao.controller.js';
 import { UploadController } from './upload/upload.controller.js';
 
 export interface Api {
@@ -26,7 +27,7 @@ export interface Api {
 export async function criarApi(config: Config, porta = 0, host = '127.0.0.1'): Promise<Api> {
   const nucleo = new Nucleo(config);
 
-  @Module({ controllers: [AuthController, ProjetosController, FormulariosController, UploadController], providers: [{ provide: NUCLEO, useValue: nucleo }] })
+  @Module({ controllers: [AuthController, ProjetosController, FormulariosController, UploadController, RevisaoController], providers: [{ provide: NUCLEO, useValue: nucleo }] })
   class ModuloApi {}
 
   const adaptador = new FastifyAdapter({
@@ -37,9 +38,10 @@ export async function criarApi(config: Config, porta = 0, host = '127.0.0.1'): P
   const app = await NestFactory.create<NestFastifyApplication>(ModuloApi, adaptador, { logger: false });
   const fastify = app.getHttpAdapter().getInstance();
   await fastify.register(fastifyCookie as never);
-  // Upload (RF-006, DEC-029): até 50 arquivos de 20 MB por envio, sem campos de texto.
+  // Upload (RF-006, DEC-029): até 50 arquivos de 20 MB por envio; um só campo de texto, a
+  // confirmação da assinatura de attachSignaturePage (RN-044).
   await fastify.register(fastifyMultipart as never, {
-    limits: { fileSize: LIMITE_BYTES, files: 50, fields: 0, parts: 50, fieldSize: 1024 },
+    limits: { fileSize: LIMITE_BYTES, files: 50, fields: 1, parts: 51, fieldSize: 1024 },
     throwFileSizeLimit: true,
   });
   fastify.addHook('onRequest', async (req, reply) => {

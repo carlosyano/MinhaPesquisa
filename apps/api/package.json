@@ -15,6 +15,7 @@
     "@fastify/cookie": "11.1.5",
     "@fastify/multipart": "10.1.7",
     "@minhapesquisa/db": "0.1.0",
+    "@minhapesquisa/motor-leitura": "0.1.0",
     "@napi-rs/canvas": "1.1.0",
     "@nestjs/common": "12.2.0",
     "@nestjs/core": "12.2.0",

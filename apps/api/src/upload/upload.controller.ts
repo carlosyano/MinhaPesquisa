@@ -6,7 +6,7 @@
 // arquivo recusado recusa o envio e nada é gravado (CA-029).
 
 import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
-import type { MultipartFile } from '@fastify/multipart';
+import type { Multipart } from '@fastify/multipart';
 import { createHash } from 'node:crypto';
 import { NUCLEO } from '../auth/auth.controller.js';
 import { projetoNoEscopo } from '../escopo.js';
@@ -16,7 +16,9 @@ import { linha, linhas, sql, type Executor } from '../infra/banco.js';
 import { ErroApi, naoEncontrado } from '../infra/erros.js';
 import { analisarPagina, contarPaginasPdf, normalizarImagem, renderizarPdf } from '../infra/imagens.js';
 import { MINUTO, somar } from '../infra/relogio.js';
+import { aplicacaoNoEscopo, corpoAplicacao, ESTADOS_REVISAO, iniciarLeitura, type LinhaAplicacao } from '../leitura/dominio.js';
 import { ehUuid, Nucleo, type SessaoAtiva } from '../nucleo.js';
+import { anexarAssinatura } from '../revisao/respondentes.js';
 import { classificarCriacao, LIMITE_BYTES, LIMITE_PAGINAS, lerConteudoQr, MOTIVO, paginasCompletas, tipoPorConteudo, type Criacao, type VersaoDoQr } from '../regras/upload.js';
 
 interface PaginaProcessada {
@@ -24,15 +26,6 @@ interface PaginaProcessada {
   sha256: Buffer;
   qr: string | null;
   registroOk: boolean;
-}
-
-interface LinhaAplicacao {
-  id: string;
-  projeto_id: string;
-  versao_id: string | null;
-  estado: string;
-  aviso: string | null;
-  assinatura: string;
 }
 
 interface LinhaPagina {
@@ -51,7 +44,14 @@ interface Identificar {
 
 const recusa = (motivo: string) => new ErroApi('ERR-029', { motivo, substituir: motivo });
 
-type ReqMultipart = Requisicao & { isMultipart(): boolean; files(): AsyncIterableIterator<MultipartFile> };
+type ReqMultipart = Requisicao & { isMultipart(): boolean; parts(): AsyncIterableIterator<Multipart> };
+
+/** O que um envio multipart pode ter: o nome do campo dos arquivos e os campos de texto aceitos. */
+interface FormatoEnvio {
+  arquivos: string;
+  textos?: string[];
+  maxArquivos?: number;
+}
 
 @Controller()
 export class UploadController {
@@ -64,15 +64,21 @@ export class UploadController {
    * durante o recebimento; (2) antimalware; (3) tipo pelo conteúdo; (4) páginas. Depois
    * normaliza (sem metadados) e analisa cada página.
    */
-  private async processarArquivos(req: Requisicao): Promise<PaginaProcessada[]> {
+  private async processarArquivos(req: Requisicao, formato: FormatoEnvio = { arquivos: 'arquivos' }, textos: Record<string, string> = {}): Promise<PaginaProcessada[]> {
     const r = req as ReqMultipart;
-    if (typeof r.isMultipart !== 'function' || !r.isMultipart()) throw new ErroApi('ERR-001', { campos: ['arquivos'] });
+    if (typeof r.isMultipart !== 'function' || !r.isMultipart()) throw new ErroApi('ERR-001', { campos: [formato.arquivos] });
     const paginas: PaginaProcessada[] = [];
     let arquivos = 0;
     try {
-      for await (const parte of r.files()) {
-        if (parte.fieldname !== 'arquivos') throw new ErroApi('ERR-001', { campos: [parte.fieldname] });
+      for await (const parte of r.parts()) {
+        if (parte.type === 'field') {
+          if (!formato.textos?.includes(parte.fieldname) || typeof parte.value !== 'string') throw new ErroApi('ERR-001', { campos: [parte.fieldname] });
+          textos[parte.fieldname] = parte.value;
+          continue;
+        }
+        if (parte.fieldname !== formato.arquivos) throw new ErroApi('ERR-001', { campos: [parte.fieldname] });
         arquivos++;
+        if (formato.maxArquivos && arquivos > formato.maxArquivos) throw new ErroApi('ERR-001', { campos: [formato.arquivos] });
         let bytes: Buffer;
         try {
           bytes = await parte.toBuffer();
@@ -107,30 +113,17 @@ export class UploadController {
     } catch (e) {
       const codigo = (e as { code?: string }).code;
       if (codigo === 'FST_REQ_FILE_TOO_LARGE') throw recusa(MOTIVO.tamanho);
-      if (codigo === 'FST_FILES_LIMIT') throw new ErroApi('ERR-001', { campos: ['arquivos'] });
+      if (codigo === 'FST_FILES_LIMIT' || codigo === 'FST_FIELDS_LIMIT' || codigo === 'FST_PARTS_LIMIT') throw new ErroApi('ERR-001', { campos: [formato.arquivos] });
       throw e;
     }
-    if (arquivos === 0) throw new ErroApi('ERR-001', { campos: ['arquivos'] });
+    if (arquivos === 0) throw new ErroApi('ERR-001', { campos: [formato.arquivos] });
     return paginas;
   }
 
   // ───────────────────────────── consultas ─────────────────────────────
 
-  private async aplicacao(tx: Executor, s: SessaoAtiva, id: string, bloquear = false): Promise<LinhaAplicacao> {
-    if (!ehUuid(id)) throw naoEncontrado('Aplicacao', null);
-    const a = await linha<LinhaAplicacao>(
-      tx,
-      bloquear
-        ? sql`SELECT id, projeto_id, versao_id, estado, aviso, assinatura FROM aplicacao WHERE id = ${id} FOR UPDATE`
-        : sql`SELECT id, projeto_id, versao_id, estado, aviso, assinatura FROM aplicacao WHERE id = ${id}`,
-    );
-    if (!a) throw naoEncontrado('Aplicacao', id);
-    try {
-      await projetoNoEscopo(tx, a.projeto_id);
-    } catch {
-      throw naoEncontrado('Aplicacao', id);
-    }
-    return a;
+  private async aplicacao(tx: Executor, _s: SessaoAtiva, id: string, bloquear = false): Promise<LinhaAplicacao> {
+    return aplicacaoNoEscopo(tx, id, bloquear);
   }
 
   private async paginas(tx: Executor, aplicacaoId: string): Promise<LinhaPagina[]> {
@@ -160,19 +153,8 @@ export class UploadController {
     return { imagem_id: p.id, numero_pagina: p.numero_pagina, tipo: p.tipo, registro_ok: p.registro_ok };
   }
 
-  private async corpoAplicacao(tx: Executor, a: LinhaAplicacao) {
-    return {
-      id: a.id,
-      projeto_id: a.projeto_id,
-      versao_id: a.versao_id,
-      estado: a.estado,
-      assinatura: a.assinatura,
-      aviso: a.aviso,
-      divergencias_cadastro: [],
-      paginas: (await this.paginas(tx, a.id)).map((p) => this.corpoPagina(p)),
-      cadastro_existente: null,
-      itens: [],
-    };
+  private corpoAplicacao(tx: Executor, a: LinhaAplicacao) {
+    return corpoAplicacao(this.n, tx, a);
   }
 
   /** Grava as imagens; se algo falhar depois, o chamador apaga as que gravou. */
@@ -198,11 +180,8 @@ export class UploadController {
     await tx.execute(sql`
       UPDATE aplicacao SET estado = ${c.estado}, aviso = ${c.aviso}, versao_id = ${c.versaoId}, versao = versao + 1
        WHERE id = ${aplicacaoId}`);
-    if (c.estado === 'em_leitura') {
-      await tx.execute(sql`
-        INSERT INTO outbox (id, tenant_id, tipo, payload, criado_em)
-        VALUES (${this.n.id()}, ${s.tenantId}, 'leitura.solicitada', ${JSON.stringify({ aplicacao_id: aplicacaoId })}::jsonb, ${this.n.agora()})`);
-    }
+    // Pronta para ler: em_leitura, ou aguardando_cota com aviso ERR-003 se o teto do mês foi atingido.
+    if (c.estado === 'em_leitura') await iniciarLeitura(this.n, tx, s.tenantId, aplicacaoId);
     if (c.aviso === 'ERR-039') await this.n.auditar(tx, s, 'QR_FORA_DE_CONTEXTO', 'Aplicacao', aplicacaoId); // CA-039
   }
 
@@ -353,6 +332,58 @@ export class UploadController {
     return r;
   }
 
+  // ───────────────────────────── attachSignaturePage ─────────────────────────────
+
+  /**
+   * Página 1 assinada de uma aplicação em sem_assinatura (CA-044, RN-044): confere o QR da versão
+   * e da página, grava a imagem como `assinatura` (a página 1 original fica) e conclui sem reler.
+   */
+  @Post('applications/:applicationId/signature')
+  @HttpCode(200)
+  async attachSignaturePage(@Param('applicationId') id: string, @Headers('idempotency-key') chave: string | undefined, @Req() req: Requisicao) {
+    const s = await exigirSessao(this.n, req);
+    exigirCsrf(this.n, req);
+    if (!chave || chave.length < 16 || chave.length > 64) throw new ErroApi('ERR-001', { campos: ['Idempotency-Key'] });
+    await this.n.comAtor(s, async (tx) => {
+      const a = await this.aplicacao(tx, s, id);
+      if (a.estado !== 'sem_assinatura') throw new ErroApi('ERR-018');
+    });
+    const textos: Record<string, string> = {};
+    const paginas = await this.processarArquivos(req, { arquivos: 'arquivo', textos: ['assinatura'], maxArquivos: 1 }, textos);
+    if (textos.assinatura !== 'presente') throw new ErroApi('ERR-001', { campos: ['assinatura'] });
+    if (paginas.length !== 1) throw new ErroApi('ERR-004');
+    const [p] = paginas;
+
+    const gravadas: string[] = [];
+    try {
+      return await this.n.comAtor(s, async (tx) => {
+        const a = await this.aplicacao(tx, s, id, true);
+        await this.n.idempotente(tx, s, 'attachSignaturePage', chave, { id, arquivo: p.sha256.toString('hex') }, async () => {
+          if (a.estado !== 'sem_assinatura') throw new ErroApi('ERR-018');
+          const v = await linha<{ qr_codigo: string }>(tx, sql`SELECT qr_codigo FROM versao WHERE id = ${a.versao_id}`);
+          const lido = p.qr ? lerConteudoQr(p.qr) : null;
+          if (!v || !lido || lido.codigo !== v.qr_codigo || lido.pagina !== 1) throw new ErroApi('ERR-004');
+          const imagemId = this.n.id();
+          const chaveObjeto = chaveImagem(s.tenantId, id, imagemId);
+          await this.n.config.armazenamento.gravar(chaveObjeto, p.jpeg, 'image/jpeg');
+          gravadas.push(chaveObjeto);
+          const ordem = (await linha<{ n: number }>(tx, sql`SELECT coalesce(max(ordem_envio), 0)::int AS n FROM pagina_aplicacao WHERE aplicacao_id = ${id}`))!.n;
+          await tx.execute(sql`
+            INSERT INTO pagina_aplicacao (id, tenant_id, aplicacao_id, tipo, numero_pagina, ordem_envio, qr_codigo, chave_storage,
+                                          sha256, registro_ok, criado_em)
+            VALUES (${imagemId}, ${s.tenantId}, ${id}, 'assinatura', 1, ${ordem + 1}, ${p.qr!.slice(0, 200)}, ${chaveObjeto},
+                    ${p.sha256}, ${p.registroOk}, ${this.n.agora()})`);
+          await anexarAssinatura(this.n, tx, s, a);
+          return { status: 200, recursoId: id };
+        });
+        return this.corpoAplicacao(tx, await this.aplicacao(tx, s, id));
+      });
+    } catch (e) {
+      await this.apagarObjetos(gravadas);
+      throw e;
+    }
+  }
+
   // ───────────────────────────── getPageImage ─────────────────────────────
 
   @Get('applications/:applicationId/pages/:pageId/image')
@@ -360,11 +391,11 @@ export class UploadController {
     const s = await exigirSessao(this.n, req);
     return this.n.comAtor(s, async (tx) => {
       const a = await this.aplicacao(tx, s, id);
+      // Sem reserva (DEC-112): identificação e estados de revisão (contrato, getPageImage).
+      if (a.estado !== 'identificacao_pendente' && !ESTADOS_REVISAO.has(a.estado)) throw new ErroApi('ERR-018');
       if (!ehUuid(paginaId)) throw naoEncontrado('PaginaAplicacao', null);
       const p = (await this.paginas(tx, id)).find((x) => x.id === paginaId);
       if (!p) throw naoEncontrado('PaginaAplicacao', paginaId);
-      // Sem reserva (DEC-112): a imagem só sai em identificacao_pendente até a revisão do IMP-003.
-      if (a.estado !== 'identificacao_pendente') throw new ErroApi('ERR-018');
       const expira = somar(this.n.agora(), 5 * MINUTO); // DEC-034
       let regiao: unknown = null;
       if (p.numero_pagina === 1 && a.versao_id) {

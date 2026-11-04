@@ -121,7 +121,7 @@ export class FiltroErros implements ExceptionFilter {
       api = new ErroApi('ERR-001'); // corpo malformado, tipo de conteúdo errado, corpo grande demais
     } else {
       // Erro inesperado: registra só o tipo e a correlação, nunca dados da requisição.
-      console.error(`erro_interno correlationId=${req.correlationId} tipo=${(erro as Error)?.name ?? typeof erro}`);
+      this.n.log(`erro_interno correlationId=${req.correlationId} tipo=${(erro as Error)?.name ?? typeof erro}`);
       api = new ErroApi('ERR-020');
     }
     const def = this.n.contrato.erros.get(api.errId) ?? this.n.contrato.erros.get('ERR-020')!;
