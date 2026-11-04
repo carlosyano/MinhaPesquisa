@@ -1,16 +1,18 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-010 aceitas
-Versão: 1.12
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 em propagação)
+Versão: 2.0
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0, CHG-011)
 Nível de rigor: Completo (DEC-001)
-Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado)
+Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado), aplicado no que couber à aplicação local da DEC-107
 Responsável: Carlos Yano
+
+Nota da v2.0 (CHG-011): o produto deixa de ser um SaaS na nuvem e passa a ser uma aplicação local num notebook, usada por uma única pessoa (DEC-107 a DEC-112). As seções 1, 2 e 3 já refletem a mudança. A propagação aos RF, RN, RNF, CA, ERR, à matriz, ao contrato e aos testes segue em PRs próprios (PLANO §11, IMP-005); até lá, onde o texto das seções 4 a 8 contradiz a DEC-107 a DEC-112, valem as decisões (seção 2.5).
 
 1. Resumo em linguagem simples
 
-O MinhaPesquisa é um SaaS multi-tenant que transforma formulários de pesquisa respondidos em papel por público 60+ em dados estruturados, prontos para relatórios, dashboards e análises individuais ou por grupo. O sistema recebe imagens (scanner ou celular), identifica cada página por QR code, lê os campos por IA com confiança por campo, envia para revisão humana quando a confiança é baixa ou o valor é inválido, e produz dashboards com regras de anonimização (tamanho mínimo de grupo). Todo o tratamento de dados pessoais sensíveis de saúde segue a LGPD, com isolamento total por tenant, auditoria imutável, direitos do titular e transferência internacional de recortes para IA condicionada a parecer jurídico. A especificação está APROVADA para prosseguir à Fase 3 (Arquitetura) e, em seguida, à implementação por incrementos.
+O MinhaPesquisa é uma aplicação local, instalada num notebook e usada por uma única pessoa (DEC-107), que transforma formulários de pesquisa respondidos em papel por público 60+ em dados estruturados, prontos para relatórios, dashboards e análises individuais ou por grupo. O sistema recebe imagens (scanner ou celular), identifica cada página por QR code, lê os campos por IA com confiança por campo, envia para revisão humana quando a confiança é baixa ou o valor é inválido, e produz dashboards e exportações (sem k-anonimato, DEC-110). Dados, imagens e backups ficam no notebook; só os recortes lidos vão ao provedor de IA na nuvem, que pode processar fora do Brasil (DEC-111). Todo o tratamento de dados pessoais sensíveis de saúde segue a LGPD, com disco cifrado, backup cifrado, auditoria imutável, direitos do titular e transferência internacional de recortes para IA condicionada a parecer jurídico. A especificação está APROVADA para prosseguir à Fase 3 (Arquitetura) e, em seguida, à implementação por incrementos.
 
 2. Sumário executivo e escopo
 
@@ -22,23 +24,17 @@ Digitalizar, validar e analisar pesquisas em papel com governança LGPD, rastrea
 
 | Ator | Descrição |
 |---|---|
-| Administrador da plataforma (você) | Cria tenants e o primeiro administrador por script; acompanha métricas no painel da nuvem. Não faz login no produto na v1. |
-| Administrador do tenant | Gerencia usuários, projetos, formulários, parâmetros, dashboards, exportações, auditoria e direitos do titular dentro do seu tenant. |
-| Digitalizador (também revisor na v1) | Faz upload, monta aplicações, revisa leituras, confere CPF e assinatura, informa campos obrigatórios, descarta e reabre aplicações. |
-| Analista | Vê dashboards e relatórios agregados, cria grupos, exporta só agregados. Não vê dados individuais identificados. |
-| Analista com acesso individual | Tudo do analista, mais ficha individual e exportação linha a linha. Acesso concedido com justificativa, validade de 90 dias, revogável, cada abertura auditada. |
+| Usuária (única, DEC-107 e DEC-109) | A única pessoa que usa o sistema, no próprio notebook. Acumula o que antes eram cinco papéis: instala e configura por script (antigo administrador da plataforma); cuida de projetos, formulários, parâmetros, auditoria e direitos do titular (administrador do tenant); faz upload, revisa leituras, confere CPF e assinatura, descarta e reabre aplicações (digitalizador); vê dashboards e fichas individuais e exporta linha a linha (analista com acesso individual). Entra só com senha local (DEC-108). |
 | Respondente | Pessoa 60+ que responde formulários em papel. Pode responder vários formulários do mesmo projeto ou de projetos diferentes ao longo do tempo. |
 
-2.3 Clientes do SaaS (tenants)
+2.3 Instituição usuária
 
-Clínicas, cooperativas e qualquer entidade que conduza pesquisas impressas. Volume inicial: cerca de 500 formulários por mês, digitalizados por scanner ou foto de celular.
+Uma única instituição (clínica, cooperativa ou outra entidade que conduza pesquisas impressas), registrada como o único tenant, criado na instalação (DEC-107). Não há venda como serviço nem outras instituições. Volume inicial: cerca de 500 formulários por mês, digitalizados por scanner ou foto de celular.
 
 2.4 Integrações previstas
 
-- Provedor de IA para leitura de campos (contrato isolado, sem retenção, sem uso para treino).
-- Armazenamento de objetos (imagens) em nuvem com região no Brasil.
-- E-mail transacional (convites, avisos de teto de cota, recuperação de senha).
-- Monitoramento da nuvem (métricas do administrador da plataforma).
+- Provedor de IA na nuvem para leitura de campos (contrato sem retenção e sem uso para treino; pode processar fora do Brasil, DEC-111). É a única integração externa.
+- Imagens, banco e backups ficam no notebook (DEC-107); não há armazenamento em nuvem, e-mail nem monitoramento em nuvem.
 
 2.5 Fontes e precedência
 
@@ -56,7 +52,8 @@ Clínicas, cooperativas e qualquer entidade que conduza pesquisas impressas. Vol
 - Fila de revisão humana para campos com baixa confiança.
 - Armazenamento estruturado por item de resposta.
 - Relatórios e dashboards por projeto, por formulário, por respondente e por grupo dinâmico (filtros por idade, estado civil, condição de saúde etc.).
-- Isolamento de dados por tenant, perfis de acesso, trilha de auditoria, exportação e direitos do titular.
+- Acesso por senha local, trilha de auditoria, exportação e direitos do titular.
+- Instalação local, disco cifrado e backup cifrado em mídia externa (DEC-107, Q-031).
 
 2.7 Fora do escopo da v1 (etapa posterior)
 
@@ -66,6 +63,8 @@ Clínicas, cooperativas e qualquer entidade que conduza pesquisas impressas. Vol
 - Exportação para SPSS e R.
 - Permissão por linha (por usuário ou por condição).
 - Gestão de tenants por tela (criar, suspender, configurar); cobrança e assinatura do SaaS.
+
+Fora do produto a partir da v2.0 (CHG-011, sem previsão de volta): vários tenants, várias pessoas usuárias, perfis, vínculos a projetos e concessões de acesso individual (DEC-109); MFA, convites e e-mail (DEC-108); k-anonimato nos painéis e exportações (DEC-110); reserva de aplicação para revisão (DEC-112); implantação em nuvem (DEC-107).
 
 2.8 Riscos aceitos na v1
 
@@ -81,24 +80,24 @@ A v1 não verifica automaticamente se todas as páginas de um envio são da mesm
 | Mitigação na v1 | Procedimento operacional: digitalizar uma aplicação por vez e conferir as páginas antes de enviar; correção pela revisão, com auditoria |
 | Tratamento futuro | ID único por cópia impressa no QR, ou comparação automática do nome lido em cada página |
 
-#### Risco 2 — Grupo mínimo reduzido até 1 (DEC-055)
+#### Risco 2 — Dados num único notebook (DEC-107)
 
-Um filtro estreito (ex.: projeto X, idade 91, viúva) pode identificar uma pessoa e expor seus dados de saúde a um analista que não tem acesso individual. O padrão passou a 5 (DEC-055), mas o administrador do tenant pode reduzir até 1; nesse caso a separação de perfis (analista vs. analista com acesso individual) deixa de proteger.
+Todo o banco, as imagens e os dados de saúde ficam num só equipamento.
 
 | Campo | Descrição |
 |---|---|
-| Causa | Parâmetro `grupo_minimo` configurável por projeto (padrão 5), podendo ser reduzido até 1 |
-| Impacto | Reidentificação de indivíduo por filtro estreito, expondo dados de saúde sem acesso individual |
-| Probabilidade | Baixa em projetos com muitos respondentes; alta em projetos pequenos ou filtros muito específicos |
-| Mitigação na v1 | Padrão 5; redução auditada; o projeto que precisar de anonimização mantém valor maior que 1 |
-| Mitigação adicional | Faixas fixas de idade e mínimo aplicado ao complemento do filtro (DEC-071). Supressão complementar: além das células abaixo do mínimo, a consulta oculta outra célula da mesma linha e da mesma coluna (e o total marginal quando necessário), para que a célula oculta não possa ser deduzida por subtração no cruzamento (CA-017) nem pela consulta sem cruzamento (DEC-067) |
-| Fora da v1 | Proteção contra deduzir valores comparando filtros diferentes ao longo do tempo |
+| Causa | Aplicação local, sem nuvem (DEC-107) |
+| Impacto | Perda dos dados por defeito, roubo ou perda do notebook; acesso indevido se a máquina for levada desbloqueada |
+| Probabilidade | Baixa para defeito ou roubo em um ano, mas com impacto alto |
+| Mitigação na v2.0 | Disco cifrado (BitLocker) obrigatório; senha local com bloqueio por tentativas (DEC-108); backup cifrado em mídia externa guardada longe do notebook (Q-031); teste periódico de restauração |
+| Fora da v2.0 | Alta disponibilidade e acesso por outra máquina |
+
+O antigo Risco 2 (grupo mínimo reduzido até 1) deixa de existir: o k-anonimato foi retirado (DEC-110).
 
 2.9 Parâmetros de configuração (RN-008)
 
 | Chave | Escopo | Padrão | Faixa | Quem altera | Origem |
 |---|---|---|---|---|---|
-| grupo_minimo | projeto | 5 | 1..1000 | Administrador do tenant (`createProject`, `updateProject`), com auditoria | DEC-055, RN-026 |
 | limite_confianca | plataforma | 0,90 (provisório, DEC-028) | 0..1, calibrado no conjunto-ouro | Administrador da plataforma, por script, com auditoria | DEC-028, DEC-059 |
 | custo_ia_teto | tenant | R$ 500,00/mês | ≥ 0 | Administrador da plataforma, por script, com auditoria | DEC-035, DEC-058, DEC-059 |
 | retencao_dias | tenant | NULL (sem expurgo por tempo até GX-001) | 1..3650 | Administrador da plataforma, por script, com auditoria | RN-030, Q-002, DEC-059 |
@@ -107,6 +106,8 @@ Um filtro estreito (ex.: projeto X, idade 91, viúva) pode identificar uma pesso
 | termo_consentimento | tenant | texto padrão abaixo [PROVISÓRIO até o GX-001] | texto de 1 a 1000 caracteres | Administrador da plataforma, por script, com auditoria | DEC-094, RN-041, GX-001 |
 
 Texto padrão de `termo_consentimento` [PROVISÓRIO até o parecer do GX-001; o tenant, como controlador (RN-041), pode substituí-lo]: "Termo de consentimento. Autorizo o uso das minhas respostas a este formulário, inclusive as de saúde, pela instituição responsável pela pesquisa, para fins de acompanhamento e análise, conforme a Lei Geral de Proteção de Dados (Lei 13.709/2018). Posso pedir acesso, correção ou eliminação dos meus dados a qualquer momento." Abaixo do texto, o PDF traz o campo "Assinatura do respondente" (DEC-094).
+
+Na aplicação local, "administrador da plataforma, por script" é a própria usuária, por script no notebook (DEC-107). O parâmetro `grupo_minimo` saiu com o k-anonimato (DEC-110).
 
 Fonte única: todos os parâmetros vivem em ParametroConfiguracao (ENT-020). Ausente no nível mais específico, vale o nível acima (projeto → tenant → plataforma); ausente em todos, vale o padrão desta tabela.
 
@@ -130,44 +131,44 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-012 | 23/10/2026 | negócio | Biblioteca de perguntas | v1 com biblioteca; v1 sem biblioteca | v2; na v1 basta o código estável | Evolução incremental | definitivo | Baixo | RF-004 |
 | DEC-013 | 23/10/2026 | negócio | Relatórios | Agregados; Agregados com cruzamento | Gráfico por pergunta, com cruzamento por uma segunda pergunta | Valor analítico | definitivo | Médio | RF-009, CA-017 |
 | DEC-014 | 23/10/2026 | negócio | Exportação | CSV/XLSX/SPSS/R; CSV/XLSX | CSV e XLSX na v1; SPSS e R na v2; analista exporta só agregados | Escopo enxuto | definitivo | Médio | RF-010, CA-022 |
-| DEC-015 | 23/10/2026 | negócio | Permissões | Por linha; Por projeto; Por perfil | Tabela de perfis; o vínculo a projetos limita tudo; sem permissão por linha; sem acesso público | Simplicidade e isolamento | definitivo | Alto | RF-001, CA-012, CA-016 |
+| DEC-015 | 23/10/2026 | negócio | Permissões | Por linha; Por projeto; Por perfil | Tabela de perfis; o vínculo a projetos limita tudo; sem permissão por linha; sem acesso público | Simplicidade e isolamento | substituído (DEC-109) | Alto | RF-001, CA-012, CA-016 |
 | DEC-016 | 23/10/2026 | negócio | Importação | v1 com importação; v1 sem | XLSForm, Microsoft e Google Forms no roadmap | Evolução incremental | definitivo | Baixo | — |
-| DEC-017 | 23/10/2026 | negócio | Gestão de tenants | Tela na v1; Script na v1 | Fora da v1; tenant e primeiro administrador por script; isolamento no banco desde a v1 | Isolamento é mais caro de adicionar depois | definitivo | Alto | RF-001, RNF-001 |
-| DEC-018 | 23/10/2026 | negócio | Administrador da plataforma | Com login no produto; Sem login | Sem login no produto na v1; atua por script e monitoramento | Separação de responsabilidades | definitivo | Médio | RF-001 |
+| DEC-017 | 23/10/2026 | negócio | Gestão de tenants | Tela na v1; Script na v1 | Fora da v1; tenant e primeiro administrador por script; isolamento no banco desde a v1 | Isolamento é mais caro de adicionar depois | substituído (DEC-107) | Alto | RF-001, RNF-001 |
+| DEC-018 | 23/10/2026 | negócio | Administrador da plataforma | Com login no produto; Sem login | Sem login no produto na v1; atua por script e monitoramento | Separação de responsabilidades | substituído (DEC-107) | Médio | RF-001 |
 | DEC-019 | 23/10/2026 | negócio | Identificação do respondente | Por nome+data; Por CPF | Identificado só pelo CPF, obrigatório, sempre conferido por pessoa; vínculo na conclusão | Unicidade e LGPD | definitivo | Alto | RF-005, CA-002, CA-014 |
 | DEC-020 | 23/10/2026 | negócio | Campos obrigatórios | Nenhum; Alguns; Todos os 5 | Nome, nascimento, CPF, data e local bloqueiam a conclusão | Integridade mínima | definitivo | Alto | RF-004, RF-008, CA-032, CA-036 |
 | DEC-021 | 23/10/2026 | negócio | Mascaramento de CPF | Sempre visível; Sempre mascarado; Exceções | Exceto na revisão, na portabilidade e na exportação linha a linha, com auditoria | Equilíbrio entre LGPD e operação | substituído (DEC-072) | Alto | RNF-003, CA-008 |
 | DEC-022 | 23/10/2026 | técnica | Envio à IA | Página inteira; Recortes | Recortes dos campos; identificação e saúde em chamadas separadas; sem metadados | Minimização de dado sensível | definitivo | Alto | RF-007, RNF-011 |
 | DEC-023 | 23/10/2026 | negócio | Grupo mínimo | Fixo; Configurável | Por projeto, podendo ser 1; entre projetos vale o maior; ocultação por célula, também na exportação | Flexibilidade e anonimização | substituído (DEC-055) | Alto | RF-009, CA-010, CA-034 |
 | DEC-024 | 23/10/2026 | negócio | Unidade dos grupos | Aplicação; Respondente | Respondente; cada filtro usa a aplicação mais recente que tenha a pergunta; período padrão de 12 meses | Coerência analítica | definitivo | Alto | RF-009, CA-009, CA-031 |
-| DEC-025 | 23/10/2026 | negócio | Autenticação | Sem MFA; MFA opcional; MFA obrigatório | Regras de senha, bloqueio e sessão para todos; MFA para todos os perfis | Segurança de dado sensível | definitivo | Alto | RF-002, CA-026, RNF-002 |
+| DEC-025 | 23/10/2026 | negócio | Autenticação | Sem MFA; MFA opcional; MFA obrigatório | Regras de senha, bloqueio e sessão para todos; MFA para todos os perfis | Segurança de dado sensível | substituído (DEC-108) | Alto | RF-002, CA-026, RNF-002 |
 | DEC-026 | 23/10/2026 | negócio | Eliminação a pedido do titular | Parcial; Total | Apaga imagens e respostas, anonimiza o respondente; auditoria só com referências; lista de eliminações por 180 dias | Conformidade LGPD | definitivo | Alto | RF-010, CA-023, RNF-008 |
 | DEC-027 | 23/10/2026 | negócio | Ciclo de vida do projeto | Ativo/Inativo; Ativo/Arquivado | Ativo ou Arquivado, reversível; toda mudança de status registrada com data, hora e usuário | Rastreabilidade | definitivo | Médio | RF-003, CA-027 |
 | DEC-028 | 23/10/2026 | negócio | Limite de confiança da IA | 0,70; 0,80; 0,90 | Confirma só acima de 0,90 | Valor provisório até calibração pelo conjunto-ouro | provisório | Alto | RF-007, CA-005 |
 | DEC-029 | 23/10/2026 | negócio | Limites de arquivo e texto | 10 MB; 20 MB; 50 MB | 20 MB e 50 páginas por arquivo; textos de 200 e 2.000 caracteres | Equilíbrio entre uso e custo | provisório | Médio | RF-006, CA-029 |
 | DEC-030 | 23/10/2026 | negócio | Tempo de leitura | 1 min; 2 min; 5 min | 95% das páginas em até 2 minutos, num lote de 100 | Valor provisório até conjunto-ouro | provisório | Médio | RNF-013 |
 | DEC-031 | 23/10/2026 | negócio | Acesso individual | 30 dias; 90 dias; indeterminado | 90 dias, com justificativa; cada abertura auditada | Equilíbrio entre uso e risco | provisório | Alto | RF-001, CA-025 |
-| DEC-032 | 23/10/2026 | negócio | Validade do convite | 12 h; 24 h; 72 h | 24 horas, de uso único | Segurança | provisório | Médio | RF-002, CA-035 |
+| DEC-032 | 23/10/2026 | negócio | Validade do convite | 12 h; 24 h; 72 h | 24 horas, de uso único | Segurança | substituído (DEC-108) | Médio | RF-002, CA-035 |
 | DEC-033 | 24/10/2026 | negócio | Retenção de backups | 30 dias; 90 dias; indeterminado | Backups guardados por no máximo 90 dias | Conformidade com direito à eliminação | provisório | Alto | RNF-008, CA-023 |
-| DEC-034 | 23/10/2026 | negócio | Operação | Sem link assinado; Link de 5 min; Link de 1 h | Link de imagem de 5 minutos; avisos por e-mail e na tela; reserva de aplicação por 30 minutos | Segurança e UX | provisório | Médio | RNF-007, CA-043 |
+| DEC-034 | 23/10/2026 | negócio | Operação | Sem link assinado; Link de 5 min; Link de 1 h | Link de imagem de 5 minutos; avisos por e-mail e na tela; reserva de aplicação por 30 minutos | Segurança e UX | substituído (DEC-112) | Médio | RNF-007, CA-043 |
 | DEC-035 | 24/10/2026 | negócio | Teto de custo de IA na v1 | Sem teto; R$ 500/mês; R$ 1.000/mês | R$ 500,00/mês por tenant | Valor provisório para viabilizar a fila de espera (CA-030) na v1 | provisório | Alto | RF-007, CA-030, RNF-014 |
 | DEC-036 | 24/10/2026 | técnica | Definição do ambiente de nuvem | AWS sa-east-1; Azure Brazil South | A definir na Fase 3 (ADR), sempre com região no Brasil | Soberania de dados; decisão técnica adiada para análise | substituído (DEC-038) | Alto | RNF-011, RNF-002 |
-| DEC-054 | 27/10/2026 | negócio | Identificação do usuário no login | E-mail único global; e-mail único por tenant | E-mail único em toda a plataforma; um e-mail pertence a um único tenant | Login sem ambiguidade de tenant (Q-005) | definitivo | Alto | RF-001, RF-002, ENT-002 |
-| DEC-055 | 27/10/2026 | negócio | Grupo mínimo | Padrão 1; padrão 5; padrão 5 com piso 3 | Por projeto, padrão 5, alterável de 1 a 1000 pelo administrador do tenant com auditoria; entre projetos vale o maior; ocultação por célula, também na exportação | Reduz a reidentificação de idosos por filtros estreitos (Q-006); substitui a DEC-023 | definitivo | Alto | RF-009, CA-010, CA-034 |
+| DEC-054 | 27/10/2026 | negócio | Identificação do usuário no login | E-mail único global; e-mail único por tenant | E-mail único em toda a plataforma; um e-mail pertence a um único tenant | Login sem ambiguidade de tenant (Q-005) | substituído (DEC-108) | Alto | RF-001, RF-002, ENT-002 |
+| DEC-055 | 27/10/2026 | negócio | Grupo mínimo | Padrão 1; padrão 5; padrão 5 com piso 3 | Por projeto, padrão 5, alterável de 1 a 1000 pelo administrador do tenant com auditoria; entre projetos vale o maior; ocultação por célula, também na exportação | Reduz a reidentificação de idosos por filtros estreitos (Q-006); substitui a DEC-023 | substituído (DEC-110) | Alto | RF-009, CA-010, CA-034 |
 | DEC-056 | 27/10/2026 | negócio | Origem do conjunto-ouro | Voluntários com dados fictícios; dados reais após GX-001; preenchimento digital | Formulários preenchidos à mão por voluntários 60+ com dados fictícios, sob termo de participação próprio, sem dado pessoal real | Permite calibrar e escolher o provedor sem depender do GX-001 (Q-007) | definitivo | Alto | DEC-004, DEC-028, RN-046 |
 | DEC-057 | 27/10/2026 | negócio | Leitura de texto livre | Sempre revisão; regra geral de confiança; sem leitura por IA | Itens do tipo `texto_livre` sempre vão para `a_revisar` | Texto livre não tem schema que valide o valor (Q-008) | definitivo | Médio | RF-007, FL-002, DEC-010 |
 | DEC-058 | 27/10/2026 | negócio | Período e moeda do teto de custo de IA | Mês civil e PTAX diária; janela móvel de 30 dias; mês civil e cotação fixa mensal | Mês civil no fuso America/Sao_Paulo; custo em dólar convertido por cotação fixa configurada pela plataforma a cada mês | Previsibilidade do teto (Q-009) | definitivo | Médio | DEC-035, RN-036, CA-030 |
 | DEC-059 | 27/10/2026 | negócio | Alteração de limite_confianca, custo_ia_teto e retencao_dias | Plataforma por script; administrador do tenant pela tela; misto | Administrador da plataforma, por script, com auditoria | Não há gestão de tenant por tela na v1 (DEC-017); Q-010 | definitivo | Médio | RN-008, DEC-017, DEC-018 |
-| DEC-060 | 27/10/2026 | negócio | Perfil analista_individual × concessão | Perfil e concessão; só concessão; só perfil | O acesso individual exige o perfil `analista_individual` e uma concessão vigente para o projeto | Defesa em duas camadas para dados individuais de saúde (Q-011) | definitivo | Alto | RF-001, RF-009, DEC-031, CA-025 |
+| DEC-060 | 27/10/2026 | negócio | Perfil analista_individual × concessão | Perfil e concessão; só concessão; só perfil | O acesso individual exige o perfil `analista_individual` e uma concessão vigente para o projeto | Defesa em duas camadas para dados individuais de saúde (Q-011) | substituído (DEC-109) | Alto | RF-001, RF-009, DEC-031, CA-025 |
 | DEC-061 | 28/10/2026 | negócio | Forma da revisão independente (nível Completo) | Revisor humano; agente de IA isolado | Agente de IA de outro modelo, com contexto isolado e somente leitura (`.claude/agents/revisor-independente.md`); o responsável lê e aprova os achados de cada rodada | Não há revisor humano disponível; risco aceito: IAs tendem a errar de forma parecida | definitivo | Alto | REV-REQ-005, REV-PLANO-007 |
 | DEC-064 | 28/10/2026 | negócio | Vínculo do respondente sem assinatura | Só ao concluir; já em sem_assinatura | O respondente só é criado ou vinculado, e o cadastro só é alterado, quando a aplicação chega a `concluida` | Sem assinatura não há evidência de consentimento (DEC-006, RN-041); Q-012 | definitivo | Alto | RF-005, RF-008, FL-001 |
-| DEC-065 | 28/10/2026 | negócio | E-mail já usado em outro tenant | Erro genérico; resposta igual ao sucesso | Erro ERR-023 igual para qualquer tenant, auditado e limitado por rate limit; risco residual aceito | Evita oráculo detalhado entre clientes (Q-013) | definitivo | Médio | RF-001, DEC-054 |
+| DEC-065 | 28/10/2026 | negócio | E-mail já usado em outro tenant | Erro genérico; resposta igual ao sucesso | Erro ERR-023 igual para qualquer tenant, auditado e limitado por rate limit; risco residual aceito | Evita oráculo detalhado entre clientes (Q-013) | substituído (DEC-108) | Médio | RF-001, DEC-054 |
 | DEC-066 | 28/10/2026 | negócio | Leitura de texto curto | Sempre revisão; regra geral | Itens `texto_curto` sempre vão para `a_revisar` | Sem schema que valide o conteúdo (Q-014) | definitivo | Médio | RF-007, FL-002, DEC-057 |
-| DEC-067 | 28/10/2026 | negócio | Dedução de célula oculta por subtração | Supressão complementar; aceitar o risco | Supressão complementar na consulta agregada, também na exportação | Impede deduzir a célula oculta pela linha, pela coluna ou pela consulta sem cruzamento (Q-015) | definitivo | Alto | RF-009, DEC-045, CA-017 |
+| DEC-067 | 28/10/2026 | negócio | Dedução de célula oculta por subtração | Supressão complementar; aceitar o risco | Supressão complementar na consulta agregada, também na exportação | Impede deduzir a célula oculta pela linha, pela coluna ou pela consulta sem cruzamento (Q-015) | substituído (DEC-110) | Alto | RF-009, DEC-045, CA-017 |
 | DEC-068 | 28/10/2026 | negócio | Vínculo padrão a todos os projetos | Dinâmico; fixado na criação | Dinâmico: inclui projetos criados depois (`todos_projetos`) | Leitura natural da RN-004 (Q-016) | definitivo | Médio | RN-004, RF-001 |
 | DEC-069 | 28/10/2026 | negócio | Retenção dos arquivos de exportação | 24 h; 7 dias; 30 dias | 7 dias após a geração | Dados pessoais em repouso pelo menor tempo útil (Q-017) | definitivo | Médio | RN-030, RF-010 |
 | DEC-070 | 28/10/2026 | negócio | Efeito de tenant inativo | Login, jobs e dados; só login | Login recusado (ERR-013), jobs do tenant suspensos, dados preservados, expurgos por eliminação e retenção mantidos | Gestão de tenant por script (DEC-017); Q-018 | definitivo | Médio | DEC-017, ENT-001 |
-| DEC-071 | 28/10/2026 | negócio | Dedução por diferença entre filtros | Faixas fixas e mínimo no complemento; aceitar o risco | Filtros de idade só em faixas fixas de 5 anos (60-64 ... 90+); consulta recusada quando o complemento do filtro no projeto tem menos respondentes que o mínimo | Dois filtros que diferem em uma pessoa revelariam suas respostas (Q-019) | definitivo | Alto | RF-009, RNF-004, DEC-055 |
+| DEC-071 | 28/10/2026 | negócio | Dedução por diferença entre filtros | Faixas fixas e mínimo no complemento; aceitar o risco | Filtros de idade só em faixas fixas de 5 anos (60-64 ... 90+); consulta recusada quando o complemento do filtro no projeto tem menos respondentes que o mínimo | Dois filtros que diferem em uma pessoa revelariam suas respostas (Q-019) | substituído (DEC-110) | Alto | RF-009, RNF-004, DEC-055 |
 | DEC-072 | 28/10/2026 | negócio | Mascaramento de CPF | Ver DEC-021 | Exceto na revisão, no pedido de acesso e na portabilidade do titular e na exportação linha a linha, com auditoria | Inclui o acesso do próprio titular (Q-020); substitui a DEC-021 | definitivo | Alto | RNF-003, CA-008, CA-024 |
 | DEC-073 | 28/10/2026 | negócio | Critério de parada da revisão independente | Zero achados médios; zero bloqueantes e altos com médios registrados | Rodada aprovada com 0 bloqueantes e 0 altos; achados médios e baixos restantes só com registro de responsável e incremento (PLANO §12.3) | Rodadas sucessivas descem de nível e não convergem a zero médios; desvio do nível Completo aceito | definitivo | Médio | DEC-001, DEC-061 |
 | DEC-074 | 29/10/2026 | negócio | Campo lido em branco | Sempre revisão; regra geral de confiança | Campo lido em branco que não é destino de salto que mande pular vai para `a_revisar` | Evita confirmar como vazio um campo marcado de leve (Q-021) | definitivo | Médio | RF-007, FL-002, RN-020 |
@@ -176,9 +177,9 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-077 | 29/10/2026 | negócio | Valores de aplicação descartada | Apagar no descarte; manter até a retenção | No descarte, `valor_ia` e `valor_final` dos itens são apagados com as imagens e a aplicação vai para a ListaEliminacoes (motivo `descarte_aplicacao`) para reaplicação após restore; fica a auditoria | Minimização (LGPD) (Q-024) | definitivo | Médio | RF-008, CA-033, RN-030 |
 | DEC-078 | 29/10/2026 | negócio | Respondente sem aplicação após reabertura | Anonimizar; manter até a retenção | Respondente que fica sem aplicação concluída após reabertura é anonimizado e registrado na ListaEliminacoes só para reaplicação após restore (motivo `anonimizacao_reabertura`), com auditoria | Sem finalidade para manter (Q-025) | definitivo | Médio | RF-005, CA-042 |
 | DEC-079 | 29/10/2026 | negócio | Campo obrigatório ilegível | Bloquear conclusão; concluir sem vínculo | Nome, nascimento, data ou local ilegível, rasurado ou não se aplica → ERR-006 até informar o valor; CPF ilegível → `aguardando_cpf` | Integridade mínima (DEC-020) (Q-026) | definitivo | Médio | RF-008, DEC-020, CA-032 |
-| DEC-080 | 29/10/2026 | negócio | Concessão individual sem perfil | Recusar; permitir | Concessão recusada (ERR-018) se o usuário não tiver o perfil `analista_individual` (DEC-060; texto corrigido pela Q-030) | Evita concessão sem efeito ou indevida (Q-027, Q-030) | definitivo | Baixo | RF-001, CA-025 |
-| DEC-081 | 29/10/2026 | negócio | Faixa abaixo de 60 | Criar faixa; excluir | Faixa `<60` com o mesmo mínimo das demais; complementa a DEC-071 | Público pode ter menos de 60 (Q-028) | definitivo | Baixo | RF-009, DEC-071 |
-| DEC-082 | 29/10/2026 | negócio | Novo MFA após reset | Link por e-mail; próximo login | Após o reset, o novo cadastro só começa pelo link de uso único (24 h) enviado ao e-mail, com a senha; login com `mfa_ativo = false` não cria pré-sessão (ERR-013) | Quem tem só a senha não cadastra MFA (Q-029) | definitivo | Alto | RF-001, RF-002, CA-037b, CA-026b |
+| DEC-080 | 29/10/2026 | negócio | Concessão individual sem perfil | Recusar; permitir | Concessão recusada (ERR-018) se o usuário não tiver o perfil `analista_individual` (DEC-060; texto corrigido pela Q-030) | Evita concessão sem efeito ou indevida (Q-027, Q-030) | substituído (DEC-109) | Baixo | RF-001, CA-025 |
+| DEC-081 | 29/10/2026 | negócio | Faixa abaixo de 60 | Criar faixa; excluir | Faixa `<60` com o mesmo mínimo das demais; complementa a DEC-071 | Público pode ter menos de 60 (Q-028) | substituído (DEC-110) | Baixo | RF-009, DEC-071 |
+| DEC-082 | 29/10/2026 | negócio | Novo MFA após reset | Link por e-mail; próximo login | Após o reset, o novo cadastro só começa pelo link de uso único (24 h) enviado ao e-mail, com a senha; login com `mfa_ativo = false` não cria pré-sessão (ERR-013) | Quem tem só a senha não cadastra MFA (Q-029) | substituído (DEC-108) | Alto | RF-001, RF-002, CA-037b, CA-026b |
 | DEC-093 | 03/11/2026 | negócio | CA-003 enviava só a página 2 e esperava `em_leitura`, contra a linha 3 da criação da FL-001 (página faltante) | Ajustar a FL-001; esclarecer o CA-003 | Esclarecimento: no CA-003 o digitalizador envia as 4 páginas da versão em JPEG e a página 2 é identificada pelo QR; a FL-001 não muda | Encontrado no IA-TEST do IMP-002 (CHG-009, item 1) | definitivo | Baixo | CA-003, FL-001 |
 | DEC-094 | 03/11/2026 | negócio | Texto do termo de consentimento da página 1 (CA-028) | Texto fixo do sistema; texto por tenant | Texto por tenant no parâmetro `termo_consentimento` (seção 2.9), definido por script, com texto padrão provisório até o GX-001 | O tenant é o controlador e responde pela base legal (RN-041) (CHG-009, item 2) | provisório | Médio | CA-028, RN-041, GX-001 |
 | DEC-095 | 03/11/2026 | negócio | Validação das regras de salto (M-09) | Validar na publicação; validar no rascunho | No rascunho (`updateVersion`), ERR-001 quando: a origem não é `sim_nao` nem `escolha_unica`; a opção não existe na origem; origem e destino são a mesma pergunta; a regra fecha um ciclo; o destino vem antes da origem (`ordem`) | Erro apontado na hora da edição (CHG-009, item 3) | definitivo | Médio | RN-021, RF-004 |
@@ -186,6 +187,12 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-097 | 03/11/2026 | negócio | Sensibilidade `identificacao` em pergunta comum (M-14) | Livre; reservada | `identificacao` é reservada às perguntas com `campo_respondente` ou `campo_aplicacao = aplicador` (definida automaticamente); nas demais o administrador escolhe `saude` ou `outro`; `identificacao` nelas → ERR-001 | Evita que dado de saúde vá na chamada de identificação (RN-039) (CHG-009, item 5) | definitivo | Médio | RN-039, RN-047 |
 | DEC-098 | 03/11/2026 | negócio | Páginas de aplicação já aberta em projeto arquivado | Recusar; permitir | `addApplicationPages` continua permitido em projeto arquivado; só `uploadImages` (nova aplicação) é recusado com ERR-001 | Completar aplicação já aberta não é novo upload (CA-027) (CHG-009, item 8) | definitivo | Baixo | CA-027, RF-006 |
 | DEC-105 | 03/11/2026 | negócio | CPF no PDF | Campo único; uma caixa por dígito | A pergunta do tipo `cpf` sai no PDF com 11 caixas, uma por dígito, sem pontuação impressa | Orienta o preenchimento à mão e separa os dígitos para a leitura (RN-012) (CHG-010) | definitivo | Médio | CA-028, RF-004, RN-012 |
+| DEC-107 | 03/11/2026 | negócio | Forma de implantação do produto | SaaS multi-tenant na AWS; aplicação local num notebook | Aplicação local num único notebook Windows, para uma instituição (um tenant, criado na instalação) e uma única usuária. Banco, imagens e backups ficam no notebook, com disco cifrado (BitLocker) obrigatório; nada é guardado em nuvem. A única saída de dados são os recortes enviados ao provedor de IA (DEC-111). Instalação, parâmetros e manutenção por script local. Sem intenção de voltar a ser SaaS | Simplificar o protótipo e eliminar o custo de nuvem (CHG-011) | definitivo | Alto | RNF-001, RNF-002, RNF-011, DEC-017, DEC-018, DEC-038, Q-031 |
+| DEC-108 | 03/11/2026 | negócio | Acesso ao sistema na aplicação local | Senha local sem MFA; senha + MFA; só o login do Windows | Uma conta, criada na instalação, com senha local (regras de senha e bloqueio por tentativas mantidos); sem MFA, sem convite e sem e-mail. Recuperação de senha por script no próprio notebook, com auditoria | Uma só pessoa no próprio notebook; a proteção principal é o login do Windows e o disco cifrado (CHG-011) | definitivo | Alto | RF-002, DEC-025, DEC-032, DEC-054, DEC-065, DEC-082 |
+| DEC-109 | 03/11/2026 | negócio | Perfis com uma única usuária | Manter perfis; papel único | A usuária tem todas as permissões: administra, digitaliza e revisa, vê fichas individuais e exporta linha a linha (com auditoria). Saem perfis, vínculos a projetos e concessões de acesso individual | Com uma pessoa, a separação de perfis não protege nada (CHG-011) | definitivo | Alto | RF-001, RF-009, RF-010, DEC-014, DEC-015, DEC-060, DEC-080 |
+| DEC-110 | 03/11/2026 | negócio | k-anonimato nos painéis e exportações | Manter; remover | Removido: sem grupo mínimo, sem faixas obrigatórias de idade e sem supressão de células; painéis e exportações mostram todos os grupos | Escolha do responsável para reduzir o IMP-004 (CHG-011); quem compartilhar painéis ou planilhas responde por não expor pessoas em grupos pequenos | definitivo | Alto | RF-009, RF-010, RNF-004, DEC-055, DEC-067, DEC-071, DEC-081 |
+| DEC-111 | 03/11/2026 | negócio | Região do provedor de IA (RNF-011) | Só no Brasil; fora do Brasil permitido; decidir no parecer | O provedor de IA pode processar os recortes fora do Brasil, com contrato sem retenção e sem uso para treino (RNF-010) e base legal de transferência internacional (LGPD art. 33), confirmada no GX-001. Os dados guardados continuam só no notebook | Amplia a escolha do provedor no IMP-003 (CHG-011) | definitivo | Alto | RNF-010, RNF-011, Q-001, GX-001 |
+| DEC-112 | 03/11/2026 | negócio | Operação com uma única usuária | Manter DEC-034; simplificar | Avisos só na tela (sem e-mail); link de imagem de 5 minutos mantido, servido só no notebook; sem reserva de aplicação para revisão (a proteção contra gravação concorrente fica no If-Match) | Não há disputa entre revisores (CHG-011) | provisório | Médio | RF-008, RNF-007, DEC-034, CA-043 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -193,7 +200,8 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 |---|---|
 | Retenção de dados de produção em ambiente ativo | Aguarda parecer jurídico (GX-001). Backups já decididos em 90 dias (DEC-033). |
 | Retenção da trilha de auditoria (inclui IP) | Aguarda parecer jurídico (GX-001); até lá, a auditoria é mantida e nunca contém valores pessoais (RN-027). |
-| Provedor de IA | Escolhido no conjunto-ouro; transferência internacional condicionada a GX-001. |
+| Provedor de IA | Escolhido no conjunto-ouro; pode processar fora do Brasil (DEC-111), com a transferência internacional condicionada a GX-001. |
+| Backup do notebook | Frequência, mídia e guarda do backup cifrado (Q-031). |
 | Parecer jurídico (DPA + LGPD Art. 33) | Registrado como GX-001; bloqueia piloto e produção (Fase 6), não o desenvolvimento com dados sintéticos. |
 
 4. Glossário e regras de negócio
@@ -1718,6 +1726,7 @@ Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, f
 | Q-028 | 29/10/2026 | Idade abaixo de 60 nos filtros | As faixas da DEC-071 começam em 60-64; respondentes com menos de 60 não têm faixa definida (B-N6) | A: criar a faixa "menos de 60" | B: respondentes com menos de 60 ficam fora dos filtros de idade | — | A | Há a faixa "menos de 60", sujeita ao mesmo mínimo das demais. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-009, DEC-071 |
 | Q-029 | 29/10/2026 | Novo cadastro de MFA após reset | Após o reset pelo administrador, quem tiver só a senha cadastra o próprio MFA antes do titular (risco residual da correção A-01) | A: após o reset, o novo cadastro exige link de uso único enviado por e-mail, como no convite | B: manter o cadastro no próximo login e aceitar o risco | — | A | Após o reset de MFA, o novo cadastro só começa por link de uso único enviado ao e-mail do usuário, válido por 24 horas. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, RF-002, CA-037b, CA-026b |
 | Q-030 | 29/10/2026 | Perfil exigido para a concessão individual | A DEC-060 exige o perfil `analista_individual` para o acesso individual, mas a DEC-080, o RF-001 e o CA-025 recusam a concessão só a quem não tem o perfil `analista`; com `analista`, a concessão ficaria sem efeito | A: exigir `analista_individual` (coerente com a DEC-060) | B: exigir `analista` | — | A | A concessão individual só é aceita para usuário com o perfil `analista_individual`; caso contrário, ERR-018. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, CA-025, DEC-060, DEC-080 |
+| Q-031 | 03/11/2026 | Frequência, mídia e guarda do backup do notebook | Com tudo num só notebook (DEC-107), o backup é a única proteção contra perda; a frequência define quantos dias de digitação se perdem | A: diário, em disco externo cifrado guardado longe do notebook | B: semanal, em disco externo cifrado | C: diário, em nuvem cifrada pela própria usuária | A | Backup diário, cifrado, em disco externo guardado longe do notebook; retenção de 90 dias (DEC-033); teste de restauração a cada mês | — | aberta | DEC-107, DEC-033, RNF-008 |
 
 10. Gates externos (GX)
 
@@ -1757,7 +1766,7 @@ Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tool
 - [x] 9. Testes sentinela cobrindo riscos: TS-001 a TS-008.
 - [x] 10. Gates externos registrados: GX-001 (bloqueia piloto e produção).
 - [x] 11. Nenhum trecho exige "bom senso": lacunas resolvidas pelas DEC-054 a DEC-060 e DEC-064 a DEC-072.
-- [x] 12. Toda Q respondida: Q-001 a Q-030.
+- [ ] 12. Toda Q respondida: Q-001 a Q-030 respondidas; Q-031 aberta (backup, CHG-011), com texto provisório.
 - [ ] 13. Consenso DEV/TEST sem divergência bloqueante: depende da próxima rodada de revisão independente.
 - [x] 14. REQ autocontida: referências externas (MeuRemedio, Kit v3) são informativas; o Bloco P está em `docs/spec/BLOCO_P.md`.
 - [ ] 15. Última revisão independente sem achado bloqueante ou alto, com médios e baixos registrados (DEC-061, DEC-073): pendente (REV-REQ-007).
