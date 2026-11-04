@@ -8,7 +8,7 @@ Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado), aplicado no que couber à aplicação local da DEC-107
 Responsável: Carlos Yano
 
-Nota da v2.0 (CHG-011): o produto deixa de ser um SaaS na nuvem e passa a ser uma aplicação local num notebook, usada por uma única pessoa (DEC-107 a DEC-112). As seções 1, 2 e 3 já refletem a mudança. A propagação aos RF, RN, RNF, CA, ERR, à matriz, ao contrato e aos testes segue em PRs próprios (PLANO §11, IMP-005); até lá, onde o texto das seções 4 a 8 contradiz a DEC-107 a DEC-112, valem as decisões (seção 2.5).
+Nota da v2.0 (CHG-011): o produto deixa de ser um SaaS na nuvem e passa a ser uma aplicação local num notebook, usada por uma única pessoa (DEC-107 a DEC-112 e DEC-117). As seções 1, 2 e 3 já refletem a mudança. A propagação aos RF, RN, RNF, CA, ERR, à matriz, ao contrato e aos testes segue em PRs próprios (PLANO §11, IMP-005); até lá, onde o texto das seções 4 a 8 contradiz a DEC-107 a DEC-112, valem as decisões (seção 2.5).
 
 1. Resumo em linguagem simples
 
@@ -53,7 +53,7 @@ Uma única instituição (clínica, cooperativa ou outra entidade que conduza pe
 - Armazenamento estruturado por item de resposta.
 - Relatórios e dashboards por projeto, por formulário, por respondente e por grupo dinâmico (filtros por idade, estado civil, condição de saúde etc.).
 - Acesso por senha local, trilha de auditoria, exportação e direitos do titular.
-- Instalação local, disco cifrado e backup cifrado em mídia externa (DEC-107, Q-031).
+- Instalação local, disco cifrado e backup diário cifrado em disco externo (DEC-107, DEC-117).
 
 2.7 Fora do escopo da v1 (etapa posterior)
 
@@ -89,7 +89,7 @@ Todo o banco, as imagens e os dados de saúde ficam num só equipamento.
 | Causa | Aplicação local, sem nuvem (DEC-107) |
 | Impacto | Perda dos dados por defeito, roubo ou perda do notebook; acesso indevido se a máquina for levada desbloqueada |
 | Probabilidade | Baixa para defeito ou roubo em um ano, mas com impacto alto |
-| Mitigação na v2.0 | Disco cifrado (BitLocker) obrigatório; senha local com bloqueio por tentativas (DEC-108); backup cifrado em mídia externa guardada longe do notebook (Q-031); teste periódico de restauração |
+| Mitigação na v2.0 | Disco cifrado (BitLocker) obrigatório; senha local com bloqueio por tentativas (DEC-108); backup diário cifrado em disco externo guardado longe do notebook (DEC-117); teste periódico de restauração |
 | Fora da v2.0 | Alta disponibilidade e acesso por outra máquina |
 
 O antigo Risco 2 (grupo mínimo reduzido até 1) deixa de existir: o k-anonimato foi retirado (DEC-110).
@@ -193,6 +193,7 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-110 | 03/11/2026 | negócio | k-anonimato nos painéis e exportações | Manter; remover | Removido: sem grupo mínimo, sem faixas obrigatórias de idade e sem supressão de células; painéis e exportações mostram todos os grupos | Escolha do responsável para reduzir o IMP-004 (CHG-011); quem compartilhar painéis ou planilhas responde por não expor pessoas em grupos pequenos | definitivo | Alto | RF-009, RF-010, RNF-004, DEC-055, DEC-067, DEC-071, DEC-081 |
 | DEC-111 | 03/11/2026 | negócio | Região do provedor de IA (RNF-011) | Só no Brasil; fora do Brasil permitido; decidir no parecer | O provedor de IA pode processar os recortes fora do Brasil, com contrato sem retenção e sem uso para treino (RNF-010) e base legal de transferência internacional (LGPD art. 33), confirmada no GX-001. Os dados guardados continuam só no notebook | Amplia a escolha do provedor no IMP-003 (CHG-011) | definitivo | Alto | RNF-010, RNF-011, Q-001, GX-001 |
 | DEC-112 | 03/11/2026 | negócio | Operação com uma única usuária | Manter DEC-034; simplificar | Avisos só na tela (sem e-mail); link de imagem de 5 minutos mantido, servido só no notebook; sem reserva de aplicação para revisão (a proteção contra gravação concorrente fica no If-Match) | Não há disputa entre revisores (CHG-011) | provisório | Médio | RF-008, RNF-007, DEC-034, CA-043 |
+| DEC-117 | 03/11/2026 | negócio | Backup do notebook (Q-031) | Diário em disco externo; semanal em disco externo; diário em nuvem cifrada | Backup diário, cifrado, em disco externo guardado longe do notebook; retenção de 90 dias (DEC-033); teste de restauração a cada mês | Com tudo num só notebook, o backup é a única proteção contra perda; diário limita a perda a um dia de digitação (CHG-011) | definitivo | Alto | DEC-107, DEC-033, DEC-114, RNF-008, Q-031 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -201,7 +202,6 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | Retenção de dados de produção em ambiente ativo | Aguarda parecer jurídico (GX-001). Backups já decididos em 90 dias (DEC-033). |
 | Retenção da trilha de auditoria (inclui IP) | Aguarda parecer jurídico (GX-001); até lá, a auditoria é mantida e nunca contém valores pessoais (RN-027). |
 | Provedor de IA | Escolhido no conjunto-ouro; pode processar fora do Brasil (DEC-111), com a transferência internacional condicionada a GX-001. |
-| Backup do notebook | Frequência, mídia e guarda do backup cifrado (Q-031). |
 | Parecer jurídico (DPA + LGPD Art. 33) | Registrado como GX-001; bloqueia piloto e produção (Fase 6), não o desenvolvimento com dados sintéticos. |
 
 4. Glossário e regras de negócio
@@ -1726,7 +1726,7 @@ Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, f
 | Q-028 | 29/10/2026 | Idade abaixo de 60 nos filtros | As faixas da DEC-071 começam em 60-64; respondentes com menos de 60 não têm faixa definida (B-N6) | A: criar a faixa "menos de 60" | B: respondentes com menos de 60 ficam fora dos filtros de idade | — | A | Há a faixa "menos de 60", sujeita ao mesmo mínimo das demais. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-009, DEC-071 |
 | Q-029 | 29/10/2026 | Novo cadastro de MFA após reset | Após o reset pelo administrador, quem tiver só a senha cadastra o próprio MFA antes do titular (risco residual da correção A-01) | A: após o reset, o novo cadastro exige link de uso único enviado por e-mail, como no convite | B: manter o cadastro no próximo login e aceitar o risco | — | A | Após o reset de MFA, o novo cadastro só começa por link de uso único enviado ao e-mail do usuário, válido por 24 horas. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, RF-002, CA-037b, CA-026b |
 | Q-030 | 29/10/2026 | Perfil exigido para a concessão individual | A DEC-060 exige o perfil `analista_individual` para o acesso individual, mas a DEC-080, o RF-001 e o CA-025 recusam a concessão só a quem não tem o perfil `analista`; com `analista`, a concessão ficaria sem efeito | A: exigir `analista_individual` (coerente com a DEC-060) | B: exigir `analista` | — | A | A concessão individual só é aceita para usuário com o perfil `analista_individual`; caso contrário, ERR-018. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, CA-025, DEC-060, DEC-080 |
-| Q-031 | 03/11/2026 | Frequência, mídia e guarda do backup do notebook | Com tudo num só notebook (DEC-107), o backup é a única proteção contra perda; a frequência define quantos dias de digitação se perdem | A: diário, em disco externo cifrado guardado longe do notebook | B: semanal, em disco externo cifrado | C: diário, em nuvem cifrada pela própria usuária | A | Backup diário, cifrado, em disco externo guardado longe do notebook; retenção de 90 dias (DEC-033); teste de restauração a cada mês | — | aberta | DEC-107, DEC-033, RNF-008 |
+| Q-031 | 03/11/2026 | Frequência, mídia e guarda do backup do notebook | Com tudo num só notebook (DEC-107), o backup é a única proteção contra perda; a frequência define quantos dias de digitação se perdem | A: diário, em disco externo cifrado guardado longe do notebook | B: semanal, em disco externo cifrado | C: diário, em nuvem cifrada pela própria usuária | A | Backup diário, cifrado, em disco externo guardado longe do notebook; retenção de 90 dias (DEC-033); teste de restauração a cada mês | Aceito a recomendação, backup diário (Carlos Yano, 03/11/2026). Incorporada como DEC-117. | respondida | DEC-107, DEC-033, DEC-117, RNF-008 |
 
 10. Gates externos (GX)
 
@@ -1766,7 +1766,7 @@ Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tool
 - [x] 9. Testes sentinela cobrindo riscos: TS-001 a TS-008.
 - [x] 10. Gates externos registrados: GX-001 (bloqueia piloto e produção).
 - [x] 11. Nenhum trecho exige "bom senso": lacunas resolvidas pelas DEC-054 a DEC-060 e DEC-064 a DEC-072.
-- [ ] 12. Toda Q respondida: Q-001 a Q-030 respondidas; Q-031 aberta (backup, CHG-011), com texto provisório.
+- [x] 12. Toda Q respondida: Q-001 a Q-031 (Q-031 respondida em 03/11/2026 como DEC-117).
 - [ ] 13. Consenso DEV/TEST sem divergência bloqueante: depende da próxima rodada de revisão independente.
 - [x] 14. REQ autocontida: referências externas (MeuRemedio, Kit v3) são informativas; o Bloco P está em `docs/spec/BLOCO_P.md`.
 - [ ] 15. Última revisão independente sem achado bloqueante ou alto, com médios e baixos registrados (DEC-061, DEC-073): pendente (REV-REQ-007).
