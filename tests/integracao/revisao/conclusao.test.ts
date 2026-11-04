@@ -1,11 +1,11 @@
 // Conclusão da aplicação e vínculo do respondente pelo CPF (RF-005, RF-008, CA-002, CA-014,
 // CA-014b, CA-021, CA-032, CA-044; FL-001 precedência na conclusão; DEC-020, DEC-064, DEC-079).
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { jpeg } from '../../support/arquivos.js';
 import { esperarErro } from '../../support/catalogo.js';
 import { chaveIdempotencia, type Cliente, type Resposta } from '../../support/cliente.js';
-import { entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
+import { entrar, MINUTO, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import { arquivo, formularioPublicado, projetoCriado, type FormularioPublicado } from '../../support/formularios.js';
 import { criarHarness, type Harness, type RespondenteGravado, type RoteiroLeitura } from '../../support/harness.js';
 import {
@@ -41,6 +41,11 @@ beforeAll(async () => {
   projeto = await projetoCriado(admin, 'Saúde Idoso');
   f = await formularioPublicado(admin, projeto, 'Demografia', conteudoLeitura());
   dig = await entrar(h, A.usuaria);
+});
+// Uma só usuária faz todas as requisições do arquivo: avançar o relógio a cada teste evita o
+// limite de 100 requisições por minuto por usuária (Bloco P P.7), que não é o assunto aqui.
+beforeEach(async () => {
+  await h.clock.advance(MINUTO);
 });
 afterAll(async () => {
   await h?.close();
