@@ -1,9 +1,8 @@
-// Configuração da API. Em produção vem do ambiente e do gerenciador de segredos; nos testes,
-// do harness. Nenhum segredo fica no repositório.
+// Configuração da API. No notebook vem do ambiente e das chaves locais (DEC-113, DEC-114);
+// nos testes, do harness. Nenhum segredo fica no repositório.
 
 import type { Antimalware } from './infra/antimalware.js';
 import type { Armazenamento } from './infra/armazenamento.js';
-import type { Mailer } from './infra/mailer.js';
 import type { Relogio } from './infra/relogio.js';
 
 export interface Config {
@@ -15,18 +14,13 @@ export interface Config {
   raizRepositorio: string;
   /** Chave de 32 bytes para HMAC do e-mail (falhas de login). */
   chaveHmacEmail: Buffer;
-  /** Chave de 32 bytes para cifrar o segredo TOTP (AES-256-GCM, DEC-085). */
-  chaveCifraMfa: Buffer;
   /** Origens aceitas no cabeçalho Origin das mutações (CSRF, Bloco P P.2). */
   origensPermitidas: string[];
-  /** URL pública da aplicação web, usada nos links dos e-mails. */
-  urlWeb: string;
   /** Cookies com atributo Secure (sempre em produção). */
   cookiesSeguros: boolean;
   /** Aceitar X-Forwarded-For como IP do cliente. Só atrás de proxy confiável ou em teste. */
   confiarProxy: boolean;
   relogio: Relogio;
-  mailer: Mailer;
   /** Imagens das páginas (DEC-101). */
   armazenamento: Armazenamento;
   /** Varredura de todo arquivo recebido (DEC-042, DEC-102). */

@@ -1,26 +1,21 @@
 // Testes unitários das primitivas de segurança (Bloco P P.2, DEC-084, DEC-085), rápidos o
-// bastante para o teste de mutação (DEC-052). Importam o código-fonte direto.
+// bastante para o teste de mutação (DEC-052). Importam o código-fonte direto. Sem TOTP desde
+// o IMP-005 (DEC-108): as funções de MFA saem de apps/api/src/infra/cripto.ts.
 
 import { describe, expect, it } from 'vitest';
 import {
   cifrar,
   conferirSenha,
-  conferirTotp,
   decifrar,
   hashSenha,
   hmacEmail,
   iguais,
   normalizarEmail,
-  novoSegredoTotp,
   SENHA_INDEFINIDA,
   senhaAceita,
-  uriOtpauth,
 } from '../../apps/api/src/infra/cripto.js';
-import { codigoTotp } from '../support/totp.js';
 
-const SEGREDO = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
-const T = new Date(1_111_111_109_000); // passo 37037036
-const PASSO = Math.floor(T.getTime() / 30_000);
+const SEGREDO = 'valor sintético a cifrar';
 
 describe('política de senha (Bloco P P.2, DEC-084)', () => {
   // @trace RF-002, DEC-084
@@ -56,52 +51,7 @@ describe('hash de senha (Argon2id, DEC-085)', () => {
   });
 });
 
-describe('TOTP (RFC 6238, DEC-085)', () => {
-  // @trace DEC-085, CA-026
-  it('aceita o passo atual e ±1, recusa ±2 e devolve o passo aceito', () => {
-    for (const d of [-1, 0, 1]) {
-      const c = codigoTotp(SEGREDO, new Date(T.getTime() + d * 30_000));
-      expect(conferirTotp(SEGREDO, c, T, null)).toBe(PASSO + d);
-    }
-    for (const d of [-2, 2]) {
-      expect(conferirTotp(SEGREDO, codigoTotp(SEGREDO, new Date(T.getTime() + d * 30_000)), T, null)).toBeNull();
-    }
-  });
-
-  // @trace DEC-085, B-N9
-  it('anti-reuso: recusa passo igual ou anterior ao último aceito', () => {
-    const c = codigoTotp(SEGREDO, T);
-    expect(conferirTotp(SEGREDO, c, T, PASSO)).toBeNull();
-    expect(conferirTotp(SEGREDO, c, T, PASSO + 1)).toBeNull();
-    expect(conferirTotp(SEGREDO, c, T, PASSO - 1)).toBe(PASSO);
-  });
-
-  // @trace DEC-085
-  it('recusa código de outro segredo e formato errado', () => {
-    expect(conferirTotp(novoSegredoTotp(), codigoTotp(SEGREDO, T), T, null)).toBeNull();
-    expect(conferirTotp(SEGREDO, '12345', T, null)).toBeNull();
-  });
-
-  // @trace DEC-050
-  it('segredo novo: 32 caracteres base32 (160 bits), diferente a cada chamada', () => {
-    const a = novoSegredoTotp();
-    expect(a).toMatch(/^[A-Z2-7]{32}$/);
-    expect(novoSegredoTotp()).not.toBe(a);
-  });
-
-  // @trace DEC-050
-  it('URI otpauth com segredo, emissor e parâmetros', () => {
-    const u = new URL(uriOtpauth(SEGREDO, 'ana@exemplo.test'));
-    expect(u.protocol).toBe('otpauth:');
-    expect(u.searchParams.get('secret')).toBe(SEGREDO);
-    expect(u.searchParams.get('issuer')).toBe('MinhaPesquisa');
-    expect(u.searchParams.get('digits')).toBe('6');
-    expect(u.searchParams.get('period')).toBe('30');
-    expect(decodeURIComponent(u.pathname)).toContain('MinhaPesquisa:ana@exemplo.test');
-  });
-});
-
-describe('cifra do segredo TOTP (AES-256-GCM, DEC-085)', () => {
+describe('cifra de campo (AES-256-GCM, DEC-085)', () => {
   const chave = Buffer.alloc(32, 7);
 
   // @trace DEC-085

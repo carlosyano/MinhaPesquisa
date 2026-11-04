@@ -29,10 +29,6 @@ export const PAGINA_DEMO = `<!doctype html>
   <form id="f-login">
     <label for="email">E-mail</label><input id="email" type="email" autocomplete="username" required>
     <label for="senha">Senha (impressa no terminal)</label><input id="senha" type="password" autocomplete="current-password" required>
-    <button type="submit">Continuar</button>
-  </form>
-  <form id="f-mfa" hidden>
-    <label for="codigo">Código do app autenticador</label><input id="codigo" type="text" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" required>
     <button type="submit">Entrar</button>
   </form>
 </section>
@@ -94,14 +90,6 @@ $('f-login').addEventListener('submit', async (e) => {
   e.preventDefault(); mensagem();
   try {
     await chamar('POST', '/auth/login', { email: $('email').value, senha: $('senha').value });
-    $('f-login').hidden = true; $('f-mfa').hidden = false; $('codigo').focus();
-  } catch (err) { mensagem(err.message); }
-});
-
-$('f-mfa').addEventListener('submit', async (e) => {
-  e.preventDefault(); mensagem();
-  try {
-    await chamar('POST', '/auth/mfa/verify', { codigo: $('codigo').value });
     $('entrar').hidden = true; $('painel').hidden = false;
   } catch (err) { mensagem(err.message); }
 });

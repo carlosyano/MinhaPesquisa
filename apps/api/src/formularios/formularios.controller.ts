@@ -9,7 +9,7 @@ import { exigirCsrf, exigirSessao, type Req as Requisicao, type Res as Resposta 
 import { linha, linhas, sql, type Executor } from '../infra/banco.js';
 import { ErroApi, naoEncontrado } from '../infra/erros.js';
 import { ehUuid, Nucleo, type SessaoAtiva } from '../nucleo.js';
-import { exigirPerfil, paginacao } from '../regras/autorizacao.js';
+import { paginacao } from '../regras/autorizacao.js';
 import {
   normalizarConteudo,
   pendenciasPublicacao,
@@ -79,7 +79,7 @@ export class FormulariosController {
     const f = await linha<LinhaFormulario>(tx, sql`SELECT id, projeto_id, nome, criado_em FROM formulario WHERE id = ${id}`);
     if (!f) throw naoEncontrado('Formulario', id);
     try {
-      await projetoNoEscopo(this.n, tx, s, f.projeto_id);
+      await projetoNoEscopo(tx, f.projeto_id);
     } catch {
       throw naoEncontrado('Formulario', id);
     }
@@ -222,7 +222,7 @@ export class FormulariosController {
     const s = await exigirSessao(this.n, req);
     const { pagina, limite } = paginacao(q);
     return this.n.comAtor(s, async (tx) => {
-      await projetoNoEscopo(this.n, tx, s, projetoId);
+      await projetoNoEscopo(tx, projetoId);
       const total = (await linha<{ n: number }>(tx, sql`SELECT count(*)::int AS n FROM formulario WHERE projeto_id = ${projetoId}`))!.n;
       const fs = await linhas<LinhaFormulario>(
         tx,
@@ -246,8 +246,7 @@ export class FormulariosController {
     exigirCsrf(this.n, req);
     this.validar('createForm', corpo);
     return this.n.comAtor(s, async (tx) => {
-      await projetoNoEscopo(this.n, tx, s, corpo.projeto_id);
-      exigirPerfil(s.perfis, 'admin_tenant');
+      await projetoNoEscopo(tx, corpo.projeto_id);
       const feito = await this.n.idempotente(tx, s, 'createForm', chave, corpo, async () => {
         const id = this.n.id();
         await tx.execute(sql`
@@ -278,7 +277,6 @@ export class FormulariosController {
     const c = corpo ?? {};
     const r = await this.n.comAtor(s, async (tx) => {
       await this.formulario(tx, s, formId);
-      exigirPerfil(s.perfis, 'admin_tenant');
       this.validar('createVersion', c);
       const feito = await this.n.idempotente(tx, s, 'createVersion', chave, { formId, ...c }, async () => {
         let origem: { perguntas: Pergunta[]; regras_salto: RegraEntrada[] } | null = null;
@@ -324,7 +322,6 @@ export class FormulariosController {
     exigirCsrf(this.n, req);
     const r = await this.n.comAtor(s, async (tx) => {
       const { v } = await this.versao(tx, s, formId, versaoId, true);
-      exigirPerfil(s.perfis, 'admin_tenant');
       if (v.status === 'publicada') throw new ErroApi('ERR-009');
       if (!ifMatch) throw new ErroApi('ERR-001', { campos: ['If-Match'] });
       if (ifMatch !== etag(v.versao)) throw new ErroApi('ERR-017');
@@ -347,7 +344,6 @@ export class FormulariosController {
     exigirCsrf(this.n, req);
     return this.n.comAtor(s, async (tx) => {
       const { v } = await this.versao(tx, s, formId, versaoId, true);
-      exigirPerfil(s.perfis, 'admin_tenant');
       if (v.status === 'publicada') throw new ErroApi('ERR-009');
       const c = await this.conteudo(tx, versaoId);
       const faltam = pendenciasPublicacao(c.perguntas);

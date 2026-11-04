@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { comQr, conteudoForjado, jpeg, paginasDoPdf, semQr } from '../../support/arquivos.js';
 import { esperarErro } from '../../support/catalogo.js';
 import { chaveIdempotencia, type Arquivo, type Cliente, type Resposta } from '../../support/cliente.js';
-import { entrar, pessoa, tenantComAdmin, type TenantPronto } from '../../support/cenarios.js';
+import { entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import { arquivo, enviar, formularioPublicado, projetoCriado, type FormularioPublicado } from '../../support/formularios.js';
 import { criarHarness, type Harness } from '../../support/harness.js';
 
@@ -23,19 +23,19 @@ let formOutroTenant: FormularioPublicado;
 
 beforeAll(async () => {
   h = await criarHarness();
-  A = await tenantComAdmin(h, 'Tenant A');
-  adminA = await entrar(h, A.admin);
+  A = await tenantComUsuaria(h, 'Tenant A');
+  adminA = await entrar(h, A.usuaria);
   projeto = await projetoCriado(adminA, 'Saúde Idoso');
   outroProjeto = await projetoCriado(adminA, 'Outro projeto');
   f = await formularioPublicado(adminA, projeto, 'Demografia');
   outroForm = await formularioPublicado(adminA, projeto, 'Hábitos');
   formOutroProjeto = await formularioPublicado(adminA, outroProjeto, 'Demografia do outro projeto');
-  const B = await tenantComAdmin(h, 'Tenant B');
-  const adminB = await entrar(h, B.admin);
+  const B = await tenantComUsuaria(h, 'Tenant B');
+  const adminB = await entrar(h, B.usuaria);
   formOutroTenant = await formularioPublicado(adminB, await projetoCriado(adminB, 'Projeto B'), 'Demografia B');
-  const p = await pessoa(h, A.tenantId, ['digitalizador'], 'dig.montagem', { projetos: [projeto, outroProjeto] });
-  digId = p.usuarioId;
-  dig = await entrar(h, p);
+  // Com a usuária única (DEC-109), o papel de digitalizador é uma segunda sessão da mesma conta.
+  digId = A.usuaria.usuarioId;
+  dig = await entrar(h, A.usuaria);
 });
 afterAll(async () => {
   await h?.close();
