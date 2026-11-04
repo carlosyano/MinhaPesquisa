@@ -436,7 +436,7 @@ export class RevisaoController {
         await tx.execute(sql`
           UPDATE aplicacao SET estado = 'em_revisao', aviso = NULL, motivo_reabertura = ${this.n.cifrar(corpo.motivo)},
                                respondente_anterior_id = coalesce(respondente_id, respondente_anterior_id), respondente_id = NULL,
-                               concluida_em = NULL, manter_cadastro = NULL, cadastro_versao = NULL, cpf_exibido_em = NULL,
+                               concluida_em = NULL, manter_cadastro = NULL, cadastro_versao = NULL,
                                assinatura = CASE WHEN estado = 'sem_assinatura' THEN 'nao_conferida' ELSE assinatura END,
                                versao = versao + 1
            WHERE id = ${id}`);
