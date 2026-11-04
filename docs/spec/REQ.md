@@ -1,9 +1,9 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-009 aceitas
-Versão: 1.11
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-010 aceitas
+Versão: 1.12
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado)
 Responsável: Carlos Yano
@@ -185,6 +185,7 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-096 | 03/11/2026 | negócio | Erro da estrutura da RN-047 (M-19) | ERR-001 no rascunho; ERR-036 na publicação | Mantém a recusa na publicação com ERR-036; `campos` traz os códigos das perguntas com estrutura inválida (matriz sem linhas, múltipla escolha sem `nenhuma_das_anteriores`), junto com os campos da RN-017 que faltarem | Preserva a RN-047 e diz ao administrador qual pergunta corrigir (CHG-009, item 4) | definitivo | Baixo | RN-047, CA-036, ERR-036 |
 | DEC-097 | 03/11/2026 | negócio | Sensibilidade `identificacao` em pergunta comum (M-14) | Livre; reservada | `identificacao` é reservada às perguntas com `campo_respondente` ou `campo_aplicacao = aplicador` (definida automaticamente); nas demais o administrador escolhe `saude` ou `outro`; `identificacao` nelas → ERR-001 | Evita que dado de saúde vá na chamada de identificação (RN-039) (CHG-009, item 5) | definitivo | Médio | RN-039, RN-047 |
 | DEC-098 | 03/11/2026 | negócio | Páginas de aplicação já aberta em projeto arquivado | Recusar; permitir | `addApplicationPages` continua permitido em projeto arquivado; só `uploadImages` (nova aplicação) é recusado com ERR-001 | Completar aplicação já aberta não é novo upload (CA-027) (CHG-009, item 8) | definitivo | Baixo | CA-027, RF-006 |
+| DEC-105 | 03/11/2026 | negócio | CPF no PDF | Campo único; uma caixa por dígito | A pergunta do tipo `cpf` sai no PDF com 11 caixas, uma por dígito, sem pontuação impressa | Orienta o preenchimento à mão e separa os dígitos para a leitura (RN-012) (CHG-010) | definitivo | Médio | CA-028, RF-004, RN-012 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -1375,6 +1376,7 @@ Dado que a versão 1 do formulário "Demografia" está publicada
 Quando o administrador gera o PDF
 Então cada página traz um QR com identificador opaco da versão e o número da página
 E a primeira página traz o termo de consentimento do tenant (`termo_consentimento`) com campo de assinatura (DEC-094)
+E a pergunta do tipo "CPF" traz 11 caixas, uma por dígito (DEC-105)
 E versão em rascunho não gera PDF
 
 CA-036 — Publicação exige campos obrigatórios
