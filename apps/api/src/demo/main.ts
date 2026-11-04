@@ -4,23 +4,25 @@
 // sobrevive ao encerramento (banco no contêiner, imagens em memória).
 //
 // Não é a instalação do notebook: o armazenamento é o em memória dos testes e o antimalware é
-// o equivalente EICAR (DEC-102), a menos que MP_CLAMD_HOST aponte para um clamd real. Só dados
-// sintéticos (GX-001).
+// o equivalente EICAR (DEC-102), a menos que MP_DEFENDER=true peça o Microsoft Defender real
+// (DEC-115, só no Windows). Só dados sintéticos (GX-001).
 //
 // Variáveis opcionais:
 //   MP_DEMO_DATABASE_URL  superusuário de um PostgreSQL 17 já em execução (sem Docker)
 //   MP_DEMO_PORTA         porta da página (padrão 8080)
-//   MP_CLAMD_HOST, MP_CLAMD_PORTA  clamd real em vez do equivalente EICAR
+//   MP_DEFENDER=true      Microsoft Defender (MpCmdRun) em vez do equivalente EICAR
 
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { aplicarMigracoes, criarPapeis } from '@minhapesquisa/db';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, request as requisitarHttp, type IncomingMessage, type ServerResponse } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { criarApi } from '../app.js';
 import type { Config } from '../config.js';
-import { AntimalwareClamd, AntimalwareEicar, type Antimalware } from '../infra/antimalware.js';
+import { AntimalwareDefender, AntimalwareEicar, type Antimalware } from '../infra/antimalware.js';
 import { ArmazenamentoEmMemoria } from '../infra/armazenamento.js';
 import { relogioDoSistema } from '../infra/relogio.js';
 import { criarTenantComUsuaria } from '../scripts/instalacao.js';
@@ -126,8 +128,9 @@ const origens = [`http://${HOST}:${porta}`, `http://localhost:${porta}`];
 
 const armazenamento = new ArmazenamentoEmMemoria(relogioDoSistema.agora);
 await armazenamento.iniciar();
-const antimalware: Antimalware = process.env.MP_CLAMD_HOST
-  ? new AntimalwareClamd(process.env.MP_CLAMD_HOST, Number(process.env.MP_CLAMD_PORTA ?? 3310))
+const defender = process.env.MP_DEFENDER === 'true';
+const antimalware: Antimalware = defender
+  ? new AntimalwareDefender({ pastaTemp: join(tmpdir(), 'minhapesquisa-demo-varredura') })
   : new AntimalwareEicar();
 
 const config: Config = {
@@ -192,7 +195,7 @@ console.log(`MinhaPesquisa — modo de demonstração (DEC-104). Só dados sint�
   página:  http://${HOST}:${porta}
   e-mail:  ${EMAIL}
   senha:   ${senha}
-  antimalware: ${process.env.MP_CLAMD_HOST ? `clamd em ${process.env.MP_CLAMD_HOST}` : 'equivalente EICAR (sem ClamAV)'}
+  antimalware: ${defender ? 'Microsoft Defender' : 'equivalente EICAR'}
 Tudo some ao encerrar (Ctrl+C).`);
 
 async function encerrar(): Promise<void> {

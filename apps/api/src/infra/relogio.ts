@@ -1,4 +1,4 @@
-// Relógio injetável (PLANO §10.2): toda regra de tempo (sessão, convite, bloqueio, concessão)
+// Relógio injetável (PLANO §10.2): toda regra de tempo (sessão, bloqueio, links assinados, backup)
 // lê a hora daqui, nunca de Date.now() nem de now() no banco.
 
 export interface Relogio {

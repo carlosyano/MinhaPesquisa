@@ -1,56 +1,22 @@
-// Ponto de entrada em produção. Todos os segredos vêm do ambiente (preenchido pelo
-// gerenciador de segredos da nuvem); nada fica no repositório.
+// Ponto de entrada no notebook (DEC-113): lê a pasta de dados criada pela instalação
+// (scripts/cli.ts), abre a chave mestra pelo DPAPI (DEC-114) e serve a API só em 127.0.0.1.
+// Nenhum segredo fica no repositório nem no ambiente.
 
-import { randomUUID } from 'node:crypto';
 import { criarApi } from './app.js';
-import { relogioDoSistema } from './infra/relogio.js';
-import { AntimalwareClamd } from './infra/antimalware.js';
-import type { Armazenamento } from './infra/armazenamento.js';
+import { protetorDpapi } from './infra/chaves.js';
+import { lerConfigLocal, montarConfig, pastaDados } from './local.js';
 
-function obrigatoria(nome: string): string {
-  const v = process.env[nome];
-  if (!v) throw new Error(`variável de ambiente ausente: ${nome}`);
-  return v;
+const dir = pastaDados();
+const local = await lerConfigLocal(dir);
+const { config, armazenamento } = await montarConfig(dir, local, protetorDpapi);
+await armazenamento.iniciar();
+const api = await criarApi(config, local.porta, '127.0.0.1');
+console.log(`MinhaPesquisa em ${api.url}`);
+
+async function encerrar(): Promise<void> {
+  await api.fechar();
+  await armazenamento.fechar();
+  process.exit(0);
 }
-
-function chave32(nome: string): Buffer {
-  const b = Buffer.from(obrigatoria(nome), 'base64');
-  if (b.length !== 32) throw new Error(`${nome} deve ter 32 bytes em base64`);
-  return b;
-}
-
-// O adaptador do S3 (sa-east-1) entra com o ambiente na nuvem (DEC-101), como o e-mail.
-const armazenamento: Armazenamento = {
-  async gravar() {
-    throw new Error('armazenamento de imagens não configurado (DEC-101)');
-  },
-  async apagar() {
-    throw new Error('armazenamento de imagens não configurado (DEC-101)');
-  },
-  async urlAssinada() {
-    throw new Error('armazenamento de imagens não configurado (DEC-101)');
-  },
-  async contar() {
-    throw new Error('armazenamento de imagens não configurado (DEC-101)');
-  },
-};
-
-const api = await criarApi(
-  {
-    urlBancoApp: obrigatoria('MP_DB_APP_URL'),
-    urlBancoManutencao: obrigatoria('MP_DB_MANUTENCAO_URL'),
-    raizRepositorio: obrigatoria('MP_RAIZ'),
-    chaveHmacEmail: chave32('MP_CHAVE_HMAC_EMAIL'),
-    origensPermitidas: obrigatoria('MP_ORIGENS').split(','),
-    cookiesSeguros: true,
-    confiarProxy: process.env.MP_CONFIAR_PROXY === 'true',
-    relogio: relogioDoSistema,
-    armazenamento,
-    // ClamAV como sidecar (DEC-042, DEC-102).
-    antimalware: new AntimalwareClamd(obrigatoria('MP_CLAMD_HOST'), Number(process.env.MP_CLAMD_PORTA ?? 3310)),
-    gerarId: randomUUID,
-  },
-  Number(process.env.PORT ?? 3000),
-  process.env.HOST ?? '0.0.0.0',
-);
-console.log(`api ouvindo em ${api.url}`);
+process.on('SIGINT', () => void encerrar());
+process.on('SIGTERM', () => void encerrar());
