@@ -137,7 +137,8 @@ describe('CA-030 — teto mensal atingido', () => {
     await h.clock.advance(60 * 60_000);
     await h.worker.processar();
     expect(await h.motor.chamadas(id)).toHaveLength(0);
-    expect(await cota(c.dig)).toMatchObject({ teto: '500.00', consumido: '500.00', atingido: true, aplicacoes_aguardando: 1 });
+    const dig = await entrar(h, c.t.usuaria); // a sessão expirou por inatividade (30 min)
+    expect(await cota(dig)).toMatchObject({ teto: '500.00', consumido: '500.00', atingido: true, aplicacoes_aguardando: 1 });
     h.motor.custo({ estimadoUsd: 0, realUsd: 0 });
   });
 
