@@ -1,7 +1,7 @@
 # Arquitetura do Projeto MinhaPesquisa
 
 > Mapa do repositório para pessoas e agentes de IA. Resume o que está decidido em
-> `docs/architecture/PLANO.md` (v3.0) e aponta a fonte de verdade de cada artefato.
+> `docs/architecture/PLANO.md` (v3.1) e aponta a fonte de verdade de cada artefato.
 > Em conflito, vale a precedência do PLANO: decisões de negócio → REQ → PLANO/DEC técnicas → Bloco P.
 
 ## 1. Situação atual
@@ -26,8 +26,8 @@ IMP-001 aceito em 29/10/2026 (Gate 2), com o E2E com navegador pendente; IMP-002
 ## 3. Stack (DEC-037, Bloco P P.1)
 
 Node.js 24 · TypeScript strict · NestJS + Fastify · Next.js + React + Tailwind + shadcn/ui ·
-PostgreSQL 17 + Drizzle (SQL explícito) · pg-boss + Outbox · AWS sa-east-1 (DEC-038) ·
-Terraform · Vitest, Testcontainers, Playwright + axe, Schemathesis, fast-check, Stryker.
+PostgreSQL 17 + Drizzle (SQL explícito) · pg-boss + Outbox · aplicação local num notebook Windows (DEC-107, DEC-113) ·
+Vitest, Testcontainers, Playwright + axe, Schemathesis, fast-check, Stryker.
 
 ## 4. Estrutura planejada
 
@@ -41,7 +41,7 @@ minhapesquisa/
 │   ├── db/                  # Schemas Drizzle, migrações SQL, policies RLS, papéis (DEC-046)
 │   ├── motor-leitura/       # Motor isolado e domain-agnostic (DEC-007, PLANO §2.1)
 │   └── contratos/           # Tipos gerados de contracts/openapi.yaml
-├── infra/                   # Terraform: rede, KMS, S3, banco, filas
+├── infra/                   # Scripts locais: instalação, redefinição de senha e backup (IMP-005)
 ├── contracts/openapi.yaml   # Contrato (fonte de verdade)
 ├── docs/spec/               # REQ e Bloco P
 ├── docs/architecture/       # PLANO
@@ -68,15 +68,16 @@ packages/contratos <── apps/api, apps/web (tipos)
 
 1. Upload → validação, antimalware, remoção de metadados → QR e registro da imagem → estado inicial (FL-001).
 2. Worker → reserva de orçamento (DEC-051) → recortes → ReadEngine → estado dos itens (FL-002).
-3. Revisão com reserva de 30 min e If-Match → conclusão com vínculo por CPF.
+3. Revisão sem reserva, com If-Match (DEC-112) → conclusão com vínculo por CPF.
 4. Eliminação LGPD → anonimização, expurgo e lista de eliminações reaplicada após restore.
-5. Login → pré-sessão → MFA → sessão plena (DEC-050).
+5. Login com senha local → sessão plena, sem MFA (DEC-108).
 
 ## 7. Segurança e dados
 
 - Isolamento: FK composta + RLS com FORCE + `SET LOCAL app.tenant_id`; papéis em DEC-046.
-- CPF: AES-256-GCM com envelope no KMS + HMAC com chave por tenant (DEC-041).
-- Imagens privadas, link assinado de 5 min; auditoria só com referências; logs sem dado pessoal.
+- CPF: AES-256-GCM + HMAC com chave por tenant; chave mestra pelo DPAPI do Windows (DEC-114).
+- Disco cifrado (BitLocker) e backup diário cifrado fora do notebook (DEC-107, DEC-117).
+- Imagens em pasta local privada, link assinado local de 5 min; auditoria só com referências; logs sem dado pessoal.
 - Nenhum dado real em desenvolvimento enquanto GX-001 estiver pendente.
 
 ## 8. Referência rápida

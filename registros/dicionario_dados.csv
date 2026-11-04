@@ -165,7 +165,7 @@ ENT-019 ListaEliminacoes,valido_ate,data de expiração do registro,timestamp,si
 ENT-020 ParametroConfiguracao,id,identificador do parâmetro,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-020 ParametroConfiguracao,tenant_id,tenant do parâmetro (NULL = plataforma),uuid,não,36,UUID v4,—,NULL,não,Tenant.id,não
 ENT-020 ParametroConfiguracao,projeto_id,projeto do parâmetro (NULL = tenant/plataforma),uuid,não,36,UUID v4,—,NULL,não,Projeto.id,não
-ENT-020 ParametroConfiguracao,chave,nome do parâmetro,varchar,sim,100,^[a-z_]+$,retencao_dias; custo_ia_teto; limite_confianca; grupo_minimo; cotacao_usd_brl; retencao_exportacao_dias; termo_consentimento,—,não,—,não
+ENT-020 ParametroConfiguracao,chave,nome do parâmetro,varchar,sim,100,^[a-z_]+$,retencao_dias; custo_ia_teto; limite_confianca; cotacao_usd_brl; retencao_exportacao_dias; termo_consentimento,—,não,—,não
 ENT-020 ParametroConfiguracao,competencia,"mês civil a que o valor se refere (obrigatório para cotacao_usd_brl, NULL nas demais)",date,não,—,YYYY-MM-01,—,NULL,não,—,não
 ENT-020 ParametroConfiguracao,valor,valor do parâmetro,text,sim,1000,—,—,—,não,—,sensível (depende da chave)
 ENT-020 ParametroConfiguracao,alterado_em,data da alteração,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
