@@ -3,11 +3,11 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v1.11 (CHG-009 aceita em 03/11/2026) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v1.12 (CHG-010 aceita em 03/11/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 2.16
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104)
+**Versão do plano:** 2.17
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104); v2.17 incorpora a CHG-010 (CPF com uma caixa por dígito, DEC-105 e DEC-106)
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -422,6 +422,8 @@ CHG-009 incorporada. Pendentes: o E2E com navegador, quando houver telas; e, ant
 a renderização de PDF em processo isolado, o limite total por envio, a verificação do clamd e do
 S3 contra os serviços reais e a extensão do teste de mutação às regras novas (DEC-052). Sem
 revisão independente do incremento, por escolha do responsável.
+Depois do aceite, a CHG-010 (DEC-105, DEC-106) muda só o campo de CPF do PDF e o mapa de
+layout; o ajuste segue IA-TEST → IA-DEV dentro do IMP-002, antes do IMP-003.
 
 **Aceite do IMP-001 (29/10/2026, Carlos Yano):** aceito com 105 testes verdes no CI (74 de
 integração com PostgreSQL 17 e 31 unitários) e mutação de 90% em criptografia e autorização
@@ -432,10 +434,10 @@ para economizar custo); fica recomendada antes do piloto.
 
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 47 CAs da REQ v1.11
+### 11.1 Cobertura dos 47 CAs da REQ v1.12
 
 A soma dos CAs listados nos IMP-001 a IMP-004 cobre integralmente os 47 critérios
-de aceite da REQ v1.11 (CA-001 a CA-044, incluindo CA-014b, CA-026b e CA-037b). O validador
+de aceite da REQ v1.12 (CA-001 a CA-044, incluindo CA-014b, CA-026b e CA-037b). O validador
 confere que cada CA está no incremento do seu RF.
 
 **CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
@@ -484,6 +486,7 @@ validado pelo CI a cada merge.
 | CHG-007 — altos A-01 e A-02 da REV-REQ-008; Q-021 a Q-029 | mudança normativa | aceita em 29/10/2026 (REQ v1.9, DEC-074 a DEC-082) |
 | CHG-008 — perfil exigido na concessão individual (Q-030) | mudança normativa | aceita em 29/10/2026 (REQ v1.10, Q-030) |
 | CHG-009 — CA-003 esclarecido e lacunas do IA-TEST do IMP-002 (DEC-093 a DEC-100) | mudança normativa | aceita em 03/11/2026 (REQ v1.11) |
+| CHG-010 — CPF com uma caixa por dígito no PDF (DEC-105, DEC-106) | mudança normativa | aceita em 03/11/2026 (REQ v1.12); IA-TEST e IA-DEV pendentes |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
@@ -535,6 +538,7 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-102 | 03/11/2026 | técnica | Antimalware nos testes e em produção (DEC-042) | ClamAV em contêiner no CI; equivalente que reconhece o EICAR | Produção: cliente clamd (INSTREAM, 30 s; resposta inesperada ou tempo esgotado é falha, nunca "limpo"). Testes: equivalente que reconhece a assinatura EICAR, sem baixar a base de vírus. O cliente clamd é verificado contra um ClamAV real antes do piloto | CI rápido; a base de vírus tem centenas de MB | definitivo | | Médio | DEC-042, CA-029 |
 | DEC-103 | 03/11/2026 | técnica | Itens de resposta (ItemResposta) na criação da aplicação | Criar `pendente_leitura` no upload; criar na leitura | Os itens nascem com a leitura, no IMP-003; no IMP-002 a aplicação em `em_leitura` tem só as páginas e o evento `leitura.solicitada` no outbox | A versão só fica certa quando a aplicação sai de `identificacao_pendente`; evita criar e apagar itens | definitivo | | Baixo | RF-006, RF-007, FL-001 |
 | DEC-104 | 03/11/2026 | técnica | Modo de demonstração local para testar o IMP-002 com foto real, antes das telas (TL-xxx) | Esperar as telas; script de demonstração local fora da API | `npm run demo` (`apps/api/src/demo`): PostgreSQL 17 descartável, a API real com o armazenamento em memória (DEC-101), e-mail só no terminal e o equivalente EICAR (DEC-102), ou um clamd real com `MP_CLAMD_HOST`; uma usuária sintética com MFA, um projeto e um formulário publicado de duas páginas; uma página simples (entrar, baixar o PDF, enviar e identificar) que só usa operações do contrato, repassadas a partir da mesma origem. Escuta só em 127.0.0.1, recusa NODE_ENV=production, gera segredos a cada execução e não grava nada fora do contêiner; depende de pacotes de desenvolvimento, então não roda na imagem de produção. Não substitui o E2E com navegador nem as telas TL-xxx | Escolha do responsável em 03/11/2026: testar a leitura do QR e o registro com fotos reais antes do IMP-003. Só dados sintéticos enquanto a GX-001 estiver pendente | definitivo | | Baixo | DEC-101, DEC-102, DEC-088, RF-006, GX-001 |
+| DEC-106 | 03/11/2026 | técnica | Caixas do CPF no PDF e no mapa de layout (DEC-105) | Só a região da pergunta; região da pergunta e de cada caixa | 11 caixas quadradas de 18 pt, com 4 pt entre elas, dentro da área de resposta atual (a altura do bloco e a região da pergunta não mudam). O `mapa_layout` ganha, na pergunta do tipo `cpf`, a lista `caixas` com as 11 regiões normalizadas, na ordem dos dígitos | O IMP-003 recorta e lê dígito a dígito; como a região da pergunta não muda, os mapas já gravados continuam válidos | definitivo | | Médio | DEC-105, DEC-048, RF-004, RF-007, RN-012 |
 
 ---
 
@@ -606,7 +610,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 47 CAs da REQ v1.11
+- [x] Estratégia de testes cobre todos os 47 CAs da REQ v1.12
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
@@ -658,4 +662,4 @@ REQ §8.1; o CI falha se divergirem.
 
 ---
 
-**Fim do documento `PLANO.md` v2.16**
+**Fim do documento `PLANO.md` v2.17**
