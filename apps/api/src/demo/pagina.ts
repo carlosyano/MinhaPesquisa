@@ -1,6 +1,6 @@
-// Página do modo de demonstração (DEC-104). Não é uma tela TL-xxx: só o mínimo para entrar,
-// baixar o PDF, enviar fotos e ver o resultado, usando apenas operações do contrato. Texto
-// do servidor entra por textContent, nunca por innerHTML.
+// Página do modo de demonstração (DEC-104, DEC-125). Não é uma tela TL-xxx: só o mínimo para
+// entrar, baixar o PDF, enviar fotos, acompanhar a leitura, revisar e concluir, usando apenas
+// operações do contrato. Texto do servidor entra por textContent, nunca por innerHTML.
 
 export const PAGINA_DEMO = `<!doctype html>
 <html lang="pt-BR">
@@ -17,7 +17,10 @@ export const PAGINA_DEMO = `<!doctype html>
   button, a.botao { margin-top: 12px; padding: 8px 14px; font-size: 1rem; cursor: pointer; }
   pre { background: #f4f4f4; padding: 10px; overflow-x: auto; font-size: .85rem; }
   .erro { color: #a40000; font-weight: 600; } [hidden] { display: none; }
-  table { border-collapse: collapse; margin-top: 8px; } td, th { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
+  table { border-collapse: collapse; margin-top: 8px; } td, th { border: 1px solid #ccc; padding: 4px 8px; text-align: left; vertical-align: top; }
+  #itens input[type=text] { width: 140px; } #itens select { font-size: .9rem; }
+  img.recorte { display: block; max-width: 260px; max-height: 160px; margin-top: 6px; border: 1px solid #999; }
+  .baixa { background: #fff4d6; } .cota { font-size: .9rem; color: #444; }
 </style>
 </head>
 <body>
@@ -37,6 +40,7 @@ export const PAGINA_DEMO = `<!doctype html>
   <h2>2. Imprimir o formulário</h2>
   <p>Baixe o PDF, imprima, preencha com dados sintéticos e fotografe cada página (a foto da página 1 precisa mostrar o QR).</p>
   <a id="pdf" class="botao" download="formulario-demo.pdf">Baixar PDF</a>
+  <p class="cota" id="cota"></p>
 
   <h2>3. Enviar as fotos (uma pessoa por envio)</h2>
   <form id="f-upload">
@@ -53,7 +57,20 @@ export const PAGINA_DEMO = `<!doctype html>
       <div id="campos-identificar"></div>
       <button type="submit">Identificar</button>
     </form>
-    <pre id="json"></pre>
+
+    <section id="revisao" hidden>
+      <h2>5. Revisão</h2>
+      <p>Itens em amarelo esperam a sua conferência. <strong>Abrir revisão</strong> mostra o CPF completo (fica auditado).</p>
+      <button type="button" id="abrir">Abrir revisão</button>
+      <table><thead><tr><th>Campo</th><th>Lido pela IA</th><th>Confiança</th><th>Estado</th><th>Ação</th></tr></thead><tbody id="itens"></tbody></table>
+      <button type="button" id="salvar">Salvar revisão</button>
+      <div id="divergencias"></div>
+      <label for="assinatura">Assinatura na página 1</label>
+      <select id="assinatura"><option value="presente">presente</option><option value="ausente">ausente</option></select>
+      <br><button type="button" id="concluir">Concluir</button>
+    </section>
+    <button type="button" id="tentar" hidden>Tentar a leitura de novo</button>
+    <details><summary>Resposta da API</summary><pre id="json"></pre></details>
   </section>
 </section>
 <p id="mensagem" class="erro" role="alert"></p>
@@ -70,8 +87,10 @@ function csrf() {
 }
 function mensagem(texto) { $('mensagem').textContent = texto || ''; }
 
-async function chamar(metodo, caminho, corpo, idempotente) {
-  const headers = { accept: 'application/json, application/problem+json', 'x-csrf-token': csrf() };
+let etag = null; // ETag da última resposta da aplicação (If-Match da revisão e da conclusão, RN-043)
+
+async function chamar(metodo, caminho, corpo, idempotente, extra) {
+  const headers = { accept: 'application/json, application/problem+json', 'x-csrf-token': csrf(), ...(extra || {}) };
   if (idempotente) headers['idempotency-key'] = crypto.randomUUID();
   let body;
   if (corpo instanceof FormData) body = corpo;
@@ -83,6 +102,7 @@ async function chamar(metodo, caminho, corpo, idempotente) {
     const p = dados || {};
     throw new Error((p.errorCode || r.status) + ': ' + (p.detail || p.title || 'falha'));
   }
+  if (r.headers.get('etag')) etag = r.headers.get('etag');
   return dados;
 }
 
@@ -91,12 +111,37 @@ $('f-login').addEventListener('submit', async (e) => {
   try {
     await chamar('POST', '/auth/login', { email: $('email').value, senha: $('senha').value });
     $('entrar').hidden = true; $('painel').hidden = false;
+    cota();
   } catch (err) { mensagem(err.message); }
 });
 
 let aplicacao = null;
+let espera = null;
+const idDe = (a) => a.aplicacao_id || a.id;
+const EDITAVEL = ['em_revisao', 'aguardando_cpf'];
+const consultar = (id) => chamar('GET', '/applications/' + id);
+
+async function cota() {
+  try {
+    const c = await chamar('GET', '/tenant/quota');
+    $('cota').textContent = 'Cota de IA do mês: R$ ' + c.consumido + ' de R$ ' + c.teto + (c.atingido ? ' (atingida)' : '');
+  } catch (err) { $('cota').textContent = ''; }
+}
+
+/** Enquanto a leitura roda, consulta a cada 2 s (o worker roda a cada 1 s). */
+function acompanhar(id) {
+  clearTimeout(espera);
+  espera = setTimeout(async () => {
+    try { mostrar(await consultar(id)); } catch (err) { mensagem(err.message); }
+  }, 2000);
+}
+
 function mostrar(a) {
   aplicacao = a;
+  if (a.estado === 'em_leitura' || a.estado === 'aguardando_cota') acompanhar(idDe(a));
+  else cota();
+  mostrarItens(a);
+  $('tentar').hidden = a.estado !== 'erro_leitura';
   $('resultado').hidden = false;
   $('estado').textContent = a.estado;
   $('aviso').textContent = a.aviso ? '(aviso ' + a.aviso + ')' : '';
@@ -131,6 +176,104 @@ function mostrar(a) {
   }
   $('f-identificar').hidden = a.estado !== 'identificacao_pendente';
 }
+
+const ACOES = { confirmar: 'confirmar', corrigir: 'corrigir para…', em_branco: 'em branco', ilegivel: 'ilegível', rasurado: 'rasurado', nao_se_aplica: 'não se aplica' };
+const revisavel = (i) => i.estado !== 'pendente_leitura' && i.estado !== 'aguardando_condicao';
+
+function celula(texto) { const td = document.createElement('td'); td.textContent = texto; return td; }
+
+function mostrarItens(a) {
+  const corpo = $('itens'); corpo.replaceChildren();
+  const itens = a.itens || [];
+  $('revisao').hidden = itens.length === 0 || a.estado === 'em_leitura';
+  const editavel = EDITAVEL.includes(a.estado);
+  for (const b of ['abrir', 'salvar', 'concluir']) $(b).disabled = !editavel;
+  for (const i of itens) {
+    const tr = document.createElement('tr');
+    if (i.estado === 'a_revisar') tr.className = 'baixa';
+    const campo = celula(i.pergunta_codigo + (i.linha_codigo ? '.' + i.linha_codigo : ''));
+    let lido = i.valor_ia ?? '—';
+    if (i.valor_final !== null && i.valor_final !== i.valor_ia) lido += ' → ' + i.valor_final;
+    const acao = document.createElement('td');
+    if (editavel && revisavel(i)) {
+      // Recorte do campo ao lado do valor lido (CA-007), pedido só quando a usuária quer ver.
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = 'Ver recorte';
+      b.addEventListener('click', async () => {
+        mensagem();
+        try {
+          const r = await chamar('GET', '/applications/' + idDe(a) + '/items/' + i.id + '/image');
+          const img = document.createElement('img'); img.className = 'recorte'; img.alt = 'recorte do campo'; img.src = r.url;
+          b.replaceWith(img);
+        } catch (err) { mensagem(err.message); }
+      });
+      campo.append(document.createElement('br'), b);
+      const sel = document.createElement('select'); sel.dataset.item = i.id;
+      const vazio = document.createElement('option'); vazio.value = ''; vazio.textContent = i.estado === 'a_revisar' ? '— escolha —' : '(manter)';
+      sel.appendChild(vazio);
+      for (const [v, t] of Object.entries(ACOES)) { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); }
+      const valor = document.createElement('input'); valor.type = 'text'; valor.hidden = true; valor.value = i.valor_final ?? i.valor_ia ?? '';
+      sel.addEventListener('change', () => { valor.hidden = sel.value !== 'corrigir'; });
+      acao.append(sel, valor);
+    }
+    tr.append(campo, celula(lido), celula(i.confianca === null ? '—' : Number(i.confianca).toFixed(2)), celula(i.estado), acao);
+    corpo.appendChild(tr);
+  }
+  // Atributos que divergem do cadastro do mesmo CPF: a escolha é obrigatória na conclusão (CA-014).
+  const div = $('divergencias'); div.replaceChildren();
+  for (const atributo of a.divergencias_cadastro || []) {
+    const atual = a.cadastro_existente ? a.cadastro_existente[atributo] : null;
+    const l = document.createElement('label');
+    l.textContent = 'Cadastro diverge em ' + atributo + (atual ? ' (atual: ' + atual + ')' : ' (abra a revisão para ver o atual)') + '. Manter:';
+    const sel = document.createElement('select'); sel.dataset.atributo = atributo;
+    for (const [v, t] of [['aplicacao', 'o valor desta aplicação'], ['existente', 'o cadastro atual']]) {
+      const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o);
+    }
+    div.append(l, sel);
+  }
+}
+
+$('abrir').addEventListener('click', async () => {
+  mensagem();
+  try { mostrar(await chamar('POST', '/applications/' + idDe(aplicacao) + '/review/open')); }
+  catch (err) { mensagem(err.message); }
+});
+
+$('salvar').addEventListener('click', async () => {
+  mensagem();
+  const itens = [];
+  for (const sel of $('itens').querySelectorAll('select')) {
+    if (!sel.value) continue;
+    const item = { item_id: sel.dataset.item, acao: sel.value };
+    if (sel.value === 'corrigir') item.valor_final = sel.nextElementSibling.value;
+    itens.push(item);
+  }
+  if (itens.length === 0) { mensagem('Escolha a ação de pelo menos um item.'); return; }
+  try { mostrar(await chamar('PATCH', '/applications/' + idDe(aplicacao) + '/review', { itens }, false, { 'if-match': etag || '' })); }
+  catch (err) { mensagem(err.message); }
+});
+
+$('concluir').addEventListener('click', async () => {
+  mensagem();
+  const corpo = { assinatura: $('assinatura').value };
+  const escolhas = [...$('divergencias').querySelectorAll('select')];
+  if (escolhas.length) corpo.manter_cadastro = Object.fromEntries(escolhas.map((s) => [s.dataset.atributo, s.value]));
+  try {
+    const id = idDe(aplicacao);
+    await consultar(id); // ETag atual
+    await chamar('POST', '/applications/' + id + '/confirm', corpo, true, { 'if-match': etag || '' });
+    mostrar(await consultar(id));
+  } catch (err) { mensagem(err.message); }
+});
+
+$('tentar').addEventListener('click', async () => {
+  mensagem();
+  try {
+    const id = idDe(aplicacao);
+    await chamar('POST', '/applications/' + id + '/retry', undefined, true);
+    mostrar(await consultar(id));
+  } catch (err) { mensagem(err.message); }
+});
 
 $('f-upload').addEventListener('submit', async (e) => {
   e.preventDefault(); mensagem();
