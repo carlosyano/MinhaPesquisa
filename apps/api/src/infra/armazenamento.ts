@@ -1,7 +1,7 @@
-// Armazenamento de imagens atrás de interface (DEC-101). Bucket privado, sem versionamento e
-// fora do backup (PLANO §4.1, RN-030); acesso só por link assinado de 5 min (RN-029, DEC-034).
-// O adaptador do Amazon S3 (sa-east-1) entra com o ambiente na nuvem, como o e-mail (DEC-088);
-// até lá existe a implementação em memória usada nos testes.
+// Armazenamento de imagens atrás de interface (DEC-101). No notebook, pasta local com links
+// assinados de 5 min servidos só em 127.0.0.1 (DEC-113, RN-029, DEC-034; ver
+// armazenamento-disco.ts); nos testes de integração, a implementação em memória daqui. As imagens
+// entram no backup diário cifrado (DEC-117); o expurgo some dos backups pela retenção de 90 dias.
 
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
@@ -21,33 +21,27 @@ export function chaveImagem(tenantId: string, aplicacaoId: string, imagemId: str
 }
 
 /**
- * Implementação em memória com um servidor HTTP local que serve os links assinados (HMAC da
- * chave e da expiração). Só para testes; a expiração segue o relógio injetado.
+ * Servidor HTTP local dos links assinados (HMAC da chave e da expiração, segredo que só vive
+ * na memória do processo). Só escuta em 127.0.0.1; a expiração segue o relógio injetado.
  */
-export class ArmazenamentoEmMemoria implements Armazenamento {
-  private readonly objetos = new Map<string, { bytes: Buffer; tipo: string }>();
+export class ServidorLinks {
   private readonly segredo = randomBytes(32);
   private servidor?: Server;
   private base = '';
 
-  constructor(private readonly agora: () => Date) {}
+  constructor(
+    private readonly agora: () => Date,
+    private readonly ler: (chave: string) => Promise<{ bytes: Buffer; tipo: string } | undefined>,
+  ) {}
 
-  async iniciar(): Promise<void> {
+  async iniciar(porta = 0): Promise<void> {
     this.servidor = createServer((req, res) => {
-      const url = new URL(req.url ?? '/', 'http://local');
-      const chave = decodeURIComponent(url.pathname.slice(1));
-      const expira = Number(url.searchParams.get('expira'));
-      const assinatura = Buffer.from(url.searchParams.get('assinatura') ?? '', 'hex');
-      const esperada = this.assinar(chave, expira);
-      const valida = assinatura.length === esperada.length && timingSafeEqual(assinatura, esperada) && expira > this.agora().getTime();
-      const obj = this.objetos.get(chave);
-      if (!valida || !obj) {
-        res.writeHead(403).end();
-        return;
-      }
-      res.writeHead(200, { 'content-type': obj.tipo, 'content-length': obj.bytes.length }).end(obj.bytes);
+      void this.servir(req.url ?? '/').then(
+        (obj) => (obj ? res.writeHead(200, { 'content-type': obj.tipo, 'content-length': obj.bytes.length }).end(obj.bytes) : res.writeHead(403).end()),
+        () => res.writeHead(403).end(),
+      );
     });
-    await new Promise<void>((ok) => this.servidor!.listen(0, '127.0.0.1', ok));
+    await new Promise<void>((ok) => this.servidor!.listen(porta, '127.0.0.1', ok));
     const end = this.servidor.address();
     this.base = typeof end === 'object' && end ? `http://127.0.0.1:${end.port}` : '';
   }
@@ -56,8 +50,41 @@ export class ArmazenamentoEmMemoria implements Armazenamento {
     await new Promise<void>((ok) => (this.servidor ? this.servidor.close(() => ok()) : ok()));
   }
 
+  private async servir(caminho: string) {
+    const url = new URL(caminho, 'http://local');
+    const chave = decodeURIComponent(url.pathname.slice(1));
+    const expira = Number(url.searchParams.get('expira'));
+    const assinatura = Buffer.from(url.searchParams.get('assinatura') ?? '', 'hex');
+    const esperada = this.assinar(chave, expira);
+    const valida = assinatura.length === esperada.length && timingSafeEqual(assinatura, esperada) && expira > this.agora().getTime();
+    return valida ? this.ler(chave) : undefined;
+  }
+
   private assinar(chave: string, expira: number): Buffer {
     return createHmac('sha256', this.segredo).update(`${chave}\n${expira}`).digest();
+  }
+
+  url(chave: string, expira: Date): string {
+    const t = expira.getTime();
+    return `${this.base}/${encodeURIComponent(chave)}?expira=${t}&assinatura=${this.assinar(chave, t).toString('hex')}`;
+  }
+}
+
+/** Implementação em memória, só para testes. */
+export class ArmazenamentoEmMemoria implements Armazenamento {
+  private readonly objetos = new Map<string, { bytes: Buffer; tipo: string }>();
+  private readonly links: ServidorLinks;
+
+  constructor(agora: () => Date) {
+    this.links = new ServidorLinks(agora, async (chave) => this.objetos.get(chave));
+  }
+
+  iniciar(): Promise<void> {
+    return this.links.iniciar();
+  }
+
+  fechar(): Promise<void> {
+    return this.links.fechar();
   }
 
   async gravar(chave: string, bytes: Buffer, tipo: string): Promise<void> {
@@ -69,8 +96,7 @@ export class ArmazenamentoEmMemoria implements Armazenamento {
   }
 
   async urlAssinada(chave: string, expira: Date): Promise<string> {
-    const t = expira.getTime();
-    return `${this.base}/${encodeURIComponent(chave)}?expira=${t}&assinatura=${this.assinar(chave, t).toString('hex')}`;
+    return this.links.url(chave, expira);
   }
 
   async contar(prefixo: string): Promise<number> {

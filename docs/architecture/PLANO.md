@@ -6,8 +6,8 @@
 **Fontes normativas:** REQ v2.1 (CHG-011 aceita em 03/11/2026 e propagada no IMP-005) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 3.1
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104); v2.17 incorpora a CHG-010 (CPF com uma caixa por dígito, DEC-105 e DEC-106); v3.0 incorpora a CHG-011 (aplicação local num notebook, DEC-107 a DEC-112 e DEC-117 na REQ e DEC-113 a DEC-116) e cria o IMP-005; v3.1 propaga a CHG-011 às seções 3 a 11 e ao contrato (OpenAPI 0.3.0)
+**Versão do plano:** 3.2
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104); v2.17 incorpora a CHG-010 (CPF com uma caixa por dígito, DEC-105 e DEC-106); v3.0 incorpora a CHG-011 (aplicação local num notebook, DEC-107 a DEC-112 e DEC-117 na REQ e DEC-113 a DEC-116) e cria o IMP-005; v3.1 propaga a CHG-011 às seções 3 a 11 e ao contrato (OpenAPI 0.3.0); v3.2 registra os adaptadores locais do IMP-005 (DEC-118) e encerra a propagação da CHG-011
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -15,9 +15,9 @@
 
 ## 1. Objetivo e limites
 
-SaaS multi-tenant que digitaliza pesquisas em papel do público 60+, lê campos por IA,
-exige revisão humana quando necessário e produz dashboards anonimizados, com LGPD
-desde o banco de dados.
+Aplicação local, num notebook de uma única usuária (DEC-107), que digitaliza pesquisas em
+papel do público 60+, lê campos por IA, exige revisão humana quando necessário e produz
+dashboards e exportações, com LGPD desde o banco de dados.
 
 **Dentro:** projetos, formulários/versões, PDF com QR, upload, leitura IA, revisão,
 respondente por CPF, dashboards, exportação, direitos do titular, auditoria.
@@ -86,11 +86,11 @@ recebe o recorte já normalizado.
 
 ### 4.1 Upload → leitura → revisão → conclusão
 
-- Ordem de validação de cada arquivo (DEC-042), parando no primeiro motivo: (1) tamanho ≤ 20 MB, verificado durante o recebimento; (2) antimalware (ClamAV sidecar) sobre todo arquivo; (3) tipo por assinatura de conteúdo (magic bytes), não pelo MIME declarado — JPEG, PNG ou PDF; (4) ≤ 50 páginas (DEC-029). Recusa → ERR-029 com o motivo exato.
+- Ordem de validação de cada arquivo (DEC-042), parando no primeiro motivo: (1) tamanho ≤ 20 MB, verificado durante o recebimento; (2) antimalware (Microsoft Defender, DEC-115) sobre todo arquivo; (3) tipo por assinatura de conteúdo (magic bytes), não pelo MIME declarado — JPEG, PNG ou PDF; (4) ≤ 50 páginas (DEC-029). Recusa → ERR-029 com o motivo exato.
 - Remoção de metadados EXIF/GPS (sharp) antes do storage (DEC-042).
-- Bucket de imagens privado, sem versionamento e fora do backup: o expurgo físico apaga a única cópia (RN-030).
+- Pasta de imagens privada no notebook (DEC-113). As imagens entram no backup diário cifrado (DEC-118); depois do expurgo físico (RN-030), a cópia nos backups some pela retenção de 90 dias (DEC-033), e uma restauração reaplica as eliminações (DEC-062).
 - QR validado contra tenant + projeto + versão + página; registro da imagem pelos marcadores (DEC-048). Estado inicial pela tabela de criação da FL-001 (ERR-004, ERR-039, ERR-003).
-- Imagem gravada em bucket privado; acesso apenas por link assinado de 5 min (DEC-034), entregue por `getItemImage`.
+- Imagem gravada na pasta privada; acesso apenas por link assinado de 5 min, servido só em 127.0.0.1 (DEC-034, DEC-113), entregue por `getItemImage`.
 - Outbox registra `leitura.solicitada` na mesma transação.
 - Worker lê páginas em paralelo, em recortes; identificação e saúde em chamadas separadas, sem identificador do respondente (DEC-022, RN-038, RN-039).
 - Antes de cada chamada, reserva atômica de orçamento (DEC-051); sem reserva → `aguardando_cota`.
@@ -466,7 +466,7 @@ validado pelo CI a cada merge.
 | CHG-007 — altos A-01 e A-02 da REV-REQ-008; Q-021 a Q-029 | mudança normativa | aceita em 29/10/2026 (REQ v1.9, DEC-074 a DEC-082) |
 | CHG-008 — perfil exigido na concessão individual (Q-030) | mudança normativa | aceita em 29/10/2026 (REQ v1.10, Q-030) |
 | CHG-009 — CA-003 esclarecido e lacunas do IA-TEST do IMP-002 (DEC-093 a DEC-100) | mudança normativa | aceita em 03/11/2026 (REQ v1.11) |
-| CHG-011 — aplicação local num notebook, de uma única usuária (DEC-107 a DEC-116) | mudança normativa | aceita em 03/11/2026 (REQ v2.1); propagação no IMP-005 |
+| CHG-011 — aplicação local num notebook, de uma única usuária (DEC-107 a DEC-116) | mudança normativa | aceita em 03/11/2026 (REQ v2.1); propagada no IMP-005 (PLANO v3.2, DEC-118) |
 | CHG-010 — CPF com uma caixa por dígito no PDF (DEC-105, DEC-106) | mudança normativa | aceita em 03/11/2026 (REQ v2.1); propagada no IA-TEST e no IA-DEV |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
@@ -524,6 +524,7 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-114 | 03/11/2026 | técnica | Chaves de cifra do CPF e do MFA sem KMS (DEC-041) | KMS da nuvem; chave mestra local protegida pelo Windows | AES-256-GCM e HMAC-SHA256 por HKDF mantidos; a chave mestra é gerada na instalação e guardada cifrada pelo DPAPI do Windows (escopo da máquina); uma cópia cifrada com senha de recuperação acompanha o backup, para restaurar em outro notebook | Sem KMS (CHG-011); sem a cópia, a perda do notebook tornaria o backup ilegível | definitivo | | Alto | DEC-041, DEC-107, RNF-003, DEC-117 |
 | DEC-115 | 03/11/2026 | técnica | Antimalware no upload da aplicação local (DEC-042, DEC-102) | clamd; Microsoft Defender | Produção: Microsoft Defender pela linha de comando (MpCmdRun), com a mesma regra de falha da DEC-102 (tempo esgotado ou resposta inesperada é falha, nunca "limpo"). Testes: o equivalente EICAR da DEC-102 continua | Já vem no Windows, sem serviço extra (CHG-011) | definitivo | | Médio | DEC-042, DEC-102, RF-006, CA-029 |
 | DEC-116 | 03/11/2026 | técnica | Código de vários tenants já implementado (DEC-107) | Remover tenant_id e RLS; manter com um tenant fixo | Mantém tenant_id, RLS e papéis do banco como estão; a instalação cria o único tenant e a usuária; tabelas novas seguem o mesmo padrão. Os testes de isolamento ficam como regressão até o IMP-005 decidir quais saem | Remover custaria refazer migrações e testes do IMP-001 e do IMP-002 sem ganho para a usuária (escolha do responsável) | definitivo | | Médio | DEC-107, RNF-001, RN-001, DEC-046 |
+| DEC-118 | 04/11/2026 | técnica | Detalhes dos adaptadores locais do IMP-005 (DEC-113 a DEC-115, DEC-117) | Decidir na implantação; fixar no IA-DEV do IMP-005 | Chave mestra: subchaves por HKDF-SHA256 com um rótulo por finalidade (HMAC do e-mail, cifra de campo, backup); cópia de recuperação com scrypt (N=2^15, r=8, p=1) e AES-256-GCM, com a senha de recuperação definida pela usuária na instalação, pela política da RN-048; DPAPI no escopo da máquina pelo Windows PowerShell, que protege também as senhas geradas de mp_app e mp_manutencao e a conexão de superusuário usada no backup (segredos.dpapi). Imagens: pasta local com gravação atômica, chave validada por segmentos simples e links assinados por HMAC num servidor em 127.0.0.1. Defender: MpCmdRun -Scan -ScanType 3 -File -DisableRemediation sobre arquivo temporário de nome aleatório; código 0 = limpo, 2 ou arquivo removido = risco, o resto = falha. Backup: pg_dump (formato custom, como superusuário), imagens e cópia de recuperação num tar do Windows, cifrado com AES-256-GCM pela subchave de backup, com a cópia de recuperação no cabeçalho; diário pelo Agendador de Tarefas; retenção de 90 dias pelo nome do arquivo; o teste mensal pede a senha de recuperação, restaura num banco temporário e confere tenant e imagens. A instalação recusa sem BitLocker, salvo com --sem-bitlocker para testes com dados sintéticos | As imagens entram no backup, porque o notebook é a única cópia (DEC-107); a senha de recuperação pedida no teste mensal confirma que a usuária ainda a sabe | definitivo | | Alto | DEC-113, DEC-114, DEC-115, DEC-117, DEC-101, DEC-033, T-08 |
 
 ---
 
