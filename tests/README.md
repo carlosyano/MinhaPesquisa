@@ -40,6 +40,12 @@ tenant já com a sua única usuária ativa, para que cada teste tenha a sua cont
 dois tenants no mesmo banco (defesa em profundidade, DEC-116). Os testes de MFA, convite,
 recuperação por e-mail, reset de MFA, usuários e concessões foram retirados com os CAs.
 
+Na parte 2 do IMP-005 entram testes unitários dos adaptadores locais: chave mestra (DEC-114),
+pasta de imagens (DEC-113), Microsoft Defender (DEC-115) e backup (DEC-117). O DPAPI e o
+MpCmdRun só existem no Windows e o CI roda em Linux, então os testes trocam os dois por
+equivalentes sintéticos (protetor e executor injetados); a verificação contra o Windows real
+fica para a instalação num notebook limpo (critério de saída do IMP-005).
+
 ## Cobertura
 
 | Arquivo | Rastreio |
@@ -53,6 +59,10 @@ recuperação por e-mail, reset de MFA, usuários e concessões foram retirados 
 | `integracao/formularios/pdf.test.ts` | CA-028 (QR opaco por página, termo e assinatura na página 1) |
 | `integracao/upload/upload.test.ts` | CA-003, CA-004, CA-029 (exemplos 1 a 5), TS-002, RN-040, RF-006, ERR-019 |
 | `integracao/upload/montagem.test.ts` | CA-013, CA-039, CA-040, FL-001 (ordem da criação e saída de `identificacao_pendente`) |
+| `unit/chaves.test.ts` | DEC-114 (subchaves por HKDF, cópia com a senha de recuperação, guarda pelo DPAPI), CA-035 |
+| `unit/armazenamento-disco.test.ts` | DEC-113, RN-029 (pasta local, caminho seguro, links assinados de 5 min em 127.0.0.1) |
+| `unit/defender.test.ts` | DEC-115, DEC-102, CA-029 (MpCmdRun, falha nunca é "limpo") |
+| `unit/backup.test.ts` | DEC-117, DEC-033, DEC-114 (nome, retenção de 90 dias, teste mensal, cifra do arquivo) |
 | `support/arquivos.test.ts` | autoteste dos geradores de PDF, QR, EXIF e arquivos de limite |
 | `support/apoio.test.ts` | autoteste do apoio (catálogo de erros, sem os erros descontinuados na REQ v2.1) |
 
