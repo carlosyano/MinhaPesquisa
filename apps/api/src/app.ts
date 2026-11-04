@@ -7,7 +7,6 @@ import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { randomUUID } from 'node:crypto';
-import { AdminController } from './admin/admin.controller.js';
 import { AuthController, NUCLEO } from './auth/auth.controller.js';
 import type { Config } from './config.js';
 import { FormulariosController } from './formularios/formularios.controller.js';
@@ -27,7 +26,7 @@ export interface Api {
 export async function criarApi(config: Config, porta = 0, host = '127.0.0.1'): Promise<Api> {
   const nucleo = new Nucleo(config);
 
-  @Module({ controllers: [AuthController, AdminController, ProjetosController, FormulariosController, UploadController], providers: [{ provide: NUCLEO, useValue: nucleo }] })
+  @Module({ controllers: [AuthController, ProjetosController, FormulariosController, UploadController], providers: [{ provide: NUCLEO, useValue: nucleo }] })
   class ModuloApi {}
 
   const adaptador = new FastifyAdapter({

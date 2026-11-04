@@ -1,7 +1,8 @@
-// Ambiente de teste exigido por tests/support/harness.ts (IA-TEST do IMP-001, DEC-053).
-// Sobe PostgreSQL 17 real (Testcontainers) com papéis, migrações e RLS, e a API real com
-// relógio controlado e e-mail capturado em memória. Só para testes: nunca é importado pela
-// aplicação em produção.
+// Ambiente de teste exigido por tests/support/harness.ts (IA-TEST do IMP-001, IMP-002 e
+// IMP-005, DEC-053). Sobe PostgreSQL 17 real (Testcontainers) com papéis, migrações e RLS, e a
+// API real com relógio controlado. Os scripts de instalação e de redefinição de senha rodam
+// pelo mesmo código do script de linha de comando. Só para testes: nunca é importado pela
+// aplicação.
 //
 // Variáveis opcionais:
 //   MP_TEST_DATABASE_URL  URL de superusuário de um PostgreSQL 17 já em execução (sem Docker)
@@ -15,13 +16,10 @@ import pg from 'pg';
 import { criarApi } from './app.js';
 import type { Config } from './config.js';
 import { linha, linhas, sql } from './infra/banco.js';
-import { cifrar, decifrar, hashSenha, novoSegredoTotp, normalizarEmail, sha256 } from './infra/cripto.js';
 import { AntimalwareEicar } from './infra/antimalware.js';
 import { ArmazenamentoEmMemoria } from './infra/armazenamento.js';
-import { MailerEmMemoria } from './infra/mailer.js';
 import { MINUTO } from './infra/relogio.js';
-import type { Perfil } from './nucleo.js';
-import { criarTenant } from './scripts/tenant.js';
+import { criarTenantComUsuaria, instalar, redefinirSenha } from './scripts/instalacao.js';
 
 const RAIZ = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -70,7 +68,6 @@ export async function criarHarness() {
 
   let agora = new Date('2026-11-02T12:00:00.000Z');
   const relogio = { agora: () => new Date(agora) };
-  const mailer = new MailerEmMemoria(relogio.agora);
   const armazenamento = new ArmazenamentoEmMemoria(relogio.agora);
   await armazenamento.iniciar();
   const config: Config = {
@@ -78,13 +75,10 @@ export async function criarHarness() {
     urlBancoManutencao: urlComo(banco.superUrl, 'mp_manutencao', senhaManut),
     raizRepositorio: RAIZ,
     chaveHmacEmail: randomBytes(32),
-    chaveCifraMfa: randomBytes(32),
     origensPermitidas: [],
-    urlWeb: 'https://app.minhapesquisa.example.com.br',
     cookiesSeguros: false,
     confiarProxy: true,
     relogio,
-    mailer,
     armazenamento,
     antimalware: new AntimalwareEicar(),
     gerarId: randomUUID,
@@ -93,13 +87,8 @@ export async function criarHarness() {
   config.origensPermitidas.push(api.url);
   const n = api.nucleo;
 
-  /** Jobs agendados que o relógio faz vencer: expiração de concessões e outbox. */
-  async function rodarJobs(): Promise<void> {
-    await n.banco.manutencao((tx) =>
-      tx.execute(sql`UPDATE concessao_acesso_individual SET ativo = false WHERE ativo AND valido_ate <= ${n.agora()}`),
-    );
-    await n.despacharOutbox();
-  }
+  /** Jobs agendados que o relógio faz vencer. Sem concessões nem e-mail desde o IMP-005. */
+  async function rodarJobs(): Promise<void> {}
 
   return {
     baseUrl: api.url,
@@ -112,12 +101,14 @@ export async function criarHarness() {
       },
     },
 
-    mail: {
-      enviados: () => mailer.enviados.map((m) => ({ para: m.para, tipo: m.tipo, token: m.token, enviado_em: m.enviado_em })),
+    scripts: {
+      instalar: (dados: { instituicao: string; nome: string; email: string; senha: string }) => instalar(n, dados),
+      redefinirSenha: (novaSenha: string) => redefinirSenha(n, novaSenha),
     },
 
     seed: {
-      tenant: (dados: { nome: string; emailAdmin: string; nomeAdmin: string }) => criarTenant(n, dados),
+      tenant: (dados: { nome: string; email: string; nomeUsuaria: string; senha: string }) =>
+        n.banco.manutencao((tx) => criarTenantComUsuaria(n, tx, dados)),
 
       async projeto(tenantId: string, nome: string) {
         const projetoId = n.id();
@@ -125,39 +116,6 @@ export async function criarHarness() {
           tx.execute(sql`INSERT INTO projeto (id, tenant_id, nome, criado_em) VALUES (${projetoId}, ${tenantId}, ${nome}, ${n.agora()})`),
         );
         return { projetoId };
-      },
-
-      async usuarioAtivo(d: {
-        tenantId: string;
-        email: string;
-        nome: string;
-        senha: string;
-        perfis: Perfil[];
-        todosProjetos?: boolean;
-        projetos?: string[];
-      }) {
-        const usuarioId = n.id();
-        const segredoTotp = novoSegredoTotp();
-        const todos = d.todosProjetos ?? !d.projetos?.length;
-        const hash = await hashSenha(d.senha);
-        await n.banco.manutencao(async (tx) => {
-          await tx.execute(sql`
-            INSERT INTO usuario (id, tenant_id, email, nome, senha_hash, mfa_secret, mfa_ativo, situacao, todos_projetos, criado_em)
-            VALUES (${usuarioId}, ${d.tenantId}, ${normalizarEmail(d.email)}, ${d.nome}, ${hash},
-                    ${cifrar(n.config.chaveCifraMfa, segredoTotp)}, true, 'ativo', ${todos}, ${n.agora()})`);
-          for (const codigo of d.perfis) {
-            await tx.execute(sql`
-              INSERT INTO usuario_perfil (id, tenant_id, usuario_id, perfil_id, criado_em)
-              SELECT ${n.id()}, ${d.tenantId}, ${usuarioId}, id, ${n.agora()} FROM perfil
-               WHERE tenant_id = ${d.tenantId} AND codigo = ${codigo}`);
-          }
-          for (const projetoId of todos ? [] : (d.projetos ?? [])) {
-            await tx.execute(sql`
-              INSERT INTO vinculo_usuario_projeto (id, tenant_id, usuario_id, projeto_id, criado_em)
-              VALUES (${n.id()}, ${d.tenantId}, ${usuarioId}, ${projetoId}, ${n.agora()})`);
-          }
-        });
-        return { usuarioId, segredoTotp };
       },
 
       /** Mesmo caminho do script do administrador da plataforma: grava e audita (seção 2.9). */
@@ -178,32 +136,28 @@ export async function criarHarness() {
     },
 
     inspect: {
-      async usuario(usuarioId: string) {
-        const u = await n.banco.manutencao((tx) =>
-          linha<{ situacao: 'pendente_convite' | 'ativo' | 'inativo'; mfa_ativo: boolean; mfa_secret: string | null }>(
+      async tenants() {
+        return n.banco.manutencao((tx) =>
+          linhas<{ tenantId: string; nome: string; usuarios: number }>(
             tx,
-            sql`SELECT situacao, mfa_ativo, mfa_secret FROM usuario WHERE id = ${usuarioId}`,
+            sql`SELECT t.id AS "tenantId", t.nome, (SELECT count(*)::int FROM usuario u WHERE u.tenant_id = t.id) AS usuarios
+                  FROM tenant t ORDER BY t.criado_em, t.id`,
           ),
         );
-        if (!u) throw new Error(`usuário ${usuarioId} não existe`);
-        return {
-          situacao: u.situacao,
-          mfa_ativo: u.mfa_ativo,
-          impressao_segredo_totp: u.mfa_secret ? sha256(decifrar(n.config.chaveCifraMfa, u.mfa_secret)).toString('hex') : null,
-        };
       },
 
       async sessoesAtivas(usuarioId: string) {
         const agoraJa = n.agora();
-        return n.banco.manutencao((tx) =>
-          linhas<{ tipo: 'pre_sessao' | 'plena'; etapa: 'mfa_verificacao' | 'mfa_cadastro' | null }>(
+        const r = await n.banco.manutencao((tx) =>
+          linha<{ n: number }>(
             tx,
-            sql`SELECT tipo, etapa FROM sessao
-                 WHERE usuario_id = ${usuarioId} AND revogada_em IS NULL AND expira_absoluta_em > ${agoraJa}
-                   AND (tipo = 'pre_sessao' OR ultima_atividade_em > ${new Date(agoraJa.getTime() - 30 * MINUTO)})
-                 ORDER BY criada_em`,
+            sql`SELECT count(*)::int AS n FROM sessao
+                 WHERE usuario_id = ${usuarioId} AND tipo = 'plena' AND revogada_em IS NULL
+                   AND expira_absoluta_em > ${agoraJa}
+                   AND ultima_atividade_em > ${new Date(agoraJa.getTime() - 30 * MINUTO)}`,
           ),
         );
+        return r!.n;
       },
 
       async auditoria(tenantId: string) {

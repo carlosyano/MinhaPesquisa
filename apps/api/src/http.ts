@@ -1,4 +1,4 @@
-// Camada HTTP comum: cookies, sessão e pré-sessão, CSRF, limites de requisição e o filtro
+// Camada HTTP comum: cookies, sessão, CSRF, limites de requisição e o filtro
 // que converte qualquer erro em Problem Details do catálogo (Bloco P P.2, P.6, P.7).
 
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException } from '@nestjs/common';
@@ -7,11 +7,10 @@ import { linha, sql } from './infra/banco.js';
 import { segredoAleatorio, sha256 } from './infra/cripto.js';
 import { ErroApi } from './infra/erros.js';
 import { MINUTO } from './infra/relogio.js';
-import { type Nucleo, PRE_SESSAO, type SessaoAtiva } from './nucleo.js';
+import type { Nucleo, SessaoAtiva } from './nucleo.js';
 import { csrfValido } from './regras/autorizacao.js';
 
 export const COOKIE_SESSAO = 'mp_session';
-export const COOKIE_PRE = 'mp_pre_session';
 export const COOKIE_CSRF = 'mp_csrf';
 
 type Req = FastifyRequest & { cookies: Record<string, string | undefined>; correlationId?: string };
@@ -31,24 +30,17 @@ function opcoesCookie(n: Nucleo, httpOnly: boolean, path = '/') {
   return { httpOnly, secure: n.config.cookiesSeguros, sameSite: 'lax' as const, path };
 }
 
-export function gravarPreSessao(n: Nucleo, res: Res, segredo: string): void {
-  res.setCookie(COOKIE_PRE, segredo, { ...opcoesCookie(n, true, '/auth/mfa'), maxAge: PRE_SESSAO / 1000 });
-  res.setCookie(COOKIE_CSRF, segredoAleatorio(), opcoesCookie(n, false));
-}
-
 export function gravarSessao(n: Nucleo, res: Res, segredo: string): void {
   res.setCookie(COOKIE_SESSAO, segredo, opcoesCookie(n, true));
-  res.clearCookie(COOKIE_PRE, opcoesCookie(n, true, '/auth/mfa'));
   res.setCookie(COOKIE_CSRF, segredoAleatorio(), opcoesCookie(n, false));
 }
 
 export function limparCookies(n: Nucleo, res: Res): void {
   res.clearCookie(COOKIE_SESSAO, opcoesCookie(n, true));
-  res.clearCookie(COOKIE_PRE, opcoesCookie(n, true, '/auth/mfa'));
   res.clearCookie(COOKIE_CSRF, opcoesCookie(n, false));
 }
 
-// ───────────────────────── Sessão e pré-sessão ─────────────────────────
+// ───────────────────────────── Sessão ─────────────────────────────
 
 interface Resolvida {
   sessao_id: string;
@@ -67,36 +59,13 @@ async function resolver(n: Nucleo, segredo: string | undefined): Promise<Resolvi
   );
 }
 
-/** Sessão plena válida, com os perfis do usuário; senão ERR-015. */
+/** Sessão plena válida; senão ERR-015. Sem perfis: a usuária pode tudo (DEC-109). */
 export async function exigirSessao(n: Nucleo, req: Req): Promise<SessaoAtiva> {
   const r = await resolver(n, req.cookies[COOKIE_SESSAO]);
   if (!r || r.tipo !== 'plena' || r.estado !== 'valida') throw new ErroApi('ERR-015');
-  const perfis = await n.banco.noTenant(r.tenant_id, (tx) => n.perfisDe(tx, r.usuario_id));
-  const s: SessaoAtiva = { sessaoId: r.sessao_id, tenantId: r.tenant_id, usuarioId: r.usuario_id, perfis, ip: ipDe(req) };
+  const s: SessaoAtiva = { sessaoId: r.sessao_id, tenantId: r.tenant_id, usuarioId: r.usuario_id, ip: ipDe(req) };
   limitar(n, `usuario:${s.usuarioId}`, 100);
   return s;
-}
-
-export interface PreSessao {
-  sessaoId: string;
-  tenantId: string;
-  usuarioId: string;
-  etapa: 'mfa_verificacao' | 'mfa_cadastro';
-  tokenId: string | null;
-  ip: string | null;
-}
-
-/**
- * Pré-sessão das rotas /auth/mfa/*. Encerrada porque outra pré-sessão concluiu o cadastro
- * do MFA → ERR-018 (CA-026b, exemplo 4); ausente, expirada ou encerrada por outro motivo →
- * ERR-015 (DEC-086).
- */
-export async function exigirPreSessao(n: Nucleo, req: Req): Promise<PreSessao> {
-  limitar(n, `ip:${ipDe(req)}`, 20);
-  const r = await resolver(n, req.cookies[COOKIE_PRE]);
-  if (r?.tipo === 'pre_sessao' && r.estado === 'encerrada_mfa_concluido') throw new ErroApi('ERR-018');
-  if (!r || r.tipo !== 'pre_sessao' || r.estado !== 'valida' || !r.etapa) throw new ErroApi('ERR-015');
-  return { sessaoId: r.sessao_id, tenantId: r.tenant_id, usuarioId: r.usuario_id, etapa: r.etapa, tokenId: r.token_id, ip: ipDe(req) };
 }
 
 // ───────────────────────────── CSRF ─────────────────────────────

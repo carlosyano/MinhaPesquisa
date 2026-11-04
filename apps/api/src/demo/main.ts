@@ -3,9 +3,9 @@
 // do desenvolvedor: tudo escuta em 127.0.0.1, os segredos são gerados a cada execução e nada
 // sobrevive ao encerramento (banco no contêiner, imagens em memória).
 //
-// Não é ambiente de produção nem de piloto: o armazenamento é o em memória dos testes
-// (DEC-101), o e-mail só aparece no terminal (DEC-088) e o antimalware é o equivalente EICAR
-// (DEC-102), a menos que MP_CLAMD_HOST aponte para um clamd real. Só dados sintéticos (GX-001).
+// Não é a instalação do notebook: o armazenamento é o em memória dos testes e o antimalware é
+// o equivalente EICAR (DEC-102), a menos que MP_CLAMD_HOST aponte para um clamd real. Só dados
+// sintéticos (GX-001).
 //
 // Variáveis opcionais:
 //   MP_DEMO_DATABASE_URL  superusuário de um PostgreSQL 17 já em execução (sem Docker)
@@ -18,16 +18,12 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, request as requisitarHttp, type IncomingMessage, type ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
-import QRCode from 'qrcode';
 import { criarApi } from '../app.js';
 import type { Config } from '../config.js';
 import { AntimalwareClamd, AntimalwareEicar, type Antimalware } from '../infra/antimalware.js';
 import { ArmazenamentoEmMemoria } from '../infra/armazenamento.js';
-import { sql } from '../infra/banco.js';
-import { cifrar, hashSenha, normalizarEmail, novoSegredoTotp, uriOtpauth } from '../infra/cripto.js';
-import type { Mailer } from '../infra/mailer.js';
 import { relogioDoSistema } from '../infra/relogio.js';
-import { criarPerfis } from '../scripts/tenant.js';
+import { criarTenantComUsuaria } from '../scripts/instalacao.js';
 import { PAGINA_DEMO } from './pagina.js';
 
 const HOST = '127.0.0.1'; // nunca exposto na rede: sem TLS, segredos impressos no terminal
@@ -128,12 +124,6 @@ await su.end();
 const porta = Number(process.env.MP_DEMO_PORTA ?? 8080);
 const origens = [`http://${HOST}:${porta}`, `http://localhost:${porta}`];
 
-// E-mail no terminal: só o tipo e o link, nunca o destinatário (RN-028).
-const mailer: Mailer = {
-  async enviar(m) {
-    console.log(`[e-mail ${m.tipo}] ${m.link}`);
-  },
-};
 const armazenamento = new ArmazenamentoEmMemoria(relogioDoSistema.agora);
 await armazenamento.iniciar();
 const antimalware: Antimalware = process.env.MP_CLAMD_HOST
@@ -145,13 +135,10 @@ const config: Config = {
   urlBancoManutencao: urlComo(banco.superUrl, 'mp_manutencao', senhaManut),
   raizRepositorio: RAIZ,
   chaveHmacEmail: randomBytes(32),
-  chaveCifraMfa: randomBytes(32),
   origensPermitidas: origens,
-  urlWeb: origens[0]!,
   cookiesSeguros: false, // HTTP local; por isso a demonstração só escuta em 127.0.0.1
   confiarProxy: false,
   relogio: relogioDoSistema,
-  mailer,
   armazenamento,
   antimalware,
   gerarId: randomUUID,
@@ -159,24 +146,17 @@ const config: Config = {
 const api = await criarApi(config, 0, HOST);
 const n = api.nucleo;
 
-// Tenant, perfis e uma usuária ativa (administradora e digitalizadora) com MFA já cadastrado.
-const tenantId = n.id();
-const usuarioId = n.id();
-const senha = randomBytes(9).toString('base64url');
-const segredoTotp = novoSegredoTotp();
-const hash = await hashSenha(senha);
+// Tenant e a usuária única (DEC-109), pelo mesmo código da instalação, com senha gerada.
+// A senha leva maiúscula, minúscula e dígito fixos para cumprir a RN-048.
+const senha = `Demo${randomBytes(9).toString('base64url')}7a`;
 const sessao = await n.banco.manutencao(async (tx) => {
-  await tx.execute(sql`INSERT INTO tenant (id, nome, slug, criado_em) VALUES (${tenantId}, 'Instituto Demonstração', ${`demo-${tenantId.slice(0, 8)}`}, ${n.agora()})`);
-  await criarPerfis(n, tx, tenantId);
-  await tx.execute(sql`
-    INSERT INTO usuario (id, tenant_id, email, nome, senha_hash, mfa_secret, mfa_ativo, situacao, todos_projetos, criado_em)
-    VALUES (${usuarioId}, ${tenantId}, ${normalizarEmail(EMAIL)}, 'Ana Silva', ${hash},
-            ${cifrar(config.chaveCifraMfa, segredoTotp)}, true, 'ativo', true, ${n.agora()})`);
-  await tx.execute(sql`
-    INSERT INTO usuario_perfil (id, tenant_id, usuario_id, perfil_id, criado_em)
-    SELECT gen_random_uuid(), ${tenantId}, ${usuarioId}, id, ${n.agora()} FROM perfil
-     WHERE tenant_id = ${tenantId} AND codigo IN ('admin_tenant', 'digitalizador')`);
-  return n.criarSessao(tx, { tenantId, usuarioId, tipo: 'plena', ip: HOST });
+  const { tenantId, usuarioId } = await criarTenantComUsuaria(n, tx, {
+    nome: 'Instituto Demonstração',
+    nomeUsuaria: 'Ana Silva',
+    email: EMAIL,
+    senha,
+  });
+  return n.criarSessao(tx, { tenantId, usuarioId, ip: HOST });
 });
 
 // Projeto e formulário publicados pela própria API (mesmas validações da RN-017 e do layout).
@@ -208,13 +188,10 @@ const pagina = createServer((req, res) => {
 });
 await new Promise<void>((ok) => pagina.listen(porta, HOST, ok));
 
-const uri = uriOtpauth(segredoTotp, EMAIL);
-console.log(await QRCode.toString(uri, { type: 'terminal', small: true }));
 console.log(`MinhaPesquisa — modo de demonstração (DEC-104). Só dados sintéticos (GX-001).
   página:  http://${HOST}:${porta}
   e-mail:  ${EMAIL}
   senha:   ${senha}
-  MFA:     leia o QR acima no app autenticador ou use a chave ${segredoTotp}
   antimalware: ${process.env.MP_CLAMD_HOST ? `clamd em ${process.env.MP_CLAMD_HOST}` : 'equivalente EICAR (sem ClamAV)'}
 Tudo some ao encerrar (Ctrl+C).`);
 
