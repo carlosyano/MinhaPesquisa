@@ -320,7 +320,7 @@ v_req = re.search(r"^Versão: ([\d.]+)", req, flags=re.M).group(1)
 for nome, txt in (("PLANO.md", plano), ("openapi.yaml", api_txt), ("ARCHITECTURE.md", docs_texto["ARCHITECTURE.md"])):
     for v in set(re.findall(r"REQ v([\d.]+)", txt)):
         if v != v_req and "histórico" not in nome:
-            usos = [l for l in txt.splitlines() if f"REQ v{v}" in l and not re.search(r"hist[óo]ric|errata|CHG-00\d|anterior|REV-", l, re.I)]
+            usos = [l for l in txt.splitlines() if f"REQ v{v}" in l and not re.search(r"hist[óo]ric|errata|CHG-\d{3}|anterior|REV-", l, re.I)]
             if usos:
                 erro("C12", f"{nome} cita REQ v{v}; versão vigente é {v_req}: {usos[0][:90]}")
 v_plano = re.search(r"\*\*Versão do plano:\*\* ([\d.]+)", plano).group(1)
