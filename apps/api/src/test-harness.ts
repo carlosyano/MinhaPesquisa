@@ -256,6 +256,14 @@ export async function criarHarness() {
         );
         return r!.n;
       },
+
+      async mapaLayout(versaoId: string) {
+        const r = await n.banco.manutencao((tx) =>
+          linha<{ mapa_layout: unknown }>(tx, sql`SELECT mapa_layout FROM versao WHERE id = ${versaoId}`),
+        );
+        if (!r) throw new Error(`versão ${versaoId} não existe`);
+        return (r.mapa_layout ?? null) as never;
+      },
     },
 
     async close() {
