@@ -1737,6 +1737,7 @@ components:
       required: [id, nome, status, criado_em]
       properties:
         id: { type: string, format: uuid }
+        numero: { type: integer, minimum: 1, maximum: 99999, readOnly: true, description: 'Número sequencial do projeto, exibido com 5 dígitos (DEC-160); preenchido a partir do IMP-007' }
         nome: { type: string }
         descricao: { type: string, nullable: true }
         objetivo: { type: string, nullable: true }

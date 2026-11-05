@@ -21,6 +21,7 @@ ENT-003 Perfil,codigo,código do perfil,varchar,sim,50,^[a-z_]+$,admin_tenant; d
 ENT-003 Perfil,nome,nome do perfil,varchar,sim,100,—,—,—,não,—,não
 ENT-004 Projeto,id,identificador do projeto,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-004 Projeto,tenant_id,tenant do projeto,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-004 Projeto,numero,"número do projeto, sequencial, exibido com 5 dígitos e zeros à esquerda (DEC-160)",int,sim,—,00000,1..99999,próximo da sequência,sim,—,não
 ENT-004 Projeto,nome,nome do projeto,varchar,sim,200,—,—,—,não,—,não
 ENT-004 Projeto,descricao,descrição,text,não,5000,—,—,NULL,não,—,não
 ENT-004 Projeto,objetivo,objetivo metodológico do ciclo de coleta (DEC-137),text,não,5000,—,—,NULL,não,—,não
