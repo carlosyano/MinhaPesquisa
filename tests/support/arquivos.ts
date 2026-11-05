@@ -7,15 +7,17 @@
 //
 // Bibliotecas só de teste: pdfjs-dist (renderização e texto), @napi-rs/canvas (desenho e
 // codificação JPEG/PNG), jsqr (leitura de QR), qrcode (QR forjado), pdf-lib (montagem de
-// PDF), piexifjs (gravação de EXIF/GPS) e exifr (leitura de metadados).
+// PDF), piexifjs (gravação de EXIF/GPS), exifr (leitura de metadados) e sharp (TIFF em CCITT G4
+// do scan em preto e branco).
 
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import exifr from 'exifr';
 import jsQRPadrao from 'jsqr';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, concatTransformationMatrix, drawObject, popGraphicsState, pushGraphicsState } from 'pdf-lib';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import piexif from 'piexifjs';
 import QRCode from 'qrcode';
+import sharp from 'sharp';
 import { randomBytes } from 'node:crypto';
 
 // jsqr é CommonJS: conforme o carregador, o padrão é a função ou o objeto com `default`.
@@ -187,6 +189,70 @@ export async function pdfDeImagens(imagens: Buffer[]): Promise<Buffer> {
     pagina.drawImage(emb, { x: 0, y: 0, width: 595.28, height: 841.89 });
   }
   return Buffer.from(await doc.save());
+}
+
+/**
+ * PDF como o de um scanner em preto e branco (ex.: Epson Scan 2): cada página é uma imagem de
+ * 1 bit em CCITT G4. O sharp grava o G4 num TIFF em faixas de linhas, cada faixa codificada à
+ * parte; cada faixa vira uma imagem do PDF, empilhadas na ordem.
+ */
+export async function pdfEscaneadoPb(paginas: PaginaRenderizada[]): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  for (const p of paginas) {
+    const tiff = await sharp(p.png).greyscale().threshold(128).extractChannel(0).tiff({ compression: 'ccittfax4', bitdepth: 1 }).toBuffer();
+    const { largura, altura, linhasPorFaixa, faixas } = faixasTiff(tiff);
+    const pagina = doc.addPage([595.28, 841.89]);
+    const escala = 841.89 / altura;
+    faixas.forEach((dados, i) => {
+      const linhas = Math.min(linhasPorFaixa, altura - i * linhasPorFaixa);
+      const imagem = doc.context.stream(dados, {
+        Type: 'XObject',
+        Subtype: 'Image',
+        Width: largura,
+        Height: linhas,
+        ColorSpace: 'DeviceGray',
+        BitsPerComponent: 1,
+        Filter: 'CCITTFaxDecode',
+        DecodeParms: { K: -1, Columns: largura, Rows: linhas, BlackIs1: false },
+      });
+      const nome = pagina.node.newXObject(`Faixa${i}`, doc.context.register(imagem));
+      const y = 841.89 - (i * linhasPorFaixa + linhas) * escala;
+      pagina.pushOperators(
+        pushGraphicsState(),
+        concatTransformationMatrix(largura * escala, 0, 0, linhas * escala, 0, y),
+        drawObject(nome),
+        popGraphicsState(),
+      );
+    });
+  }
+  return Buffer.from(await doc.save());
+}
+
+/** Dimensões e faixas de um TIFF de uma imagem só, com faixas contíguas. */
+function faixasTiff(b: Buffer): { largura: number; altura: number; linhasPorFaixa: number; faixas: Uint8Array[] } {
+  const le = b.toString('latin1', 0, 2) === 'II';
+  const u16 = (o: number) => (le ? b.readUInt16LE(o) : b.readUInt16BE(o));
+  const u32 = (o: number) => (le ? b.readUInt32LE(o) : b.readUInt32BE(o));
+  const ifd = u32(4);
+  const tags = new Map<number, number[]>();
+  for (let i = 0; i < u16(ifd); i++) {
+    const e = ifd + 2 + i * 12;
+    const tipo = u16(e + 2);
+    const n = u32(e + 4);
+    const tam = tipo === 3 ? 2 : 4;
+    const base = n * tam > 4 ? u32(e + 8) : e + 8;
+    tags.set(u16(e), Array.from({ length: n }, (_, k) => (tam === 2 ? u16(base + k * 2) : u32(base + k * 4))));
+  }
+  const [largura] = tags.get(256)!;
+  const [altura] = tags.get(257)!;
+  const offsets = tags.get(273)!;
+  const tamanhos = tags.get(279)!;
+  return {
+    largura,
+    altura,
+    linhasPorFaixa: tags.get(278)?.[0] ?? altura,
+    faixas: offsets.map((o, i) => new Uint8Array(b.subarray(o, o + tamanhos[i]))),
+  };
 }
 
 /** Novo PDF com as páginas do original na ordem pedida (números a partir de 1; pode repetir). */
