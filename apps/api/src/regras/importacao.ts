@@ -89,10 +89,10 @@ export function transformar(texto: string, enunciado: boolean): string {
 
 // ───────────────────────────── montagem ─────────────────────────────
 
-/** Campos que a importação reconhece além dos 5 da RN-050 (DEC-149); não são obrigatórios nem injetados. */
+/** Campos que a importação reconhece além dos 5 da RN-050 (DEC-149, DEC-152); não são obrigatórios nem injetados. */
 const CAMPOS_DEC149: Record<'endereco' | 'aplicador', CampoPadrao> = {
-  endereco: { codigo: 'ENDERECO', tipo: 'texto_curto', enunciado: 'Endereço', campo_respondente: 'endereco', campo_aplicacao: null, sensibilidade: 'identificacao' },
-  aplicador: { codigo: 'APLICADOR', tipo: 'texto_curto', enunciado: 'Aplicador', campo_respondente: null, campo_aplicacao: 'aplicador', sensibilidade: 'identificacao' },
+  endereco: { codigo: 'ENDERECO', tipo: 'texto_curto', enunciado: 'Endereço do respondente', campo_respondente: 'endereco', campo_aplicacao: null, sensibilidade: 'identificacao' },
+  aplicador: { codigo: 'APLICADOR', tipo: 'texto_curto', enunciado: 'Nome do aplicador', campo_respondente: null, campo_aplicacao: 'aplicador', sensibilidade: 'identificacao' },
 };
 
 const campoDe = (c: CampoLido): CampoPadrao =>
@@ -237,8 +237,9 @@ export function montarVersao(paginas: readonly (readonly PerguntaLida[])[], medi
   const usados = new Set([...CODIGOS_RESERVADOS, ...comuns.flatMap((p) => (p.campo ? [p.campo.codigo] : []))]);
   const perguntas: PerguntaEntrada[] = [...cinco];
   for (const a of comuns) {
+    // Endereço e aplicador são opcionais no formulário (DEC-152).
     const base: PerguntaEntrada = a.campo
-      ? padronizar({ codigo: a.campo.codigo, tipo: a.tipo, enunciado: a.enunciado, ordem: perguntas.length + 1, pagina }, a.campo)
+      ? { ...padronizar({ codigo: a.campo.codigo, tipo: a.tipo, enunciado: a.enunciado, ordem: perguntas.length + 1, pagina }, a.campo), obrigatorio: false }
       : {
           codigo: '',
           tipo: a.tipo,
