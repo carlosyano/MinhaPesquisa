@@ -1,6 +1,6 @@
 # Testes do MinhaPesquisa
 
-IA-TEST do IMP-001, do IMP-002, do IMP-005, do IMP-003 e do IMP-006 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
+IA-TEST do IMP-001, do IMP-002, do IMP-005, do IMP-003, do IMP-006 e do IMP-007 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
 implementação (IA-DEV), que não pode alterá-los: o job `testes-congelados` do CI marca de
 vermelho qualquer mudança em teste sem o rótulo `ia-test`, e o responsável só autoriza a
 junção depois de revisar o diff, com as verificações verdes.
@@ -66,6 +66,14 @@ e relógio da leitura. Os testes do IMP-002 alcançados pela CHG-014 foram ajust
 `versoes.test.ts` (PLANO §11), sem reabrir o aceite do IMP-002. Altura das perguntas (S-12): termo
 de consentimento padrão e uma escolha única de 60 opções, que não cabe em nenhuma página.
 
+No IMP-007 (exportação em formato longo, CHG-015, DEC-164 e DEC-165) a interface ganha
+`inspect.exportacao` e `inspect.contagemExportacao`. A tarefa da exportação roda no mesmo worker e
+relógio da leitura, e o `clock.advance` também roda o job diário que apaga os arquivos vencidos
+(DEC-069). Os links de `getExport` precisam ser baixáveis com `fetch`, como os das imagens. O CSV e o
+XLSX são lidos por `support/planilha.ts`, sem depender da biblioteca que gera os arquivos (autoteste
+em `support/planilha.test.ts`). A neutralização de fórmulas (DEC-161) é conferida no valor gravado
+na célula: o apóstrofo faz parte do texto, no CSV e no XLSX.
+
 ## Cobertura
 
 | Arquivo | Rastreio |
@@ -95,6 +103,8 @@ de consentimento padrão e uma escolha única de 60 opções, que não cabe em n
 | `integracao/formularios/importacao.test.ts` | RF-011, CA-045, CA-046, CA-047 (exemplos 1 a 8), RN-049, FL-004, DEC-136, DEC-143, DEC-144, DEC-149, T-02 |
 | `integracao/formularios/campos-padrao.test.ts` | CA-048 (exemplos 1 a 9), RN-050, DEC-143, DEC-145, DEC-146, DEC-147 |
 | `integracao/projetos/ciclo-coleta.test.ts` | CA-049, DEC-137, RN-027, RN-028 |
+| `integracao/exportacao/formato-longo.test.ts` | RF-012, CA-050, CA-051 (exemplos 1 a 8), CA-021, RN-051, DEC-153 a DEC-165 |
+| `support/planilha.test.ts` | autoteste da leitura de CSV (DEC-165) e de XLSX |
 | `support/arquivos.test.ts` | autoteste dos geradores de PDF, QR, EXIF e arquivos de limite |
 | `support/apoio.test.ts` | autoteste do apoio (catálogo de erros, sem os erros descontinuados na REQ v2.1) |
 

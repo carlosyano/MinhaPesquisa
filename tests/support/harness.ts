@@ -45,6 +45,13 @@
 // - inspeção da importação (estado no banco, tarefas e arquivos que restam na pasta);
 // - rascunho gravado direto no banco como antes da REQ v2.4, sem os 5 campos da RN-050, para os
 //   testes do IMP-002 que precisam de versão incompleta (PLANO §11).
+//
+// Acrescentado no IA-TEST do IMP-007 (CHG-015, DEC-164, DEC-165):
+// - a tarefa da exportação roda no mesmo worker e relógio da leitura: só em `worker.processar()` e
+//   em `clock.advance`, que também roda o job diário que apaga os arquivos vencidos (DEC-069);
+// - os links assinados de `getExport` precisam ser baixáveis pelo processo de teste com `fetch`,
+//   como os das imagens (DEC-113);
+// - inspeção da exportação (estado no banco e arquivos que restam na pasta).
 
 /** Resultado de um script local: código de saída e tudo o que ele escreveu no terminal. */
 export interface SaidaScript {
@@ -185,6 +192,26 @@ export interface ContagemImportacao {
   formularios: number;
   /** Arquivos em todas as pastas de importação do tenant. */
   objetos: number;
+}
+
+/** Exportacao (ENT-026) e o que sobra dela na pasta. Acrescentado no IA-TEST do IMP-007. */
+export interface ExportacaoGravada {
+  status: 'enfileirada' | 'em_andamento' | 'concluida' | 'falhou' | 'cancelada';
+  formato: 'csv' | 'xlsx';
+  escopo: 'agregado' | 'linha_a_linha' | 'linha_por_item';
+  chave_storage: string | null;
+  expira_em: Date | null;
+  /** Arquivos da exportação que restam em `tenant/<tenant>/exportacao/` (DEC-165 (3)). */
+  objetos: number;
+}
+
+/** Contagens do tenant para provar que uma exportação recusada não gravou nada. */
+export interface ContagemExportacao {
+  exportacoes: number;
+  /** Arquivos na pasta de exportação do tenant. */
+  objetos: number;
+  /** Tarefas de exportação na fila do worker, em qualquer estado (DEC-165 (4)). */
+  tarefas: number;
 }
 
 export interface RespondenteGravado {
@@ -337,6 +364,10 @@ export interface Harness {
     importacao(importacaoId: string): Promise<ImportacaoGravada>;
     /** Acrescentado no IA-TEST do IMP-006. */
     contagemImportacao(tenantId: string): Promise<ContagemImportacao>;
+    /** Acrescentado no IA-TEST do IMP-007. */
+    exportacao(exportacaoId: string): Promise<ExportacaoGravada>;
+    /** Acrescentado no IA-TEST do IMP-007. */
+    contagemExportacao(tenantId: string): Promise<ContagemExportacao>;
   };
 
   /** Gravação direta no banco, como um caminho futuro que não passe pela API (DEC-131). */
