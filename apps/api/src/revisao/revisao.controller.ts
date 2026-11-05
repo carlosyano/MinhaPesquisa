@@ -21,6 +21,7 @@ import {
   corpoAplicacao,
   cotaDoTenant,
   cpfDaAplicacao,
+  cpfExibido,
   divergencias,
   ESTADOS_EDICAO,
   ESTADOS_REVISAO,
@@ -38,7 +39,7 @@ import { ehUuid, Nucleo, type SessaoAtiva } from '../nucleo.js';
 import { paginacao } from '../regras/autorizacao.js';
 import { cpfValido } from '../regras/cpf.js';
 import { canonizar, RESOLVIDOS, valorNoSchema, type EstadoItem } from '../regras/leitura.js';
-import { reverterCadastro, versaoDoCadastro, vincular, type ManterCadastro } from './respondentes.js';
+import { anonimizarSemAplicacao, reverterCadastro, versaoDoCadastro, vincular, type ManterCadastro } from './respondentes.js';
 
 type Acao = 'confirmar' | 'corrigir' | 'em_branco' | 'ilegivel' | 'rasurado' | 'nao_se_aplica';
 
@@ -179,6 +180,8 @@ export class RevisaoController {
       }
       const expira = somar(this.n.agora(), 5 * MINUTO); // DEC-034
       await this.n.auditar(tx, s, 'VER_IMAGEM', 'ItemResposta', i.id);
+      // O recorte do CPF é exibição completa: fora da revisão aberta, é auditado à parte (DEC-126).
+      if (i.tipo === 'cpf' && !cpfExibido(a)) await this.n.auditar(tx, s, 'EXIBICAO_CPF', 'Aplicacao', id, { recorte: true });
       return {
         url: await armazenamento.urlAssinada(chave, expira),
         expira_em: expira.toISOString(),
@@ -244,16 +247,18 @@ export class RevisaoController {
 
   /** Ação do revisor sobre um item (FL-002); `valor_ia` nunca muda (RN-010). */
   private aplicarAcao(i: Item, x: RevisaoPatch['itens'][number]): void {
-    const invalido = () => new ErroApi('ERR-001', { campos: ['valor_final'] });
+    const valido = (v: string) => (i.tipo === 'cpf' ? cpfValido(v) : valorNoSchema(i, v)); // RN-012, CA-006
     switch (x.acao) {
       case 'confirmar':
+        // Só o valor lido preenchido e no schema se confirma; o resto se corrige ou se marca (DEC-128).
+        // No CPF basta o formato: o dígito verificador inválido leva a aguardando_cpf na conclusão (FL-001).
+        if (i.valor_ia === null || !valorNoSchema(i, i.valor_ia)) throw new ErroApi('ERR-001', { campos: ['acao'] });
         i.valor_final = i.valor_ia;
         i.estado = 'confirmado';
         return;
       case 'corrigir': {
         const v = canonizar(i.tipo, x.valor_final ?? null);
-        if (v === null) throw invalido();
-        if (i.tipo === 'cpf' ? !cpfValido(v) : !valorNoSchema(i, v)) throw invalido(); // RN-012, CA-006
+        if (v === null || !valido(v)) throw new ErroApi('ERR-001', { campos: ['valor_final'] });
         i.valor_final = v;
         i.estado = 'corrigido';
         return;
@@ -332,7 +337,7 @@ export class RevisaoController {
     if (corpo.assinatura === 'ausente') {
       await tx.execute(sql`
         UPDATE aplicacao SET estado = 'sem_assinatura', aviso = NULL, assinatura = 'ausente', manter_cadastro = ${JSON.stringify(escolhas)}::jsonb,
-                             cadastro_versao = ${await versaoDoCadastro(this.n, tx, itens)}, versao = versao + 1
+                             cadastro_versao = ${await versaoDoCadastro(this.n, tx, itens)}, cpf_exibido_em = NULL, versao = versao + 1
          WHERE id = ${a.id}`);
       await this.n.auditar(tx, s, 'CONCLUSAO_SEM_ASSINATURA', 'Aplicacao', a.id);
       return;
@@ -341,7 +346,7 @@ export class RevisaoController {
     await tx.execute(sql`
       UPDATE aplicacao SET estado = 'concluida', aviso = NULL, assinatura = 'presente', respondente_id = ${respondenteId},
                            respondente_anterior_id = NULL, manter_cadastro = ${JSON.stringify(escolhas)}::jsonb,
-                           concluida_em = ${this.n.agora()}, versao = versao + 1
+                           concluida_em = ${this.n.agora()}, cpf_exibido_em = NULL, versao = versao + 1
        WHERE id = ${a.id}`);
     await this.n.auditar(tx, s, 'CONCLUIR_APLICACAO', 'Aplicacao', a.id, { respondente_id: respondenteId });
   }
@@ -392,8 +397,11 @@ export class RevisaoController {
         await tx.execute(sql`UPDATE tarefa_leitura SET situacao = 'cancelada' WHERE aplicacao_id = ${id} AND situacao = 'pendente'`);
         await tx.execute(sql`
           UPDATE aplicacao SET estado = 'descartada', aviso = NULL, motivo_descarte = ${this.n.cifrar(corpo.motivo)},
-                               local_aplicacao = NULL, data_aplicacao = NULL, cpf_hash = NULL, manter_cadastro = NULL, versao = versao + 1
+                               local_aplicacao = NULL, data_aplicacao = NULL, cpf_hash = NULL, manter_cadastro = NULL,
+                               respondente_anterior_id = NULL, cpf_exibido_em = NULL, versao = versao + 1
            WHERE id = ${id}`);
+        // Aplicação reaberta descartada: o respondente da conclusão anterior segue a DEC-078 (DEC-130).
+        if (a.respondente_anterior_id) await anonimizarSemAplicacao(this.n, tx, s, a.respondente_anterior_id, id);
         await tx.execute(sql`
           INSERT INTO lista_eliminacoes (id, tenant_id, motivo, aplicacao_id, eliminado_em, valido_ate)
           VALUES (${this.n.id()}, ${s.tenantId}, 'descarte_aplicacao', ${id}, ${agora}, ${somar(agora, VALIDADE_LISTA)})`);
@@ -436,7 +444,7 @@ export class RevisaoController {
         await tx.execute(sql`
           UPDATE aplicacao SET estado = 'em_revisao', aviso = NULL, motivo_reabertura = ${this.n.cifrar(corpo.motivo)},
                                respondente_anterior_id = coalesce(respondente_id, respondente_anterior_id), respondente_id = NULL,
-                               concluida_em = NULL, manter_cadastro = NULL, cadastro_versao = NULL,
+                               concluida_em = NULL, manter_cadastro = NULL, cadastro_versao = NULL, cpf_exibido_em = NULL,
                                assinatura = CASE WHEN estado = 'sem_assinatura' THEN 'nao_conferida' ELSE assinatura END,
                                versao = versao + 1
            WHERE id = ${id}`);

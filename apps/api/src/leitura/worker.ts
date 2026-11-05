@@ -5,7 +5,9 @@
 //   CPF) nunca vai na mesma chamada que os demais campos (RN-038, RN-039).
 // - Tarefa: recorta da página só as regiões dos campos pendentes (mapa de layout, DEC-048), reserva
 //   o custo estimado (DEC-051), chama o motor fora da transação e grava o que foi lido. Falha →
-//   novas tentativas em 1, 2 e 4 s; esgotadas, a aplicação vai para erro_leitura (REQ §6.6).
+//   novas tentativas em 1 e 2 s; na 3ª falha, a aplicação vai para erro_leitura (REQ §6.6,
+//   DEC-129). Página que não se lê do disco também é falha da tarefa, e nenhum erro de uma
+//   tarefa interrompe as demais (DEC-130).
 // - Cota: teto atingido ou mês sem cotação do dólar → aguardando_cota, preservando o que já foi
 //   lido; a retomada roda a cada `processar` e lê só o que falta (FL-001).
 //
@@ -32,8 +34,8 @@ import {
   type Regiao,
 } from './dominio.js';
 
-/** Esperas antes da 2ª, 3ª e 4ª tentativa (REQ §6.6); depois da 4ª falha, erro_leitura. */
-export const ESPERAS_MS = [1 * SEGUNDO, 2 * SEGUNDO, 4 * SEGUNDO];
+/** Esperas antes da 2ª e da 3ª chamada (REQ §6.6, DEC-129); depois da 3ª falha, erro_leitura. */
+export const ESPERAS_MS = [1 * SEGUNDO, 2 * SEGUNDO];
 
 type Grupo = 'identificacao' | 'demais';
 const grupoDe = (i: Pick<Item, 'sensibilidade'>): Grupo => (i.sensibilidade === 'identificacao' ? 'identificacao' : 'demais');
@@ -79,7 +81,16 @@ export class WorkerLeitura {
              ORDER BY executar_em, aplicacao_id, pagina, grupo`,
       ),
     );
-    for (const t of vencidas) await this.executar(t);
+    for (const t of vencidas) {
+      try {
+        await this.executar(t);
+      } catch (e) {
+        // Erro fora do motor: conta como falha da tarefa, para não travar a fila nela (DEC-130).
+        const nome = e instanceof Error ? e.name : 'erro';
+        this.n.log(`worker_erro aplicacao=${t.aplicacao_id} pagina=${t.pagina} grupo=${t.grupo} erro=${nome}`);
+        await this.n.banco.noTenant(t.tenant_id, (tx) => this.registrarFalha(tx, t, new ErroLeitura('erro', nome)));
+      }
+    }
     return vencidas.length;
   }
 
@@ -210,7 +221,14 @@ export class WorkerLeitura {
       await this.registrarFalha(tx, t, new ErroLeitura('erro', 'página sem imagem'));
       return undefined;
     }
-    const recorte = await recortar(await this.n.config.armazenamento.ler(pagina.chave_storage), alvo);
+    let recorte: Buffer;
+    try {
+      recorte = await recortar(await this.n.config.armazenamento.ler(pagina.chave_storage), alvo);
+    } catch {
+      // Arquivo sumido ou corrompido: falha da tarefa, com as mesmas retentativas (DEC-130).
+      await this.registrarFalha(tx, t, new ErroLeitura('erro', 'página ilegível'));
+      return undefined;
+    }
     const schema: CampoSchema = {
       campos: alvo.map((i) => ({
         chave: chaveItem(i),
