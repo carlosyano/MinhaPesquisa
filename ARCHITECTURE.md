@@ -35,7 +35,7 @@ Vitest, Testcontainers, Playwright + axe, Schemathesis, fast-check, Stryker.
 minhapesquisa/
 ├── apps/
 │   ├── api/                 # HTTP, autenticação, autorização, validação pelo contrato
-│   ├── web/                 # Telas TL-001 a TL-014
+│   ├── web/                 # Telas TL-001 a TL-015
 │   └── worker/              # Leitura IA, registro de imagem, cota, expurgo, expirações
 ├── packages/
 │   ├── db/                  # Schemas Drizzle, migrações SQL, policies RLS, papéis (DEC-046)

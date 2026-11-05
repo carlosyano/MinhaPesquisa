@@ -259,6 +259,6 @@ ENT-031 ImportacaoFormulario,estado,situação da importação (FL-004),enum,sim
 ENT-031 ImportacaoFormulario,total_paginas,páginas do envio,int,sim,—,—,1..50,—,não,—,não
 ENT-031 ImportacaoFormulario,chave_storage,"pasta dos arquivos enviados (NULL depois de apagados, RN-049)",varchar,não,500,—,—,NULL,não,—,não
 ENT-031 ImportacaoFormulario,formulario_id,formulário criado (só em concluida),uuid,não,36,UUID v4,—,NULL,não,Formulario.id,não
-ENT-031 ImportacaoFormulario,avisos,"perguntas descartadas ou de tipo incerto, por página e posição, sem texto manuscrito (RN-049)",jsonb,não,—,JSON,—,NULL,não,—,não
+ENT-031 ImportacaoFormulario,avisos,"ajustes da RN-049 por página e posição no original, sem texto lido",jsonb,não,—,JSON,—,NULL,não,—,não
 ENT-031 ImportacaoFormulario,criada_em,data do pedido,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-031 ImportacaoFormulario,concluida_em,data em que terminou (concluida ou falhou),timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
