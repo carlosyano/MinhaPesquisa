@@ -1,12 +1,12 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     API da aplicação local MinhaPesquisa (DEC-107) — digitalização de pesquisas em papel com
     leitura por IA, revisão humana e dashboards, em conformidade com a LGPD. Uma única usuária,
     com todas as permissões (DEC-109); servida só em 127.0.0.1 (DEC-113).
-    Fonte normativa: REQ v2.4 e PLANO.md v3.12. Contract-first — este arquivo valida
+    Fonte normativa: REQ v2.5 e PLANO.md v3.13. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: a única rota pública (`login`) declara `security: []`; sem MFA (DEC-108);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -1216,10 +1216,13 @@ paths:
       tags: [lgpd]
       summary: Gera exportação CSV/XLSX (job assíncrono)
       description: |
-        Agregada ou linha a linha, sem k-anonimato (DEC-109, DEC-110); toda exportação é
-        auditada (CA-022). O arquivo é apagado após `retencao_exportacao_dias` (RN-030). Sem
-        assinatura fica fora (CA-021).
-      x-trace: [RF-010, CA-021, CA-022, DEC-014, DEC-109, DEC-110]
+        Agregada, linha a linha ou linha por item (formato longo, RN-051), sem k-anonimato
+        (DEC-109, DEC-110); toda exportação é auditada (CA-022). O arquivo é apagado após
+        `retencao_exportacao_dias` (RN-030). Sem assinatura fica fora (CA-021). Células de texto
+        que começam com `=`, `+`, `-`, `@`, tabulação ou retorno de carro recebem um apóstrofo
+        (DEC-161). Com `linha_por_item`, `filtros` → ERR-001 (DEC-163) e `rotulos` é ignorado
+        (a planilha traz código e rótulo).
+      x-trace: [RF-010, RF-012, RN-051, CA-021, CA-022, CA-050, CA-051, DEC-014, DEC-109, DEC-110, DEC-153, DEC-161, DEC-163]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1251,7 +1254,7 @@ paths:
       tags: [lgpd]
       summary: Situação da exportação e link assinado para baixar
       description: Situação e link assinado local (5 min) da exportação (RNF-007).
-      x-trace: [RF-010, CA-022]
+      x-trace: [RF-010, RF-012, CA-022, CA-051]
       parameters:
         - $ref: '#/components/parameters/ExportId'
       responses:
@@ -2249,7 +2252,7 @@ components:
       required: [formato, escopo, projeto_ids]
       properties:
         formato: { type: string, enum: [csv, xlsx] }
-        escopo: { type: string, enum: [agregado, linha_a_linha] }
+        escopo: { type: string, enum: [agregado, linha_a_linha, linha_por_item], description: '`linha_por_item`: formato longo (RN-051)' }
         projeto_ids: { type: array, minItems: 1, uniqueItems: true, items: { type: string, format: uuid } }
         filtros: { type: array, maxItems: 10, items: { $ref: '#/components/schemas/Filter' } }
         periodo: { $ref: '#/components/schemas/Period' }
@@ -2263,7 +2266,7 @@ components:
         id: { type: string, format: uuid }
         status: { type: string, enum: [enfileirada, em_andamento, concluida, falhou, cancelada] }
         criado_em: { type: string, format: date-time }
-        url_download: { type: string, format: uri, nullable: true, description: 'Link assinado de 5 min, só quando concluida' }
+        url_download: { type: string, format: uri, nullable: true, description: 'Link assinado de 5 min, só quando concluida e antes de expira_em (DEC-069)' }
         expira_em: { type: string, format: date-time, nullable: true }
 
     DataSubjectRequestCreate:
