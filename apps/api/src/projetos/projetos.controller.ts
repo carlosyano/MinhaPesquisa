@@ -1,8 +1,10 @@
 // RF-003: projetos e ciclo de vida (CA-027, DEC-027, RN-004). Sem grupo mínimo desde o IMP-005 (DEC-110).
+// Desde o IMP-006, os dados do ciclo de coleta (DEC-137, CA-049): o nome do coordenador é dado
+// pessoal e não entra em auditoria nem em log (RN-027, RN-028).
 
 import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { NUCLEO } from '../auth/auth.controller.js';
-import { etag, projetoNoEscopo, type LinhaProjeto } from '../escopo.js';
+import { COLUNAS_PROJETO, etag, projetoNoEscopo, type LinhaProjeto } from '../escopo.js';
 import { exigirCsrf, exigirSessao, type Req as Requisicao, type Res as Resposta } from '../http.js';
 import { linha, linhas, sql, type Executor } from '../infra/banco.js';
 import { ErroApi } from '../infra/erros.js';
@@ -12,9 +14,18 @@ import { paginacao } from '../regras/autorizacao.js';
 interface ProjetoCriar {
   nome: string;
   descricao?: string;
+  objetivo?: string | null;
+  coordenador?: string | null;
+  coleta_inicio?: string | null;
+  coleta_fim?: string | null;
 }
 
 type ProjetoAtualizar = Partial<ProjetoCriar>;
+
+/** `coleta_fim` antes de `coleta_inicio`, depois de aplicada a alteração → ERR-001 (DEC-137). */
+function conferirColeta(inicio: string | null, fim: string | null): void {
+  if (inicio && fim && fim < inicio) throw new ErroApi('ERR-001', { campos: ['coleta_fim'] });
+}
 
 @Controller('projects')
 export class ProjetosController {
@@ -26,7 +37,17 @@ export class ProjetosController {
   }
 
   private corpo(p: LinhaProjeto) {
-    return { id: p.id, nome: p.nome, descricao: p.descricao, status: p.status, criado_em: new Date(p.criado_em).toISOString() };
+    return {
+      id: p.id,
+      nome: p.nome,
+      descricao: p.descricao,
+      objetivo: p.objetivo,
+      coordenador: p.coordenador,
+      coleta_inicio: p.coleta_inicio,
+      coleta_fim: p.coleta_fim,
+      status: p.status,
+      criado_em: new Date(p.criado_em).toISOString(),
+    };
   }
 
   private async historico(tx: Executor, s: SessaoAtiva, projetoId: string, anterior: string | null, novo: string): Promise<void> {
@@ -43,7 +64,7 @@ export class ProjetosController {
       const total = (await linha<{ n: number }>(tx, sql`SELECT count(*)::int AS n FROM projeto`))!.n;
       const ps = await linhas<LinhaProjeto>(
         tx,
-        sql`SELECT id, nome, descricao, status, criado_em, versao FROM projeto
+        sql`SELECT ${COLUNAS_PROJETO} FROM projeto
              ORDER BY criado_em, id LIMIT ${limite} OFFSET ${(pagina - 1) * limite}`,
       );
       return { itens: ps.map((p) => this.corpo(p)), meta: { pagina, limite, total } };
@@ -61,12 +82,14 @@ export class ProjetosController {
     const s = await exigirSessao(this.n, req);
     exigirCsrf(this.n, req);
     this.validar('createProject', corpo);
+    conferirColeta(corpo.coleta_inicio ?? null, corpo.coleta_fim ?? null);
     const r = await this.n.comAtor(s, async (tx) => {
       const feito = await this.n.idempotente(tx, s, 'createProject', chave, corpo, async () => {
         const id = this.n.id();
         await tx.execute(sql`
-          INSERT INTO projeto (id, tenant_id, nome, descricao, status, criado_em)
-          VALUES (${id}, ${s.tenantId}, ${corpo.nome}, ${corpo.descricao ?? null}, 'ativo', ${this.n.agora()})`);
+          INSERT INTO projeto (id, tenant_id, nome, descricao, objetivo, coordenador, coleta_inicio, coleta_fim, status, criado_em)
+          VALUES (${id}, ${s.tenantId}, ${corpo.nome}, ${corpo.descricao ?? null}, ${corpo.objetivo ?? null}, ${corpo.coordenador ?? null},
+                  ${corpo.coleta_inicio ?? null}::date, ${corpo.coleta_fim ?? null}::date, 'ativo', ${this.n.agora()})`);
         await this.historico(tx, s, id, null, 'ativo');
         await this.n.auditar(tx, s, 'CRIAR_PROJETO', 'Projeto', id);
         return { status: 201, recursoId: id };
@@ -104,9 +127,13 @@ export class ProjetosController {
       this.validar('updateProject', corpo);
       if (!ifMatch) throw new ErroApi('ERR-001', { campos: ['If-Match'] });
       if (ifMatch !== etag(atual.versao)) throw new ErroApi('ERR-017');
+      const valor = <K extends keyof ProjetoAtualizar & keyof LinhaProjeto>(k: K) => (corpo[k] === undefined ? atual[k] : corpo[k]);
+      const inicio = valor('coleta_inicio');
+      const fim = valor('coleta_fim');
+      conferirColeta(inicio, fim);
       await tx.execute(sql`
-        UPDATE projeto SET nome = ${corpo.nome ?? atual.nome},
-                           descricao = ${corpo.descricao === undefined ? atual.descricao : corpo.descricao},
+        UPDATE projeto SET nome = ${corpo.nome ?? atual.nome}, descricao = ${valor('descricao')}, objetivo = ${valor('objetivo')},
+                           coordenador = ${valor('coordenador')}, coleta_inicio = ${inicio}::date, coleta_fim = ${fim}::date,
                            versao = versao + 1
          WHERE id = ${id}`);
       const campos = Object.keys(corpo);
