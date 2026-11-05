@@ -15,6 +15,7 @@ import {
   paginasDoPdf,
   pdfDeImagens,
   pdfEmBranco,
+  pdfEscaneadoPb,
   png,
   semQr,
 } from '../../support/arquivos.js';
@@ -80,6 +81,15 @@ describe('CA-003 — upload identifica formulário, versão e página', () => {
     const r2 = await enviar(dig, projeto, [arquivo('scan.pdf', 'application/pdf', scan)]);
     expect(r2.status, r2.texto).toBe(202);
     expect(r2.corpo.estado).toBe('em_leitura');
+  });
+
+  // @trace CA-003, CA-029
+  it('PDF de scanner em preto e branco (1 bit, CCITT G4) → páginas identificadas, não em branco', async () => {
+    const scan = await pdfEscaneadoPb(f.paginas);
+    const r = await enviar(dig, projeto, [arquivo('scan-pb.pdf', 'application/pdf', scan)]);
+    expect(r.status, r.texto).toBe(202);
+    expect(r.corpo).toMatchObject({ estado: 'em_leitura' });
+    expect(r.corpo.paginas.every((p: { registro_ok: boolean }) => p.registro_ok)).toBe(true);
   });
 });
 

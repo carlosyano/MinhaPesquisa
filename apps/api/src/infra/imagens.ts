@@ -7,6 +7,8 @@
 
 import { createCanvas } from '@napi-rs/canvas';
 import jsQRPadrao from 'jsqr';
+import { createRequire } from 'node:module';
+import { dirname } from 'node:path';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import sharp from 'sharp';
 
@@ -15,10 +17,21 @@ const jsQR = ((jsQRPadrao as unknown as { default?: LerQr }).default ?? jsQRPadr
 
 /** Limite de pixels por imagem (contra bombas de descompressão). */
 const MAX_PIXELS = 60_000_000;
-/** Escala de renderização do PDF: 2 ≈ 144 dpi, suficiente para QR e leitura. */
-const ESCALA_PDF = 2;
+/**
+ * Escala de renderização do PDF: 3 ≈ 216 dpi. Com 2 (144 dpi), o QR de um scan de 1 bit a
+ * 300 dpi fica serrilhado demais e não é lido.
+ */
+const ESCALA_PDF = 3;
 /** Maior lado usado na detecção de QR e marcadores. */
 const LADO_ANALISE = 1800;
+
+/**
+ * Decodificadores WASM do pdfjs (JBIG2, CCITT e JPEG 2000). Sem eles a imagem do scan é
+ * descartada com um aviso e a página sai em branco: scanner em preto e branco grava CCITT G4.
+ * No Node, o pdfjs lê do disco: caminho de pasta (não URL file://) terminado em "/", que ele
+ * exige mesmo no Windows.
+ */
+const PASTA_WASM = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/wasm/jbig2.wasm')) + '/';
 
 /** Opções de leitura de PDF não confiável: sem fontes do documento nem do sistema (o pdfjs 6 não usa eval). */
 function abrirPdf(bytes: Buffer) {
@@ -28,6 +41,7 @@ function abrirPdf(bytes: Buffer) {
     useSystemFonts: false,
     stopAtErrors: true,
     verbosity: 0,
+    wasmUrl: PASTA_WASM,
   });
 }
 
