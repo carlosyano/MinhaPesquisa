@@ -1,18 +1,20 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005) · CHG-013 aceita na v2.3
-Versão: 2.3
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011) · 05/11/2026 (v2.3, CHG-013)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005) · CHG-013 aceita na v2.3 · CHG-014 aceita na v2.4
+Versão: 2.4
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011) · 05/11/2026 (v2.3, CHG-013; v2.4, CHG-014)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado), aplicado no que couber à aplicação local da DEC-107
 Responsável: Carlos Yano
 
 Nota da v2.0 e da v2.1 (CHG-011): o produto deixa de ser um SaaS na nuvem e passa a ser uma aplicação local num notebook, usada por uma única pessoa (DEC-107 a DEC-112 e DEC-117). A v2.1 propaga as decisões às regras, aos requisitos, às telas, aos estados, aos critérios de aceite, ao catálogo de erros e à matriz (IMP-005). Saíram os CA-010, CA-016, CA-025, CA-026b, CA-034, CA-037b, CA-038 e CA-043, as telas TL-002, TL-013 e TL-014 e o TS-004. As entidades de perfis, vínculos, concessões, reservas e tokens continuam no dicionário porque as tabelas ficam no banco sem uso (DEC-116). Nos fluxos, estados e CAs, "digitalizador", "revisor", "administrador" e "analista" designam papéis que a própria usuária exerce (DEC-109).
 
+Nota da v2.4 (CHG-014, Change Request de 05/11/2026 em `docs/historico/`): o formulário pode ser criado a partir de um formulário que já existe, em branco ou preenchido com dados fictícios, com a estrutura lida pela IA e curada pela usuária (RF-011, DEC-132 a DEC-139). Todo rascunho novo já nasce com os 5 campos obrigatórios (DEC-135), e o projeto ganha objetivo, coordenador e período de coleta (DEC-137). A exportação em formato longo do mesmo documento fica para o IMP-004 e ainda não entra nesta versão.
+
 1. Resumo em linguagem simples
 
-O MinhaPesquisa é uma aplicação local, instalada num notebook e usada por uma única pessoa (DEC-107), que transforma formulários de pesquisa respondidos em papel por público 60+ em dados estruturados, prontos para relatórios, dashboards e análises individuais ou por grupo. O sistema recebe imagens (scanner ou celular), identifica cada página por QR code, lê os campos por IA com confiança por campo, envia para revisão humana quando a confiança é baixa ou o valor é inválido, e produz dashboards e exportações (sem k-anonimato, DEC-110). Dados, imagens e backups ficam no notebook; só os recortes lidos vão ao provedor de IA na nuvem, que pode processar fora do Brasil (DEC-111). Todo o tratamento de dados pessoais sensíveis de saúde segue a LGPD, com disco cifrado, backup cifrado, auditoria imutável, direitos do titular e transferência internacional de recortes para IA condicionada a parecer jurídico. A especificação está APROVADA para prosseguir à Fase 3 (Arquitetura) e, em seguida, à implementação por incrementos.
+O MinhaPesquisa é uma aplicação local, instalada num notebook e usada por uma única pessoa (DEC-107), que transforma formulários de pesquisa respondidos em papel por público 60+ em dados estruturados, prontos para relatórios, dashboards e análises individuais ou por grupo. O sistema recebe imagens (scanner ou celular), identifica cada página por QR code, lê os campos por IA com confiança por campo, envia para revisão humana quando a confiança é baixa ou o valor é inválido, e produz dashboards e exportações (sem k-anonimato, DEC-110). Dados, imagens e backups ficam no notebook; só os recortes lidos vão ao provedor de IA na nuvem, que pode processar fora do Brasil (DEC-111), além das páginas de formulários-modelo sem dado pessoal enviadas na importação (DEC-133). Todo o tratamento de dados pessoais sensíveis de saúde segue a LGPD, com disco cifrado, backup cifrado, auditoria imutável, direitos do titular e transferência internacional de recortes para IA condicionada a parecer jurídico. A especificação está APROVADA para prosseguir à Fase 3 (Arquitetura) e, em seguida, à implementação por incrementos.
 
 2. Sumário executivo e escopo
 
@@ -33,7 +35,7 @@ Uma única instituição (clínica, cooperativa ou outra entidade que conduza pe
 
 2.4 Integrações previstas
 
-- Provedor de IA na nuvem para leitura de campos (contrato sem retenção e sem uso para treino; pode processar fora do Brasil, DEC-111). É a única integração externa.
+- Provedor de IA na nuvem para leitura de campos e para a leitura da estrutura de formulários importados (contrato sem retenção e sem uso para treino; pode processar fora do Brasil, DEC-111). É a única integração externa.
 - Imagens, banco e backups ficam no notebook (DEC-107); não há armazenamento em nuvem, e-mail nem monitoramento em nuvem.
 
 2.5 Fontes e precedência
@@ -48,6 +50,7 @@ Uma única instituição (clínica, cooperativa ou outra entidade que conduza pe
 2.6 Dentro do escopo da v1
 
 - Cadastro de projetos, formulários (com versões), perguntas e respondentes, com geração do formulário imprimível em PDF com QR code.
+- Criação do formulário a partir de um formulário existente (imagem ou PDF, em branco ou com dados fictícios), com a estrutura lida por IA e curada pela usuária (RF-011, DEC-132).
 - Upload de imagens (scanner e celular) e leitura automática por IA.
 - Fila de revisão humana para campos com baixa confiança.
 - Armazenamento estruturado por item de resposta.
@@ -59,7 +62,7 @@ Uma única instituição (clínica, cooperativa ou outra entidade que conduza pe
 
 - Editor visual de layout dos formulários.
 - Biblioteca de perguntas reutilizáveis.
-- Importação de Microsoft Forms, Google Forms e XLSForm.
+- Importação de Microsoft Forms, Google Forms e XLSForm (DEC-016; a importação por imagem da DEC-132 é outra funcionalidade).
 - Exportação para SPSS e R.
 - Permissão por linha (por usuário ou por condição).
 - Gestão de tenants por tela (criar, suspender, configurar); cobrança e assinatura do SaaS.
@@ -199,6 +202,21 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-127 | 05/11/2026 | negócio | Confirmação automática antes da calibração (Q-033) | Confirmar acima de 0,90 já; tudo à revisão até a calibração | Até o conjunto-ouro calibrar a confiança (DEC-047), nenhum item é confirmado automaticamente: o padrão de `limite_confianca` é 1,00, e a regra 8 da FL-002 nunca se aplica (confiança > 1,00 não existe). Depois da calibração, o administrador da plataforma grava o limite calibrado por script (DEC-059) | A confiança declarada pelo modelo não é calibrada; um erro com confiança alta passaria sem revisão para dashboards e exportações (revisão focada do IMP-003, F-05) | provisório | Alto | DEC-028, DEC-047, DEC-004, FL-002, CA-005 |
 | DEC-128 | 05/11/2026 | negócio | Confirmar valor fora do schema (Q-034) | Aceitar o valor lido; exigir a correção | A ação `confirmar` só vale para valor lido preenchido e dentro do schema da pergunta (as mesmas checagens da regra 7 da FL-002; no CPF, os 11 dígitos). O CPF com dígito verificador inválido pode ser confirmado e segue para `aguardando_cpf` na conclusão (FL-001, CA-002 exemplo 3). Valor em branco ou fora do schema é recusado com ERR-001 (`campos: acao`): a usuária corrige o valor ou marca em branco, ilegível, rasurado ou não se aplica | Um valor inválido confirmado entraria nos agregados e no cadastro (revisão focada do IMP-003, F-06) | definitivo | Alto | FL-002, CA-006, CA-007, RN-020 |
 | DEC-129 | 05/11/2026 | negócio | Número de chamadas da leitura com falha (Q-035) | 3 chamadas no total; 1 chamada e 3 retentativas | No máximo 3 chamadas por página e grupo de envio: a primeira e duas retentativas, em 1 e 2 s; na 3ª falha, a aplicação vai para `erro_leitura` (ERR-041) | Alinha o código ao CA-041 ("falhou em 3 tentativas") e evita uma chamada paga a mais (revisão focada do IMP-003, F-11) | definitivo | Médio | CA-041, ERR-041, RF-007 |
+| DEC-132 | 05/11/2026 | negócio | Criação de formulário a partir de um formulário existente (Change Request de 05/11/2026) | Só cadastro manual; importação por imagem com IA | A usuária envia um formulário que já existe (imagem ou PDF) e a IA lê a estrutura: enunciados, tipos, opções, linhas de matriz e faixas. O resultado é um formulário novo, com a versão 1 em rascunho, que a usuária cura no editor antes de publicar (RF-011, RN-049). O PDF de coleta é sempre o gerado pelo sistema (CA-028): papéis no layout original não são lidos. A importação não cria versão nova de formulário existente e não substitui a DEC-016 | Agilizar o cadastro de formulários que já existem em papel; escolha do responsável para a próxima etapa (CHG-014) | definitivo | Alto | RF-011, RF-004, RN-049, DEC-016, CA-045 |
+| DEC-133 | 05/11/2026 | negócio | Formulário enviado à importação (Q-037) | Só em branco ou com dados fictícios; também preenchido com dados reais | Só formulário em branco ou preenchido com dados fictícios. A usuária declara isso a cada envio (`sem_dados_reais`); sem a declaração, ERR-001. Como a página inteira vai ao provedor, a importação é a única exceção à RN-038 e não se sujeita à RN-039, válida só para esse modelo sem dado pessoal, que por isso não depende do GX-001 (RN-033, RN-041); o extrator é instruído a ignorar o que estiver escrito à mão | A página inteira com nome, CPF e saúde juntos violaria a RN-038 e a RN-039 e exigiria o GX-001 (CHG-014) | definitivo | Alto | RN-033, RN-038, RN-039, RN-041, RN-049, GX-001, DEC-119 |
+| DEC-134 | 05/11/2026 | negócio | Os 5 campos obrigatórios no formulário importado (Q-038) | Reconhecer no original e injetar o que faltar; sempre injetar os 5 | A pergunta do original equivalente a nome, data de nascimento, CPF, data ou local da aplicação recebe o código, o tipo e a marcação padrão da RN-050, mantendo o enunciado do original; o campo que não for reconhecido é injetado. Nenhum dos 5 fica duplicado. Como a equivalência é decidida: DEC-144 | Evita perguntas repetidas no PDF (CHG-014) | definitivo | Médio | RN-017, RN-050, CA-046 |
+| DEC-135 | 05/11/2026 | negócio | Os 5 campos obrigatórios no rascunho criado à mão (Q-039) | Injetar em todo rascunho novo; só na importação | Todo rascunho novo sem cópia (`createForm`, `createVersion` sem versão de origem e importação) já nasce com os 5 campos da RN-050. No rascunho eles podem mudar de enunciado, ordem e página, mas não podem ser removidos (ERR-001); código, tipo, marcação e obrigatoriedade são reaplicados pelo sistema (DEC-145). O ERR-036 continua como proteção na publicação | A usuária não precisa lembrar dos campos da RN-017 (CHG-014) | definitivo | Médio | RN-017, RN-050, RF-004, CA-048, ERR-036 |
+| DEC-136 | 05/11/2026 | negócio | Arquivo e custo da importação (Q-040) | Mesmos tipos e limites do upload, com custo no teto; com TIFF; fora do teto | Os tipos e limites de arquivo do upload (DEC-029, acompanhando suas mudanças), com no máximo 50 páginas no envio, varredura de malware e remoção de metadados, como no RF-006 (ERR-029). Cada página lida conta no teto de custo de IA do tenant (RN-036); com o teto atingido, a importação fica em `aguardando_cota` até a cota voltar | Um só conjunto de regras de arquivo e de custo (CHG-014) | definitivo | Médio | DEC-029, DEC-035, RN-036, CA-047 |
+| DEC-137 | 05/11/2026 | negócio | Dados do ciclo de coleta no projeto (Q-041) | Texto e datas; tudo texto livre; deixar para depois | O projeto ganha `objetivo` (texto), `coordenador` (nome) e `coleta_inicio` e `coleta_fim` (datas), todos opcionais; `coleta_fim` antes de `coleta_inicio` → ERR-001. O nome do coordenador é dado pessoal: não vai à IA, não entra em log e a alteração é auditada sem o valor (RN-027, RN-028). Os quatro campos podem ser apagados (`null`); apagar o coordenador é como se atende a um pedido dele de eliminação; restauração de backup: DEC-148 | Etapa 3 do Change Request (CHG-014) | definitivo | Baixo | RF-003, ENT-004, CA-049 |
+| DEC-138 | 05/11/2026 | negócio | Sensibilidade das perguntas importadas (Q-042) | A IA sugere saúde ou outro; sempre o padrão | As perguntas importadas que não são campos de identificação recebem a sensibilidade padrão `saude` (ENT-007), sem sugestão da IA; a usuária pode mudar para `outro` na curadoria. Os campos de identificação seguem a RN-047 (DEC-097) | O sistema é usado só para teste e aprendizado (DEC-119), e `saude` é o padrão mais protetor (CHG-014) | definitivo | Baixo | RN-039, RN-047, DEC-097 |
+| DEC-139 | 05/11/2026 | negócio | Regras de salto do formulário importado (Q-043) | Só na curadoria; a IA sugere | A importação não cria regras de salto, mesmo que o original traga instruções como "se Não, pule para a 7"; a usuária as configura no rascunho (RN-021, DEC-095) | Evita regra errada criada sem aviso (CHG-014) | definitivo | Baixo | RN-021, DEC-011, DEC-095 |
+| DEC-143 | 05/11/2026 | negócio | Pergunta que não cabe na página do PDF (Q-044) | Recusar e apontar; mover para a página seguinte | A gravação do rascunho (`updateVersion`) com pergunta que não cabe na sua página, pela mesma medida de altura do PDF, é recusada com ERR-001, com os códigos das perguntas em `campos`; a publicação também confere e recusa com ERR-036, com os códigos em `campos` (DEC-096). Na importação, a pergunta mais alta que uma página inteira é descartada com aviso `nao_cabe` (RN-049) | Hoje a pergunta que passa do rodapé sai fora da folha, sem erro (PLANO §12.3, F-20) (CHG-014) | definitivo | Médio | RF-004, RN-049, CA-028, CA-047, CA-048, ERR-036 |
+| DEC-144 | 05/11/2026 | negócio | Como a importação reconhece os 5 campos obrigatórios (Q-045) | A IA indica e a primeira vence; lista fixa de termos | O extrator devolve, por pergunta, `campo_padrao`: qual dos 5 campos da RN-050 ela é, ou nenhum. A primeira pergunta, na ordem do original, com cada `campo_padrao` vira esse campo, com o tipo da RN-050; as seguintes com o mesmo `campo_padrao` ficam como perguntas comuns, com aviso `campo_repetido` | Reconhece variações como "Nome do entrevistado", que uma lista fixa não pega (CHG-014) | definitivo | Médio | RN-049, RN-050, DEC-134, CA-046 |
+| DEC-145 | 05/11/2026 | negócio | Campos da RN-050 gravados com código, tipo ou obrigatoriedade diferentes (Q-046) | Corrigir sozinho; recusar | A cada gravação do rascunho, o sistema reaplica à pergunta de cada marcação o código, o tipo, `obrigatorio = true` e a sensibilidade da RN-050, sem recusar, como a RN-047 faz com a sensibilidade. Só a falta de uma das 5 marcações, a marcação repetida ou um dos 5 códigos usado sem a marcação são recusados com ERR-001. A versão criada por cópia também é padronizada | Os dados ficam padronizados sem a tela precisar enviar tudo certo (CHG-014) | definitivo | Médio | RN-050, RN-047, DEC-135, CA-048 |
+| DEC-146 | 05/11/2026 | negócio | Criar formulário em projeto arquivado (Q-047) | Permitir; recusar | `createForm` e `importForm` em projeto arquivado são recusados com ERR-001 (`campos`: `projeto`), como o upload (CA-027). A importação já enviada segue até o fim mesmo que o projeto seja arquivado depois, como a DEC-098 faz com as páginas | Projeto arquivado não recebe cadastro novo (CHG-014) | definitivo | Baixo | RF-004, RF-011, CA-027, CA-047, CA-048, DEC-098 |
+| DEC-147 | 05/11/2026 | negócio | Código reservado em pergunta comum na cópia de versão antiga (Q-048) | Renomear com sufixo; recusar a cópia | Na criação por cópia, a pergunta sem marcação cujo código é um dos reservados da RN-050 ganha o sufixo `_2`, `_3` e assim por diante, como na RN-049, antes de a pergunta marcada receber o código padrão | A cópia sempre funciona, sem trabalho manual (revisão focada da CHG-014, S-03) | definitivo | Baixo | RN-050, DEC-145, CA-048 |
+| DEC-148 | 05/11/2026 | negócio | Nome do coordenador apagado e restauração de backup (Q-049) | Aceitar o risco; reaplicar após o restore | Risco aceito: a restauração de um backup anterior traz de volta o nome do coordenador apagado, que a usuária apaga de novo; o nome não tem retenção própria e não entra na ListaEliminacoes | Nome da equipe, num sistema usado só para teste (DEC-119) (revisão focada da CHG-014, S-06) | definitivo | Baixo | DEC-137, DEC-120, RN-031 |
+| DEC-149 | 05/11/2026 | negócio | Endereço e aplicador no formulário importado (Q-050) | A IA também reconhece; aceitar o risco | O `campo_padrao` da importação aceita também `endereco` e `aplicador`: a pergunta reconhecida recebe a marcação (`campo_respondente = endereco` ou `campo_aplicacao = aplicador`), o código ENDERECO ou APLICADOR, o tipo `texto_curto` e a sensibilidade `identificacao` (RN-047). Esses dois não são obrigatórios nem injetados | Endereço é identificação (RN-039) e não pode ir à IA junto com saúde (revisão focada da CHG-014, S-16) | definitivo | Médio | RN-039, RN-047, RN-049, DEC-097, DEC-144 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -281,7 +299,7 @@ RN-016 — Data e local da aplicação
 Todo formulário impresso DEVE trazer os campos "local" e "data da aplicação", lidos como os demais. Se o formulário não tiver esses campos ou vierem em branco, o digitalizador os informa; sem data e local, a aplicação NÃO é concluída.
 
 RN-017 — Campos obrigatórios na publicação
-Uma versão só PODE ser publicada se tiver perguntas marcadas como nome, data de nascimento e CPF do respondente (`campo_respondente`; o CPF com o tipo "CPF"), e como data e local da aplicação (`campo_aplicacao`).
+Uma versão só PODE ser publicada se tiver perguntas marcadas como nome, data de nascimento e CPF do respondente (`campo_respondente`; o CPF com o tipo "CPF"), e como data e local da aplicação (`campo_aplicacao`). Todo rascunho novo sem cópia já nasce com essas perguntas (RN-050, DEC-135).
 
 RN-018 — Código estável de pergunta
 Toda pergunta DEVE ter um código estável (ex.: `ESTADO_CIVIL`). É ele que permite comparar o mesmo dado entre formulários e versões diferentes.
@@ -329,7 +347,7 @@ RN-032 — Provedor de IA sem retenção (RNF-010)
 Provedor de IA sem retenção e sem uso dos dados para treino, com contrato (DPA).
 
 RN-033 — Dados guardados no notebook (RNF-011, DEC-111)
-Dados guardados só no notebook. O provedor de IA PODE processar os recortes fora do Brasil; isso é transferência internacional, liberada só após o parecer jurídico (GX-001) e o contrato com o provedor.
+Dados guardados só no notebook. O provedor de IA PODE processar os recortes fora do Brasil; isso é transferência internacional, liberada só após o parecer jurídico (GX-001) e o contrato com o provedor. As páginas de formulário-modelo da importação (RN-049) também vão ao provedor e podem ser processadas fora do Brasil, mas não contêm dado pessoal (DEC-133) e não dependem do GX-001.
 
 RN-034 — Acessibilidade (RNF-012)
 Acessibilidade WCAG 2.2 AA nas telas.
@@ -344,16 +362,16 @@ RN-037 — Injeção de instrução pela imagem
 A resposta da IA DEVE ser sempre validada contra o schema do formulário, e a IA NUNCA executa ações nem acessa outros dados.
 
 RN-038 — Minimização do que vai para a IA
-Só os recortes dos campos são enviados ao provedor, nunca a página inteira, e o cabeçalho de identificação NUNCA vai na mesma chamada que os campos de saúde.
+Só os recortes dos campos são enviados ao provedor, nunca a página inteira, e o cabeçalho de identificação NUNCA vai na mesma chamada que os campos de saúde. Única exceção: a importação de formulário (RN-049) envia a página inteira de um modelo em branco ou com dados fictícios, declarado pela usuária (DEC-133).
 
 RN-039 — Chamadas separadas
-Os campos de identificação (nome, CPF, endereço) e os de saúde são enviados em chamadas separadas, sem o identificador do respondente. O agrupamento usa `Pergunta.sensibilidade`: `identificacao` vai sempre sozinha; `saude` e `outro` podem ir juntas.
+Os campos de identificação (nome, CPF, endereço) e os de saúde são enviados em chamadas separadas, sem o identificador do respondente. A importação de formulário (RN-049) não se sujeita a esta regra porque a página do modelo não tem dado pessoal (DEC-133). O agrupamento usa `Pergunta.sensibilidade`: `identificacao` vai sempre sozinha; `saude` e `outro` podem ir juntas.
 
 RN-040 — Metadados removidos
 Metadados das imagens, incluindo GPS das fotos de celular, são removidos no upload (CA-029).
 
 RN-041 — Papéis LGPD
-Controlador: a instituição (tenant), dona do notebook. Operador: o provedor de IA, nos recortes enviados. Base legal: cabe ao tenant (consentimento específico e destacado ou tutela da saúde). O sistema registra a evidência do consentimento por aplicação.
+Controlador: a instituição (tenant), dona do notebook. Operador: o provedor de IA, nos recortes enviados (as páginas de formulário-modelo da importação não têm dado pessoal, DEC-133). Base legal: cabe ao tenant (consentimento específico e destacado ou tutela da saúde). O sistema registra a evidência do consentimento por aplicação.
 
 RN-042 — Versão publicada imutável
 Versão publicada DEVE ser imutável; alterações criam nova versão em rascunho.
@@ -376,9 +394,44 @@ Senha de 10 a 72 caracteres, com minúscula, maiúscula e dígito, fora da lista
 RN-046 — Conjunto-ouro e limites por domínio
 O conjunto-ouro e os limites de confiança SÃO por domínio. O conjunto-ouro do MinhaPesquisa (formulários de pesquisa, público 60+) NÃO serve para o MeuRemedio (receitas médicas). Cada domínio DEVE ter seu próprio gabarito humano e suas próprias metas de erro silencioso.
 
+RN-049 — Importação de formulário (DEC-132, DEC-133, DEC-136, DEC-138, DEC-139, DEC-143, DEC-144, DEC-146)
+Entradas: o projeto, ativo (arquivado → ERR-001, DEC-146); o nome do formulário novo; a declaração `sem_dados_reais` (sem ela, ERR-001); e um ou mais arquivos nos tipos e limites da DEC-029, com no máximo 50 páginas no envio, varredura de malware e remoção de metadados como no RF-006 (ERR-029). As páginas são lidas na ordem do envio. O extrator é instruído a devolver só o que está impresso e a ignorar respostas e marcas feitas à mão; a garantia de que não há dado pessoal é a declaração da usuária (DEC-133). Por pergunta, o extrator devolve: enunciado; tipo (um dos 10 do ENT-007, ou desconhecido); rótulos das opções; linhas de matriz; faixa, em escala e número; e `campo_padrao`, um dos 5 campos da RN-050, `endereco`, `aplicador` ou nenhum (DEC-144, DEC-149). A saída é validada contra esse formato (RN-037); saída fora do formato conta como falha da chamada, com as mesmas retentativas (FL-004). Primeiro, a pergunta com `campo_padrao` é tratada pelo passo 1 abaixo; as demais são ajustadas pela tabela; cada ajuste gera um aviso com a página e a posição no original, sem texto lido. Os avisos ficam em ordem de página e posição.
+
+| Pergunta lida | Resultado | Aviso |
+|---|---|---|
+| Enunciado vazio | descartada | `descartada` |
+| Tipo desconhecido | entra como `texto_curto` | `tipo_incerto` |
+| `escolha_unica` ou `multipla_escolha` sem opção | entra como `texto_curto` | `tipo_incerto` |
+| `matriz` sem linhas ou sem opções | entra como `texto_curto` | `tipo_incerto` |
+| `escala` sem faixa | entra como `numero`, sem faixa | `tipo_incerto` |
+| Enunciado com mais de 2000 caracteres, ou rótulo de opção ou linha com mais de 200 | cortado no limite | `texto_cortado` |
+| Opção ou linha com rótulo vazio | a opção ou linha é descartada; se a pergunta ficar sem opção ou sem linha, segue as linhas acima | `tipo_incerto` |
+| `sim_nao` | opções trocadas pelas fixas `sim` e `nao` (RN-047) | — |
+| `multipla_escolha` sem opção de código `nenhuma_das_anteriores` | ganha a opção "Nenhuma das anteriores" no fim (RN-047) | — |
+| `campo_padrao` já usado por pergunta anterior | fica como pergunta comum (DEC-144) | `campo_repetido` |
+| Mais alta que a área útil de uma página do PDF sem o termo de consentimento (página 2 em diante) | descartada (DEC-143) | `nao_cabe` |
+
+Em seguida, o sistema:
+1. aplica a RN-050: a primeira pergunta com cada `campo_padrao` vira esse campo, com o código, o tipo e a marcação da tabela da RN-050 (ou, para `endereco` e `aplicador`, os da DEC-149), mesmo com enunciado vazio, que então recebe o enunciado padrão; as opções, linhas e faixa lidas para ela são descartadas, sem aviso; os 5 campos que faltarem são injetados; os códigos usados nesse passo ficam reservados;
+2. gera os códigos das demais perguntas, opções e linhas pela transformação T: só no enunciado, tira a numeração do início (dígitos seguidos de `.`, `)` ou `-`, como em "1." e "3)"); tira os acentos ("ç" vira "c"); troca cada sequência de caracteres que não são letra de A a Z (maiúscula ou minúscula) nem dígito por `_`; tira `_` do início e do fim; corta em 40 caracteres e tira de novo `_` do fim. Pergunta em maiúsculas (RN-018); opção e linha em minúsculas (RN-019). Resultado vazio vira `P<página>_<posição>` na pergunta e `opcao_<ordem>` ou `linha_<ordem>` na opção e na linha. Código de pergunta já usado na versão (inclusive os reservados no passo 1), ou de opção já usado nas opções da mesma pergunta, ou de linha já usado nas linhas da mesma pergunta, ganha o sufixo `_2`, `_3` e assim por diante, na ordem do original, cortando antes o necessário para caber em 40 caracteres;
+3. atribui sensibilidade `saude` às perguntas que não são da RN-050 (DEC-138) e não cria regras de salto (DEC-139);
+4. distribui as perguntas pelas páginas do PDF do sistema: os 5 campos no início da página 1, na ordem da tabela da RN-050, e depois as demais na ordem do original, enchendo cada página até a altura disponível (mesma medida da DEC-143).
+O resultado é um formulário novo no projeto, com a versão 1 em `rascunho`, e a lista de avisos. Se nenhuma pergunta lida entrar na versão (as reconhecidas no passo 1 contam; as injetadas não), a importação falha (ERR-044) e nada é criado. Cada página lida conta no teto de custo de IA (RN-036). O arquivo enviado é apagado quando a importação termina, com sucesso ou falha.
+
+RN-050 — Campos obrigatórios padronizados (DEC-134, DEC-135, DEC-145)
+Todo rascunho tem exatamente uma pergunta para cada marcação da tabela abaixo. O rascunho novo sem cópia (`createForm`, `createVersion` sem versão de origem e importação) nasce com as 5 no início da página 1, na ordem da tabela; na importação, a pergunta reconhecida mantém o enunciado do original (DEC-144) e as que faltarem vêm com o enunciado padrão. Na criação por cópia, a pergunta sem marcação com um dos 5 códigos ganha sufixo (DEC-147), as perguntas da origem com essas marcações são padronizadas como abaixo, e as que faltarem são injetadas no início da página 1. A cada gravação do rascunho (`updateVersion`), o sistema reaplica à pergunta de cada marcação o código, o tipo, `obrigatorio = true` e a sensibilidade da tabela, sem recusar (DEC-145); enunciado, ordem e página são da usuária. A reaplicação vem antes das demais validações da gravação, inclusive a das regras de salto (DEC-095). É recusado com ERR-001, com todas as violações juntas em `campos` (na ordem da tabela e depois na ordem das perguntas): o conteúdo sem a pergunta de uma das marcações (`campos`: os códigos da tabela que faltam); duas perguntas com a mesma marcação (`campos`: o código da tabela); e pergunta sem a marcação com um dos 5 códigos (`campos`: esse código). No rascunho criado antes da v2.4, a próxima gravação segue estas mesmas regras (reaplicação e recusa), sem injetar o que falta; até lá, a publicação continua protegida pela RN-017 (ERR-036, CA-036). Aqui `campos` traz os códigos da tabela; no ERR-036 da publicação, traz as marcações (`data_aplicacao`, CA-036).
+
+| Código | Tipo | Enunciado padrão | Marcação | Sensibilidade |
+|---|---|---|---|---|
+| NOME | texto_curto | Nome completo | `campo_respondente = nome` | identificacao (RN-047) |
+| DATA_NASCIMENTO | data | Data de nascimento | `campo_respondente = data_nascimento` | identificacao (RN-047) |
+| CPF | cpf | CPF | `campo_respondente = cpf` | identificacao (RN-047) |
+| DATA_APLICACAO | data | Data da aplicação | `campo_aplicacao = data_aplicacao` | outro |
+| LOCAL_APLICACAO | texto_curto | Local da aplicação | `campo_aplicacao = local_aplicacao` | outro |
+
 5. Modelo e dicionário de dados
 
-5.1 Diagrama conceitual (13 entidades principais; 30 no total com as de apoio)
+5.1 Diagrama conceitual (13 entidades principais; 31 no total com as de apoio)
 
 ```
 Tenant 1──* Usuario *──* Perfil (via UsuarioPerfil)
@@ -399,7 +452,8 @@ ParametroConfiguracao (tenant, plataforma, projeto)
                                               │
 PedidoTitular, ListaEliminacoes, HistoricoStatusProjeto
 ConcessaoAcessoIndividual, Auditoria, UsuarioPerfil, HistoricoAtributoRespondente,
-LinhaMatriz, PaginaAplicacao, Exportacao, Sessao, TokenUsoUnico, ChaveIdempotencia, FalhaLogin
+LinhaMatriz, PaginaAplicacao, Exportacao, Sessao, TokenUsoUnico, ChaveIdempotencia, FalhaLogin,
+ImportacaoFormulario
 ```
 
 5.2 Dicionário de dados completo (11 propriedades em 100% dos campos)
@@ -449,6 +503,10 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | tenant_id | tenant do projeto | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
 | nome | nome do projeto | varchar | sim | 200 | — | — | — | não | — | não |
 | descricao | descrição | text | não | 5000 | — | — | NULL | não | — | não |
+| objetivo | objetivo metodológico do ciclo de coleta (DEC-137) | text | não | 5000 | — | — | NULL | não | — | não |
+| coordenador | nome do coordenador técnico (DEC-137); não vai à IA nem a log | varchar | não | 200 | — | — | NULL | não | — | pessoal |
+| coleta_inicio | início previsto da coleta (DEC-137) | date | não | — | YYYY-MM-DD | — | NULL | não | — | não |
+| coleta_fim | fim previsto da coleta; não pode ser anterior a `coleta_inicio` (DEC-137) | date | não | — | YYYY-MM-DD | ≥ coleta_inicio | NULL | não | — | não |
 | status | status do projeto | enum | sim | — | — | ativo; arquivado | ativo | não | — | não |
 | criado_em | data de criação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 
@@ -836,6 +894,24 @@ Linha a linha contém dados pessoais em repouso: cancelada e apagada na elimina�
 
 Sem `tenant_id`: o login acontece antes de conhecer o tenant (DEC-054). ENT-030 só é acessada pela função de login. ENT-027 e ENT-028 são localizadas pelo hash do cookie ou do token por funções SECURITY DEFINER mínimas (login, tokens e resolução de sessão); depois de definido o tenant, leituras e escritas seguem pela RLS normal (PLANO §4.7, DEC-046).
 
+**ENT-031 ImportacaoFormulario**
+
+| campo | significado | tipo | obrig | tamanho | formato | valores | padrão | único | FK | LGPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| id | identificador da importação | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
+| tenant_id | tenant | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
+| projeto_id | projeto que recebe o formulário | uuid | sim | 36 | UUID v4 | — | — | não | Projeto.id | não |
+| nome_formulario | nome do formulário a criar | varchar | sim | 200 | — | — | — | não | — | não |
+| estado | situação da importação (FL-004) | enum | sim | — | — | enfileirada; aguardando_cota; em_andamento; concluida; falhou | enfileirada | não | — | não |
+| total_paginas | páginas do envio | int | sim | — | — | 1..50 | — | não | — | não |
+| chave_storage | pasta dos arquivos enviados (NULL depois de apagados, RN-049) | varchar | não | 500 | — | — | NULL | não | — | não |
+| formulario_id | formulário criado (só em concluida) | uuid | não | 36 | UUID v4 | — | NULL | não | Formulario.id | não |
+| avisos | ajustes da RN-049 por página e posição no original, sem texto lido | jsonb | não | — | JSON | — | NULL | não | — | não |
+| criada_em | data do pedido | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
+| concluida_em | data em que terminou (concluida ou falhou) | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
+
+O arquivo enviado é um modelo sem dado pessoal (DEC-133) e é apagado ao fim da importação; a eliminação do titular não alcança esta entidade.
+
 5.4 Formato canônico de valores (valor_ia e valor_final)
 
 | Tipo de pergunta | Formato | Exemplo |
@@ -880,7 +956,7 @@ Estado final: autenticado ou bloqueado.
 Quem executa: A usuária.
 Quando pode: Sempre que tiver sessão.
 Quando não pode: Quando tenta criar projeto em outro tenant.
-Entradas: nome e descrição (criação e alteração).
+Entradas: nome e descrição; opcionalmente objetivo, coordenador e início e fim da coleta (DEC-137) (criação e alteração).
 Sucesso: projeto criado com status `ativo`.
 Erro e timeout: ERR-001 (validação), ERR-002 (recurso não encontrado), ERR-016 (sem permissão).
 Registros alterados: Projeto, HistoricoStatusProjeto, Auditoria.
@@ -890,8 +966,8 @@ Estado final: projeto ativo ou arquivado, reversível.
 **RF-004 — Cadastro de formulários, versões, perguntas, opções e regras de salto, e geração do PDF**
 Quem executa: A usuária.
 Quando pode: Quando o formulário está em rascunho.
-Quando não pode: Quando a versão está publicada (imutável); quando faltam campos obrigatórios (nome, nascimento, CPF, data e local da aplicação).
-Entradas: dados do formulário, perguntas, opções, regras de salto.
+Quando não pode: Quando a versão está publicada (imutável); quando faltam campos obrigatórios (nome, nascimento, CPF, data e local da aplicação); criar formulário em projeto arquivado (ERR-001, DEC-146); pergunta que não cabe na página (DEC-143).
+Entradas: dados do formulário, perguntas, opções, regras de salto. O rascunho novo sem cópia já traz os 5 campos da RN-050 (DEC-135).
 Sucesso: versão publicada, PDF gerado com QR code por página.
 Erro e timeout: ERR-001 (validação), ERR-036 (campos obrigatórios ausentes), ERR-009 (versão publicada é imutável), timeout de 30 s na geração do PDF.
 Registros alterados: Formulario, Versao, Pergunta, Opcao, RegraSalto, Auditoria.
@@ -965,6 +1041,17 @@ Registros alterados: Auditoria, PedidoTitular (se for direito do titular).
 Mensagens: "Exportação concluída" ou "Pedido do titular executado".
 Estado final: arquivo disponível ou pedido executado.
 
+**RF-011 — Criação de formulário por importação, campos obrigatórios padronizados e ciclo de coleta (CHG-014)**
+Quem executa: A usuária; a leitura da estrutura é feita pelo worker assíncrono.
+Quando pode: Com sessão e o projeto ativo; o arquivo é um formulário em branco ou com dados fictícios (DEC-133).
+Quando não pode: Projeto arquivado (ERR-001, DEC-146); sem a declaração `sem_dados_reais` (ERR-001); arquivo fora da RN-049 (ERR-029).
+Entradas: projeto, nome do formulário, arquivo(s) e a declaração `sem_dados_reais`.
+Sucesso: formulário novo com a versão 1 em rascunho (RN-049), com os 5 campos da RN-050, pronto para a curadoria no editor (TL-004). O RF-011 também responde pelos campos padronizados em todo rascunho (RN-050, DEC-135, DEC-145), pela verificação de altura das perguntas (DEC-143), pela recusa de formulário novo em projeto arquivado (DEC-146) e pelos dados do ciclo de coleta do projeto (DEC-137); esses usam as operações do RF-003 e do RF-004 (`createProject`, `updateProject`, `createForm`, `createVersion`, `updateVersion`, `publishVersion`).
+Erro e timeout: ERR-001 (validação), ERR-029 (arquivo recusado), ERR-003 (aviso de cota, importação em `aguardando_cota`), ERR-044 (falha da importação); timeout de 60 s por chamada à IA, com 3 chamadas por página no total (seção 6.6).
+Registros alterados: ImportacaoFormulario, Formulario, Versao, Pergunta, Opcao, LinhaMatriz, Projeto, Auditoria.
+Mensagens: "Formulário importado" ou a mensagem do ERR-044.
+Estado final: importação em `concluida` (formulário em rascunho) ou `falhou` (nada criado).
+
 6.2 Requisitos não funcionais (RNF)
 
 Ver seção 4.2 (RN-023 a RN-036) para os detalhes de verificação de cada RNF.
@@ -1006,6 +1093,7 @@ Para cada tela, os estados obrigatórios (Bloco P, P.11): carregando, vazio, suc
 | TL-012 | Direitos do titular | carregando, vazio, sucesso (pedido executado), erro, sem permissão, tempo esgotado |
 | TL-013 | Retirada na v2.1 (sem usuários, perfis e concessões, DEC-109) | — |
 | TL-014 | Retirada na v2.1 (sem convite nem link de recuperação, DEC-108) | — |
+| TL-015 | Importação de formulário | carregando, vazio (nenhuma importação no projeto), sucesso (lista das importações do projeto; a concluída leva ao formulário em rascunho, com os avisos), erro (arquivo recusado ou importação falhou), sem permissão, tempo esgotado; aguardando cota (aviso do ERR-003) |
 
 6.4 Máquinas de estado
 
@@ -1146,12 +1234,26 @@ Timeout e retentativa: não aplicável (estados finais de revisão são ações 
 
 Execução por tipo: `acesso` e `portabilidade` geram CSV ou JSON (CA-024); `correcao` aplica ao Respondente as correções informadas no pedido (atributo e novo valor), com auditoria e registro em HistoricoAtributoRespondente; `eliminacao` segue o CA-023. Executar em `em_andamento`, `concluido` ou `cancelado` → ERR-018.
 
+**FL-004 — Estado da importação de formulário (ENT-031)**
+
+| Estado atual | Evento | Condição | Ação | Próximo estado | Quem dispara |
+|---|---|---|---|---|---|
+| — | usuária envia o arquivo | projeto ativo, arquivo e declaração válidos (RN-049) | grava o arquivo, cria uma tarefa por página, enfileira | enfileirada | usuária |
+| enfileirada / aguardando_cota | tarefa começa | cota disponível | reserva o custo da página antes da chamada (RN-036) | em_andamento | sistema (job) |
+| enfileirada / em_andamento | reserva recusada | teto atingido | suspende as tarefas restantes; as páginas já lidas são mantidas; retoma quando a cota voltar (virada do mês ou teto maior), sem cancelamento pela usuária | aguardando_cota | sistema (job) |
+| em_andamento | todas as páginas lidas | ao menos uma pergunta aproveitada | cria o formulário e a versão 1 em rascunho (RN-049, RN-050), apaga o arquivo, audita | concluida | sistema (job) |
+| em_andamento | todas as páginas lidas | nenhuma pergunta aproveitada | apaga o arquivo, audita (ERR-044) | falhou | sistema (job) |
+| enfileirada / em_andamento / aguardando_cota | 3ª falha na mesma página (chamada, ou página que não se lê do disco ou não se converte em imagem) | — | cancela as tarefas restantes, libera as reservas não usadas, apaga o arquivo, audita (ERR-044) | falhou | sistema (job) |
+| concluida / falhou | — | estados finais; para tentar de novo, a usuária envia o arquivo outra vez | — | — | — |
+
+O arquivamento do projeto depois do envio não interrompe a importação (DEC-146).
+
 6.5 Concorrência e idempotência
 
 | Situação | Tratamento |
 |---|---|
 | Edição simultânea de aplicação (duas abas) | Sem reserva (DEC-112); ETag/If-Match obrigatório, divergência → ERR-017 |
-| Clique duplo em upload e em mutações críticas | Header `Idempotency-Key` obrigatório em todas as operações que o contrato declara com ele (upload, identificação, conclusão, assinatura, nova leitura, descarte, reabertura, grupo, exportação e pedidos do titular; reuso com conteúdo diferente → ERR-019 |
+| Clique duplo em upload e em mutações críticas | Header `Idempotency-Key` obrigatório em todas as operações que o contrato declara com ele (upload, importação de formulário, identificação, conclusão, assinatura, nova leitura, descarte, reabertura, grupo, exportação e pedidos do titular; reuso com conteúdo diferente → ERR-019 |
 | Edição concorrente de projeto, versão em rascunho e revisão | ETag/If-Match obrigatório; divergência → ERR-017 |
 | Requisição repetida de leitura | Deduplicação por `aplicacao_id` + `pagina` no worker |
 | Queda de rede no meio da operação | Outbox transacional (pg-boss) garante entrega |
@@ -1162,6 +1264,7 @@ Execução por tipo: `acesso` e `portabilidade` geram CSV ou JSON (CA-024); `cor
 | Chamada | Timeout | Retentativa | Estado final de falha |
 |---|---|---|---|
 | Provedor de IA (leitura) | 30 s | 1 e 2 s (só idempotente; DEC-129) | erro_leitura após 3 falhas (CA-041) |
+| Provedor de IA (estrutura de uma página na importação, RN-049) | 60 s | 1 e 2 s (3 chamadas por página no total) | importação em `falhou` (ERR-044) |
 | Armazenamento de objetos (upload/download) | 30 s | 1, 2 e 4 s | ERR-020 (nada é gravado) |
 | Geração do PDF imprimível | 30 s | 1, 2 e 4 s | ERR-020; versão permanece como está |
 | Job de exportação e de pedido do titular | 60 s | sem retentativa automática (job enfileirado) | PedidoTitular em `falhou` (FL-003), com auditoria e alerta; exportação em `falhou` |
@@ -1300,7 +1403,7 @@ E uma aplicação futura com o mesmo CPF cria um respondente novo
 | 5 | Nova aplicação com o mesmo CPF após a eliminação | Novo respondente criado, sem vínculo com o anterior |
 
 **US-006 — Como usuária, quero cadastrar projetos para organizar as pesquisas.**
-Relacionado a: RF-003, CA-027
+Relacionado a: RF-003, RF-011, CA-027, CA-049
 
 CA-027 — Ciclo de vida do projeto
 Dado que o administrador do tenant criou o projeto "Saúde Idoso" com status "ativo"
@@ -1372,7 +1475,7 @@ E a pergunta do tipo "CPF" traz 11 caixas, uma por dígito (DEC-105)
 E versão em rascunho não gera PDF
 
 CA-036 — Publicação exige campos obrigatórios
-Dado que a versão 1 do formulário não tem pergunta marcada como "data_aplicacao"
+Dado que a versão 1 do formulário, um rascunho criado antes da v2.4 e ainda não gravado de novo (RN-050), não tem pergunta marcada como "data_aplicacao"
 Quando o administrador tenta publicar
 Então a publicação é recusada com ERR-036
 E a mensagem exibe: "Publicação recusada: faltam [data_aplicacao]"
@@ -1546,6 +1649,84 @@ Então o sistema confere o QR code da versão e da página
 E a assinatura é conferida sem reler os outros campos
 E a aplicação muda para o estado "concluida"
 
+**US-011 — Como usuária, quero criar um formulário a partir de um formulário em papel que já tenho, sem digitar pergunta por pergunta.**
+Relacionado a: RF-011, CA-045, CA-046, CA-047, CA-048
+
+CA-045 — Importação cria o formulário em rascunho
+Dado que o projeto "Saúde 60+" está ativo
+E a usuária envia "questionario.pdf" (2 páginas, em branco) com o nome "Hábitos" e a declaração `sem_dados_reais`
+Quando a importação termina
+Então a importação fica em `concluida` e existe o formulário "Hábitos" com a versão 1 em `rascunho`
+E os 5 campos da RN-050 estão no início da página 1, seguidos das perguntas do original, na ordem do original, com os códigos da RN-049
+E toda pergunta de múltipla escolha tem a opção `nenhuma_das_anteriores`
+E as perguntas que não são da RN-050 têm sensibilidade `saude`, e a versão não tem regra de salto
+E o arquivo enviado foi apagado e a auditoria registra a importação
+
+| Exemplo | Impresso no original | Tipo | Código gerado | Opções ou linhas geradas |
+|---|---|---|---|---|
+| 1 | "Estado civil: ( ) Solteiro ( ) Casado ( ) Viúvo" | escolha_unica | ESTADO_CIVIL | `solteiro`, `casado`, `viuvo` |
+| 2 | "Quais bens possui? [ ] Carro [ ] Geladeira [ ] TV" | multipla_escolha | QUAIS_BENS_POSSUI | `carro`, `geladeira`, `tv`, `nenhuma_das_anteriores` |
+| 3 | "3) Você fuma? ( ) Sim ( ) Não" | sim_nao | VOCE_FUMA | `sim`, `nao` |
+| 4 | Grade "Satisfação com:" com linhas "Moradia" e "Saúde" e colunas "Ruim" e "Boa" | matriz | SATISFACAO_COM | linhas `moradia`, `saude`; opções `ruim`, `boa` |
+| 5 | Outra pergunta impressa como "Estado civil:", depois da do exemplo 1 | escolha_unica | ESTADO_CIVIL_2 | `solteiro`, `casado`, `viuvo` |
+| 6 | "Ações praticadas" com a opção "Caminhada / corrida" | multipla_escolha | ACOES_PRATICADAS | `caminhada_corrida`, `nenhuma_das_anteriores` |
+
+CA-046 — Campos obrigatórios reconhecidos ou injetados
+Dado que o extrator devolve "Nome do entrevistado" com `campo_padrao = nome`, "Data da entrevista" com `campo_padrao = data_aplicacao` e "Nome social" também com `campo_padrao = nome`, nessa ordem, e nenhuma pergunta de data de nascimento, CPF ou local
+Quando a importação termina
+Então "Nome do entrevistado" vira a pergunta NOME (`campo_respondente = nome`, `texto_curto`), com o enunciado do original
+E "Data da entrevista" vira DATA_APLICACAO (`campo_aplicacao = data_aplicacao`, `data`)
+E "Nome social" fica como pergunta comum, com o código NOME_SOCIAL e o aviso `campo_repetido`
+E DATA_NASCIMENTO, CPF e LOCAL_APLICACAO são injetadas com o enunciado padrão da RN-050
+E os 5 campos ficam no início da página 1, na ordem da tabela da RN-050, cada um uma só vez
+E a pergunta CPF é do tipo `cpf`
+
+CA-047 — Envio recusado, cota e falha da importação
+Dado que a usuária está na tela de importação (TL-015)
+Quando envia um arquivo ou a importação é processada
+Então o resultado segue a tabela
+
+| Exemplo | Situação | Resultado esperado | Erro e mensagem exata |
+|---|---|---|---|
+| 1 | Sem a declaração `sem_dados_reais` | Recusado; nada é gravado | ERR-001 — Revise os campos destacados e tente novamente. (`campos`: `sem_dados_reais`) |
+| 2 | modelo.tiff, 3 MB | Recusado; nada é gravado | ERR-029 — Arquivo recusado: tipo de arquivo não permitido. |
+| 3 | Dois PDFs de 30 páginas cada | Recusado; nada é gravado | ERR-029 — Arquivo recusado: excede o limite de 50 páginas. |
+| 4 | Projeto arquivado | Recusado; nada é gravado | ERR-001 — Revise os campos destacados e tente novamente. (`campos`: `projeto`) |
+| 5 | Teto de custo atingido | Importação em `aguardando_cota`; retoma quando a cota voltar, sem chamada à IA antes disso | aviso ERR-003 — O processamento está pausado: o teto mensal de custo de IA foi atingido. |
+| 6 | A IA não devolve nenhuma pergunta aproveitável | Importação em `falhou`; nenhum formulário criado; arquivo apagado | ERR-044 — Não foi possível ler o formulário. Confira o arquivo e tente de novo, ou cadastre as perguntas à mão. |
+| 7 | 3 chamadas falham na página 2 | Importação em `falhou`; tarefas restantes canceladas; nenhum formulário criado; arquivo apagado | ERR-044 — Não foi possível ler o formulário. Confira o arquivo e tente de novo, ou cadastre as perguntas à mão. |
+| 8 | Uma matriz lida é mais alta que uma página inteira | Importação em `concluida`, sem essa pergunta | aviso `nao_cabe` na página e posição da matriz |
+
+CA-048 — Rascunho com os campos obrigatórios padronizados
+Dado que a usuária cria o formulário "Sono" à mão (`createForm`) no projeto ativo "Saúde 60+"
+Quando abre a versão 1 em rascunho e a grava
+Então o resultado segue a tabela
+
+| Exemplo | Ação | Resultado esperado |
+|---|---|---|
+| 1 | Abrir a versão 1 | Tem NOME, DATA_NASCIMENTO, CPF, DATA_APLICACAO e LOCAL_APLICACAO, obrigatórias, no início da página 1, na ordem da RN-050 |
+| 2 | Gravar NOME com o enunciado "Nome do participante" | Aceito, com o enunciado novo |
+| 3 | Gravar a pergunta marcada `campo_respondente = cpf` com tipo `texto_curto`, código `DOC` e sem `obrigatorio` | Aceito; a pergunta fica com código CPF, tipo `cpf` e `obrigatorio = true` (DEC-145) |
+| 4 | Gravar sem a pergunta marcada `campo_respondente = cpf` | Recusado com ERR-001 (`campos`: `CPF`) |
+| 5 | Gravar duas perguntas marcadas `campo_aplicacao = local_aplicacao` | Recusado com ERR-001 (`campos`: `LOCAL_APLICACAO`) |
+| 6 | Gravar pergunta sem marcação com o código NOME | Recusado com ERR-001 (`campos`: `NOME`) |
+| 7 | Gravar uma pergunta que passa do rodapé da página 1 | Recusado com ERR-001 (`campos`: código da pergunta) (DEC-143) |
+| 8 | `createVersion` copiando uma versão publicada cuja pergunta de nome tem o código NOME_RESP | Nova versão com essa pergunta como NOME (RN-050) |
+| 9 | `createForm` no projeto arquivado "Antigo" | Recusado com ERR-001 (`campos`: `projeto`) (DEC-146) |
+
+CA-049 — Dados do ciclo de coleta do projeto
+Dado que o projeto "Saúde 60+" está ativo
+Quando a usuária grava objetivo, coordenador e período de coleta
+Então o resultado segue a tabela
+E a auditoria registra a alteração sem o nome do coordenador (RN-027)
+
+| Exemplo | Operação | coordenador | coleta_inicio | coleta_fim | Resultado esperado |
+|---|---|---|---|---|---|
+| 1 | createProject | "Ana Souza" | 2026-12-01 | 2027-03-31 | Gravado |
+| 2 | createProject | — | 2026-12-01 | — | Gravado |
+| 3 | updateProject | — | 2027-03-31 | 2026-12-01 | Recusado com ERR-001 (`campos`: `coleta_fim`) |
+| 4 | updateProject, num projeto que tinha "Ana Souza" | `null` | — | — | Gravado; o nome é apagado (DEC-137) |
+
 8. Rastreabilidade e catálogo de erros
 
 8.1 Matriz de Rastreabilidade (completa)
@@ -1557,13 +1738,14 @@ A matriz completa é mantida em `registros/matriz_rastreabilidade.csv`, idêntic
 | RF-001 | RN-001, RN-006, RN-007 | ENT-001, ENT-002 | FL-001 | US-010 | CA-012, CA-035, CA-037 | TS-001 | installLocalAccount (interna), resetLocalPassword (interna) | CMP-Auth | IMP-001 |
 | RF-002 | RN-048 | ENT-002, ENT-027, ENT-030 | FL-001 | US-010 | CA-026 | — | login, logout, getCurrentSession | CMP-Auth | IMP-001 |
 | RF-003 | RN-027 | ENT-004, ENT-020, ENT-021 | FL-001 | US-006 | CA-027 | — | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject | CMP-Projects | IMP-002 |
-| RF-004 | RN-017, RN-018, RN-019, RN-021, RN-042, RN-047 | ENT-005, ENT-006, ENT-007, ENT-008, ENT-016, ENT-024 | FL-001 | US-007 | CA-001, CA-028, CA-036 | TS-006 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf | CMP-Forms | IMP-002 |
+| RF-004 | RN-017, RN-018, RN-019, RN-021, RN-042, RN-047, RN-050 | ENT-005, ENT-006, ENT-007, ENT-008, ENT-016, ENT-024 | FL-001 | US-007 | CA-001, CA-028, CA-036 | TS-006 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf | CMP-Forms | IMP-002 |
 | RF-005 | RN-011, RN-012, RN-014, RN-015 | ENT-009, ENT-010 | FL-001, FL-002 | US-003 | CA-002, CA-014, CA-014b, CA-032 | — | linkRespondent (interna) | CMP-Respondents | IMP-003 |
 | RF-006 | RN-040 | ENT-010, ENT-011, ENT-025, ENT-029 | FL-001 | US-001 | CA-003, CA-004, CA-013, CA-029, CA-039, CA-040 | TS-002 | uploadImages, identifyApplication, addApplicationPages, getPageImage | CMP-Upload | IMP-002 |
 | RF-007 | RN-021, RN-037, RN-038, RN-039 | ENT-011 | FL-001, FL-002 | US-002, US-007 | CA-005, CA-006, CA-015, CA-018, CA-019, CA-030, CA-041 | TS-003, TS-007 | processAIReading (interna), getQuotaStatus | CMP-MotorIA | IMP-003 |
 | RF-008 | RN-016, RN-043, RN-044 | ENT-009, ENT-010, ENT-011, ENT-023 | FL-001, FL-002 | US-002, US-003, US-007 | CA-007, CA-008, CA-020, CA-021, CA-033, CA-042, CA-044 | — | listReviewQueue, getApplication, openReview, getItemImage, saveReview, confirmApplication, attachSignaturePage, retryReading, discardApplication, reopenApplication | CMP-Revisao | IMP-003 |
 | RF-009 | RN-026 | ENT-012 | FL-001 | US-004, US-007, US-008 | CA-009, CA-011, CA-017, CA-021, CA-031 | — | getDashboardAggregated, listGroups, createGroup, deleteGroup, findRespondent, getIndividualRecord | CMP-Dashboard | IMP-004 |
 | RF-010 | RN-027, RN-030, RN-031 | ENT-009, ENT-013, ENT-018, ENT-019, ENT-023, ENT-026 | FL-001, FL-003 | US-005, US-009 | CA-021, CA-022, CA-023, CA-024 | TS-005, TS-008 | exportData, getExport, createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, cancelDataSubjectRequest, listAuditEvents | CMP-LGPD | IMP-004 |
+| RF-011 | RN-017, RN-018, RN-019, RN-036, RN-037, RN-038, RN-047, RN-049, RN-050 | ENT-004, ENT-005, ENT-006, ENT-007, ENT-008, ENT-024, ENT-031 | FL-004 | US-006, US-011 | CA-045, CA-046, CA-047, CA-048, CA-049 | — | importForm, listFormImports, getFormImport, extractFormStructure (interna) | CMP-Forms | IMP-006 |
 
 8.2 Catálogo de Erros (ERR)
 
@@ -1571,9 +1753,9 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 
 | err_id | codigo | http_status | quando_ocorre | mensagem_ao_usuario | log_gerado | estado_resultante | requisitos | status |
 |---|---|---|---|---|---|---|---|---|
-| ERR-001 | VALIDATION_FAILED | 400 | Campo obrigatório ausente, formato inválido, regra de negócio violada (inclusive regra de salto inválida, DEC-095, e sensibilidade `identificacao` fora da RN-047, DEC-097) ou upload em projeto arquivado. | Revise os campos destacados e tente novamente. | warn: validation_failed (sem dados pessoais) | Nada é gravado | RF-004, RF-006, CA-027 | ativo |
+| ERR-001 | VALIDATION_FAILED | 400 | Campo obrigatório ausente, formato inválido, regra de negócio violada (inclusive regra de salto inválida, DEC-095; sensibilidade `identificacao` fora da RN-047, DEC-097; violação da RN-050; pergunta que não cabe na página, DEC-143; `coleta_fim` antes de `coleta_inicio`, DEC-137; falta da declaração `sem_dados_reais`, DEC-133) ou upload, criação ou importação de formulário em projeto arquivado (CA-027, DEC-146). | Revise os campos destacados e tente novamente. | warn: validation_failed (sem dados pessoais) | Nada é gravado | RF-003, RF-004, RF-006, RF-011, CA-027, CA-047, CA-048, CA-049 | ativo |
 | ERR-002 | RESOURCE_NOT_FOUND | 404 | Recurso inexistente ou de outro tenant. | O recurso solicitado não existe ou você não tem acesso. | warn: resource_not_found_or_out_of_scope (auditoria acionada) | Nada é gravado | RN-002, CA-012 | ativo |
-| ERR-003 | AI_QUOTA_EXCEEDED | — | Teto de custo de IA do tenant atingido; aviso exibido na tela (estado assíncrono, não é resposta HTTP de erro). | O processamento está pausado: o teto mensal de custo de IA foi atingido. | info: ai_quota_exceeded (tenant_id) | Aplicação em `aguardando_cota` | RF-007, CA-030, DEC-035 | ativo |
+| ERR-003 | AI_QUOTA_EXCEEDED | — | Teto de custo de IA do tenant atingido; aviso exibido na tela (estado assíncrono, não é resposta HTTP de erro). | O processamento está pausado: o teto mensal de custo de IA foi atingido. | info: ai_quota_exceeded (tenant_id) | Aplicação ou importação de formulário em `aguardando_cota` | RF-007, RF-011, CA-030, CA-047, DEC-035 | ativo |
 | ERR-004 | INVALID_QR_CODE | 400 | QR ilegível ou ausente, registro da imagem impossível, ou páginas faltantes, repetidas ou excedentes. | Não foi possível identificar o formulário nesta página. Informe manualmente. | warn: qr_invalid_or_missing | Aplicação em `identificacao_pendente` | RF-006, CA-004, CA-013, CA-040 | ativo |
 | ERR-005 | RESERVATION_EXPIRED | 409 | Descontinuado pela CHG-002: duplicava o ERR-043 (também descontinuado, CHG-011). | Descontinuado. | — | — | CHG-002 | descontinuado |
 | ERR-006 | MISSING_MANDATORY_FIELDS | 400 | Tentativa de concluir aplicação sem nome, data de nascimento, CPF válido, data ou local, ou com um deles ilegível, rasurado ou marcado como não se aplica (DEC-020, DEC-079). | A aplicação não pode ser concluída sem nome, data de nascimento, CPF válido, data e local da aplicação. | warn: missing_mandatory_fields | CPF ausente ou inválido: sucesso com este aviso e estado `aguardando_cpf`; demais campos: nada é gravado, permanece em `em_revisao` | RF-005, RF-008, CA-032 | ativo |
@@ -1595,11 +1777,12 @@ Formato Problem Details (RFC 9457). Mensagens exatas em pt-BR. Sem stack trace o
 | ERR-022 | ITEMS_UNRESOLVED | 400 | Tentativa de concluir com itens em `pendente_leitura`, `aguardando_condicao` ou `a_revisar`. | Ainda há campos a revisar nesta aplicação. | info: items_unresolved | Nada é gravado | RF-008, FL-002 | ativo |
 | ERR-023 | EMAIL_UNAVAILABLE | 400 | Descontinuado pela CHG-011: sem criação de usuários (DEC-109). | Descontinuado. | — | — | CHG-011 | descontinuado |
 | ERR-024 | QUERY_REFUSED | 400 | Descontinuado pela CHG-011: sem k-anonimato (DEC-110). | Descontinuado. | — | — | CHG-011 | descontinuado |
-| ERR-029 | FILE_REJECTED_LIMIT | 400 | Upload recusado. Motivos exatos: "excede o limite de 20 MB"; "excede o limite de 50 páginas"; "tipo de arquivo não permitido"; "risco de segurança detectado". | Arquivo recusado: [motivo]. | warn: file_rejected (motivo) | Nada é gravado | RF-006, CA-029, RN-040 | ativo |
-| ERR-036 | MISSING_PUBLISH_FIELDS | 400 | Tentativa de publicar versão sem campos obrigatórios (nome, nascimento, CPF, data, local) ou com pergunta fora da estrutura da RN-047; `campos` traz os campos que faltam e os códigos das perguntas com problema (DEC-096). | Publicação recusada: faltam [lista dos campos]. | warn: missing_publish_fields | Versão permanece em `rascunho` | RF-004, CA-036, RN-017 | ativo |
+| ERR-029 | FILE_REJECTED_LIMIT | 400 | Upload ou importação de formulário recusados. Motivos exatos: "excede o limite de 20 MB"; "excede o limite de 50 páginas"; "tipo de arquivo não permitido"; "risco de segurança detectado". | Arquivo recusado: [motivo]. | warn: file_rejected (motivo) | Nada é gravado | RF-006, RF-011, CA-029, CA-047, RN-040 | ativo |
+| ERR-036 | MISSING_PUBLISH_FIELDS | 400 | Tentativa de publicar versão sem campos obrigatórios (nome, nascimento, CPF, data, local) ou com pergunta fora da estrutura da RN-047 ou que não cabe na sua página (DEC-143); `campos` traz os campos que faltam e os códigos das perguntas com problema (DEC-096). | Publicação recusada: faltam [lista dos campos]. | warn: missing_publish_fields | Versão permanece em `rascunho` | RF-004, CA-036, RN-017 | ativo |
 | ERR-039 | QR_INVALID_CONTEXT | 400 | QR, ou versão informada no `identifyApplication`, aponta para versão inexistente, de outro tenant ou de projeto diferente do envio (DEC-100). | QR code inválido para o contexto atual. Informe manualmente. | warn: qr_invalid_context | Aplicação em `identificacao_pendente` | RF-006, CA-039 | ativo |
 | ERR-041 | AI_READING_FAILED | — | A leitura falhou em 3 tentativas automáticas consecutivas (estado assíncrono, exibido na fila). | Erro de leitura. O digitalizador pode mandar ler de novo. | error: ai_reading_failed (3 retries) | Aplicação em `erro_leitura` | RF-007, CA-041 | ativo |
 | ERR-043 | RESERVATION_CONFLICT | 409 | Descontinuado pela CHG-011: sem reserva de aplicação (DEC-112). | Descontinuado. | — | — | CHG-011 | descontinuado |
+| ERR-044 | FORM_IMPORT_FAILED | — | A importação de formulário não reconheceu nenhuma pergunta, ou 3 chamadas à IA falharam na mesma página (estado assíncrono, exibido na consulta da importação). | Não foi possível ler o formulário. Confira o arquivo e tente de novo, ou cadastre as perguntas à mão. | error: form_import_failed (motivo, página) | Importação em `falhou`; nada é criado | RF-011, CA-047 | ativo |
 
 9. Questões em aberto (Q)
 
@@ -1643,6 +1826,20 @@ Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, f
 | Q-034 | 05/11/2026 | `confirmar` com valor em branco ou fora do schema | A FL-002 não dizia se `confirmar` valida o valor lido; um valor inválido confirmado entraria nos dados (revisão focada do IMP-003, F-06) | A: recusar e exigir a correção ou outra marcação | B: aceitar o valor lido | — | A | `confirmar` só aceita valor preenchido e no schema | Concordo com a recomendação (Carlos Yano, 05/11/2026). Incorporada como DEC-128. | respondida | FL-002, CA-006, DEC-128 |
 | Q-035 | 05/11/2026 | Número de chamadas antes de `erro_leitura` | A REQ diz "falhou em 3 tentativas" e "retentativas em 1, 2 e 4 s", que somam 4 chamadas (revisão focada do IMP-003, F-11) | A: 3 chamadas no total | B: 1 chamada e 3 retentativas | — | A | 3 chamadas no total, com retentativas em 1 e 2 s | Concordo com a recomendação (Carlos Yano, 05/11/2026). Incorporada como DEC-129. | respondida | CA-041, ERR-041, DEC-129 |
 | Q-036 | 05/11/2026 | Correção de perspectiva antes do recorte | A DEC-048 pede correção de perspectiva antes do recorte; a implementação (DEC-124) só confere se os 4 marcadores aparecem. No scanner de mesa a página sai reta; na foto de celular, um recorte deslocado pode levar nome ou CPF junto com uma pergunta de saúde (RN-038; revisão focada do IMP-003, F-13) | A: exigir os 4 marcadores dentro de uma margem e mandar à revisão, sem leitura, a página fora dela | B: corrigir a perspectiva pelos 4 marcadores antes de recortar (DEC-048) | C: A agora e B quando a digitalização por celular entrar | C | Até a resposta, vale a DEC-124: marcadores conferidos, sem correção de perspectiva; a digitalização é feita no scanner de mesa | Adiada pelo responsável (Carlos Yano, 05/11/2026): no scanner é fácil garantir a página reta; decidir quando a digitalização por celular entrar, antes do piloto. | aberta | DEC-048, DEC-124, RN-038 |
+| Q-037 | 05/11/2026 | Que formulário pode ser enviado à importação | A página inteira vai ao provedor de IA; preenchida com dados reais, levaria nome, CPF e saúde juntos (RN-038, RN-039, GX-001) | A: só em branco ou com dados fictícios, com declaração a cada envio | B: também preenchido com dados reais | — | A | Só formulário em branco ou com dados fictícios, declarado a cada envio | Em branco ou sintético (Carlos Yano, 05/11/2026). Incorporada como DEC-133. | respondida | RN-038, RN-049, DEC-133 |
+| Q-038 | 05/11/2026 | Os 5 campos obrigatórios no formulário importado | O Change Request manda injetar sempre; se o original já tem "Nome" ou "CPF", o PDF sairia com perguntas repetidas | A: reconhecer no original e injetar o que faltar | B: sempre injetar os 5 | — | A | Reconhecer no original e injetar só o que faltar | Reconhecer, senão injetar (Carlos Yano, 05/11/2026). Incorporada como DEC-134. | respondida | RN-017, RN-050, DEC-134 |
+| Q-039 | 05/11/2026 | Os 5 campos obrigatórios no rascunho criado à mão | Hoje a RN-017 só recusa a publicação (ERR-036); injetar muda o cadastro manual também | A: injetar em todo rascunho novo, sem permitir remoção | B: injetar só na importação | — | A | Todo rascunho novo sem cópia nasce com os 5 campos, que não podem ser removidos | Sim, em todo rascunho (Carlos Yano, 05/11/2026). Incorporada como DEC-135. | respondida | RN-017, RN-050, DEC-135 |
+| Q-040 | 05/11/2026 | Tipos de arquivo e custo da importação | O Change Request cita TIFF, que o upload não aceita, e não diz se a importação consome o teto de IA | A: JPEG, PNG e PDF; conta no teto | B: inclui TIFF; conta no teto | C: JPEG, PNG e PDF; fora do teto | A | Mesmos tipos e limites do upload; o custo conta no teto mensal | JPEG/PNG/PDF; conta no teto (Carlos Yano, 05/11/2026). Incorporada como DEC-136. | respondida | DEC-029, DEC-035, DEC-136 |
+| Q-041 | 05/11/2026 | Dados do ciclo de coleta no projeto | O Change Request pede objetivo, coordenador e cronograma, que o projeto não tem | A: objetivo e coordenador em texto, cronograma como datas de início e fim | B: tudo texto livre | C: deixar para depois | A | Objetivo, coordenador e período de coleta, opcionais | Sim, texto + datas (Carlos Yano, 05/11/2026). Incorporada como DEC-137. | respondida | RF-003, ENT-004, DEC-137 |
+| Q-042 | 05/11/2026 | Sensibilidade das perguntas importadas | A sensibilidade define o grupo de envio à IA (RN-039); a importação poderia sugeri-la | A: a IA sugere e a usuária confere | B: sempre o padrão `saude` | — | A | As perguntas importadas recebem o padrão `saude`, sem sugestão | "Não é necessário identificar se é saúde ou não. Isso é apenas um teste para que eu aprenda o desenvolvimento de projetos via IA" (Carlos Yano, 05/11/2026). Incorporada como DEC-138. | respondida | RN-039, RN-047, DEC-138 |
+| Q-043 | 05/11/2026 | Regras de salto do formulário importado | Instruções como "se Não, pule para a 7" podem ser lidas errado e criar regra sem aviso | A: não importar; configurar na curadoria | B: a IA sugere | — | A | A importação não cria regras de salto | Não, só na curadoria (Carlos Yano, 05/11/2026). Incorporada como DEC-139. | respondida | RN-021, DEC-095, DEC-139 |
+| Q-044 | 05/11/2026 | Pergunta que não cabe na página do PDF | Hoje o PDF não confere a altura: a pergunta que passa do rodapé sai fora da folha, sem erro (PLANO §12.3, F-20); na importação, uma pergunta pode ser mais alta que uma página inteira | A: recusar a gravação do rascunho com ERR-001 e os códigos em `campos`; na importação, descartar com aviso a pergunta maior que uma página | B: mover a pergunta para a página seguinte | — | A | Recusar e apontar; descartar com aviso na importação | Recusar e apontar (Carlos Yano, 05/11/2026). Incorporada como DEC-143. | respondida | RF-004, RF-011, CA-028, DEC-143 |
+| Q-045 | 05/11/2026 | Como a importação reconhece os 5 campos obrigatórios | A saída da IA não dizia qual pergunta é o nome ou o CPF; sem regra, o teste e o código teriam de inventar uma (revisão focada da CHG-014, R-01) | A: a IA indica o campo por pergunta; o primeiro candidato vence e os demais ficam comuns, com aviso | B: lista fixa de termos | — | A | A IA indica `campo_padrao`; o primeiro vence | A IA indica; 1º vence (Carlos Yano, 05/11/2026). Incorporada como DEC-144. | respondida | RN-049, RN-050, DEC-144 |
+| Q-046 | 05/11/2026 | Campos da RN-050 gravados com código, tipo ou obrigatoriedade diferentes | O `updateVersion` substitui o conteúdo inteiro; recusar toda diferença quebraria a tela e testes que não enviam `obrigatorio` (revisão focada da CHG-014, R-03) | A: o sistema reaplica código, tipo e obrigatoriedade; só a remoção é recusada | B: recusar com ERR-001 | — | A | O sistema reaplica código, tipo, obrigatoriedade e sensibilidade; falta ou repetição de marcação, ou código reservado sem marcação, é recusado com ERR-001 | Corrige sozinho (Carlos Yano, 05/11/2026). Incorporada como DEC-145. | respondida | RN-050, DEC-135, DEC-145 |
+| Q-047 | 05/11/2026 | Criar formulário em projeto arquivado | O `createForm` aceita projeto arquivado e a importação recusava, sem decisão (revisão focada da CHG-014, R-10) | A: permitir os dois | B: recusar os dois com ERR-001 | — | A | `createForm` e `importForm` em projeto arquivado → ERR-001 (`campos`: `projeto`) | Recusar os dois (Carlos Yano, 05/11/2026). Incorporada como DEC-146. | respondida | RF-004, RF-011, CA-027, DEC-146 |
+| Q-048 | 05/11/2026 | Código reservado em pergunta comum na cópia de versão antiga | Uma versão anterior à v2.4 pode ter pergunta comum com o código NOME e a de nome com outro código; a padronização da cópia geraria dois NOME (revisão focada da CHG-014, S-03) | A: a pergunta comum ganha sufixo `_2` | B: recusar a cópia com ERR-001 | — | A | A pergunta comum com código reservado ganha sufixo na cópia | Renomear com _2 (Carlos Yano, 05/11/2026). Incorporada como DEC-147. | respondida | RN-050, DEC-147 |
+| Q-049 | 05/11/2026 | Nome do coordenador apagado e restauração de backup | A restauração reaplica só eliminações de respondentes; o nome apagado voltaria (revisão focada da CHG-014, S-06) | A: aceitar o risco | B: registrar e reaplicar após o restore | — | A | Risco aceito; a usuária apaga de novo | Aceitar o risco (Carlos Yano, 05/11/2026). Incorporada como DEC-148. | respondida | DEC-137, DEC-148 |
+| Q-050 | 05/11/2026 | Endereço e aplicador no formulário importado | Só os 5 campos eram reconhecidos; "Endereço" entraria como `saude` e iria à IA junto com saúde (RN-039; revisão focada da CHG-014, S-16) | A: a IA também reconhece endereço e aplicador | B: aceitar o risco | — | A | Endereço e aplicador reconhecidos como identificação, sem injeção | IA também reconhece (Carlos Yano, 05/11/2026). Incorporada como DEC-149. | respondida | RN-039, RN-049, DEC-149 |
 
 10. Gates externos (GX)
 
@@ -1671,10 +1868,10 @@ Testes sentinela são casos de teste de alto nível que validam os riscos críti
 
 Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tools/validar_consistencia.py`; o resultado do script prevalece sobre este texto.
 
-- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-010, RNF-001 a RNF-014, RN-001 a RN-048, ENT-001 a ENT-030, FL-001 e FL-002, TL-001 a TL-014, US-001 a US-010, 39 CAs (CA-001 a CA-044 e CA-014b, sem os retirados na v2.1: CA-010, CA-016, CA-025, CA-026b, CA-034, CA-037b, CA-038 e CA-043), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-082 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), Q-001 a Q-030 e GX-001. Verificado por script (IDs citados existem nos registros).
+- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-011, RNF-001 a RNF-014, RN-001 a RN-050, ENT-001 a ENT-031, FL-001 a FL-004, TL-001 a TL-015, US-001 a US-011, 44 CAs (CA-001 a CA-049 e CA-014b, sem os retirados na v2.1: CA-010, CA-016, CA-025, CA-026b, CA-034, CA-037b, CA-038 e CA-043), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-082 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), as DEC seguintes da REQ e do PLANO até a DEC-149, Q-001 a Q-050 e GX-001. Verificado por script (IDs citados existem nos registros).
 - [x] 2. BDD com dados concretos: tabelas de exemplos nos CAs de alto risco CA-002, CA-008, CA-012, CA-023, CA-029, CA-030 e CA-032 (adicionadas na v1.3; na v1.2 só o CA-029 tinha tabela).
-- [x] 3. Estados e fluxos fechados: FL-001 com tabela de criação e entradas em `aguardando_cota`; FL-002 com ordem de avaliação explícita. Estados verificados por script contra o dicionário e o contrato.
-- [x] 4. Dicionário de dados completo: 30 entidades com as 11 propriedades; `registros/dicionario_dados.csv` idêntico, verificado por script.
+- [x] 3. Estados e fluxos fechados: FL-001 com tabela de criação e entradas em `aguardando_cota`; FL-002 com ordem de avaliação explícita; FL-004 com as transições da importação (CHG-014). Estados verificados por script contra o dicionário e o contrato.
+- [x] 4. Dicionário de dados completo: 31 entidades com as 11 propriedades; `registros/dicionario_dados.csv` idêntico, verificado por script.
 - [x] 5. Concorrência e duplicidade definidas (seção 6.5), com idempotência e If-Match obrigatórios nas operações listadas.
 - [x] 6. Resiliência em chamadas externas (seção 6.6), incluindo PDF e jobs.
 - [x] 7. Zero contradições com a tabela de decisões: DEC-020 × ERR-006 e DEC-026 × dicionário corrigidos na v1.3.
@@ -1682,7 +1879,7 @@ Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tool
 - [x] 9. Testes sentinela cobrindo riscos: TS-001 a TS-008.
 - [x] 10. Gates externos registrados: GX-001 (bloqueia piloto e produção).
 - [x] 11. Nenhum trecho exige "bom senso": lacunas resolvidas pelas DEC-054 a DEC-060 e DEC-064 a DEC-072.
-- [ ] 12. Toda Q respondida: Q-001 a Q-035 respondidas (Q-031 em 03/11/2026 como DEC-117; Q-032 a Q-035 em 05/11/2026 como DEC-126 a DEC-129); Q-036 aberta, adiada pelo responsável até a digitalização por celular (antes do piloto).
+- [ ] 12. Toda Q respondida: Q-001 a Q-035 e Q-037 a Q-050 respondidas (Q-031 em 03/11/2026 como DEC-117; Q-032 a Q-035 em 05/11/2026 como DEC-126 a DEC-129; Q-037 a Q-050 em 05/11/2026 como DEC-133 a DEC-139 e DEC-143 a DEC-149); Q-036 aberta, adiada pelo responsável até a digitalização por celular (antes do piloto).
 - [ ] 13. Consenso DEV/TEST sem divergência bloqueante: depende da próxima rodada de revisão independente.
 - [x] 14. REQ autocontida: referências externas (MeuRemedio, Kit v3) são informativas; o Bloco P está em `docs/spec/BLOCO_P.md`.
 - [ ] 15. Última revisão independente sem achado bloqueante ou alto, com médios e baixos registrados (DEC-061, DEC-073): pendente (REV-REQ-007).
@@ -1714,5 +1911,7 @@ A revisão independente é obrigatória no nível Completo. O revisor não pode 
 | REV-REQ-006 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 1.5 | 2 | 7 | 19 | 6 | Resolvido | Confirmou a correção dos achados da REV-REQ-005. Novos: identificação de páginas e conferência de assinatura sem acesso à imagem; CPF e dados do respondente em claro nos itens; matriz de autorização contraditória; cadastro existente não exposto para a escolha do CA-014; PedidoTitular sem transição para `falhou`; minimização dependente de configuração manual; dedução por diferença entre filtros; resolução de sessão sob RLS. Corrigidos na v1.6; Q-019 e Q-020 abertas. |
 | REV-REQ-007 | 28/10/2026 | Agente revisor-independente (IA, outro modelo, contexto isolado, somente leitura) | 1.7 | 0 | 1 | 22 | 11 | Resolvido | Alto: DEC-071 (faixas de idade e recusa pelo complemento) ausente do contrato e dos CAs; corrigido na v1.8 (ERR-024 (descontinuado na v2.1), CA-009, CA-010, Filter). Médios e baixos registrados no PLANO §12.3 com incremento (DEC-073). |
 | REV-REQ-008 | 28/10/2026 | Agente revisor-independente (verificação) | 1.8 | 0 | 2 | 8 | 11 | Resolvido | Altos: A-01 (MFA cadastrável com mfa_ativo) e A-02 (regra 1 da FL-002 capturava origem em branco/ilegível/rasurado/não se aplica). Corrigidos em 29/10/2026 (CA-026b; FL-002 e CA-018); verificação restrita ao diff: 0 bloqueantes, 0 altos (agente revisor-independente no modelo Sonnet, por falta de créditos do modelo configurado; aceito pelo responsável). Médios e baixos no PLANO §12.3; decisões de negócio viraram Q-021 a Q-029. |
+| REV-REQ-009 | 05/11/2026 | Agente revisor-independente (IA, contexto isolado, somente leitura) | 2.4 | 1 | 3 | 9 | 7 | Resolvido | Rodada focada da CHG-014 (REQ, PLANO e contrato). Bloqueante: reconhecimento dos 5 campos sem regra (R-01). Altos: códigos gerados × exemplos (R-02), trava da RN-050 no `updateVersion` (R-03), CA-036 inalcançável e testes do IMP-002 (R-04). Decisões viraram Q-044 a Q-047 (DEC-143 a DEC-146); editoriais corrigidos no mesmo PR (RN-049 e RN-050 reescritas, FL-004 completa, tabela `tarefa_importacao`, `listFormImports`, escopo LGPD das páginas-modelo). |
+| REV-REQ-010 | 05/11/2026 | Agente revisor-independente (IA, contexto isolado, somente leitura) | 2.4 | 0 | 0 | 8 | 13 | Resolvido | Rodada 2 da CHG-014: conferiu os R-01 a R-20 da REV-REQ-009 (R-04 parcial: dois testes do IMP-002 a mais, incluídos no PLANO §11). Critério de parada da DEC-073 atingido (0 bloqueantes, 0 altos). Decisões S-03, S-06 e S-16 viraram Q-048 a Q-050 (DEC-147 a DEC-149); editoriais S-01, S-02, S-04, S-05, S-07 a S-11 e S-13 a S-20 corrigidos no mesmo PR; S-12 (fixtures de altura) no PLANO §12.3 para o IA-TEST do IMP-006. |
 
 Fim do documento `REQ.md`

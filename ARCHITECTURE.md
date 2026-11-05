@@ -1,14 +1,17 @@
 # Arquitetura do Projeto MinhaPesquisa
 
 > Mapa do repositório para pessoas e agentes de IA. Resume o que está decidido em
-> `docs/architecture/PLANO.md` (v3.9) e aponta a fonte de verdade de cada artefato.
+> `docs/architecture/PLANO.md` (v3.10) e aponta a fonte de verdade de cada artefato.
 > Em conflito, vale a precedência do PLANO: decisões de negócio → REQ → PLANO/DEC técnicas → Bloco P.
 
 ## 1. Situação atual
 
 IMP-001 aceito em 29/10/2026 (Gate 2), com o E2E com navegador pendente; IMP-002 aceito em
-03/11/2026; IMP-005 (aplicação local, CHG-011) aceito em 04/11/2026; próximo: IMP-003. Existem `apps/api`, `packages/db` e `tests/`; `apps/web`, `apps/worker`,
-`packages/motor-leitura`, `packages/contratos` e `infra/` ainda não foram criados.
+03/11/2026; IMP-005 (aplicação local, CHG-011) aceito em 04/11/2026; IMP-003 aceito em 05/11/2026;
+próximo: IMP-006 (importação de formulário, CHG-014), antes do IMP-004 (DEC-140). Existem `apps/api`
+(com o worker da leitura em `apps/api/src/leitura`, onde também entra o extrator de estrutura da
+DEC-141), `packages/db`, `packages/motor-leitura` e `tests/`; `apps/web`, `apps/worker`,
+`packages/contratos` e `infra/` ainda não foram criados.
 
 ## 2. Fontes de verdade (DEC-049)
 
@@ -35,7 +38,7 @@ Vitest, Testcontainers, Playwright + axe, Schemathesis, fast-check, Stryker.
 minhapesquisa/
 ├── apps/
 │   ├── api/                 # HTTP, autenticação, autorização, validação pelo contrato
-│   ├── web/                 # Telas TL-001 a TL-014
+│   ├── web/                 # Telas TL-001 a TL-015
 │   └── worker/              # Leitura IA, registro de imagem, cota, expurgo, expirações
 ├── packages/
 │   ├── db/                  # Schemas Drizzle, migrações SQL, policies RLS, papéis (DEC-046)

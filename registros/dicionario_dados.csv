@@ -23,6 +23,10 @@ ENT-004 Projeto,id,identificador do projeto,uuid,sim,36,UUID v4,—,—,sim,—,
 ENT-004 Projeto,tenant_id,tenant do projeto,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-004 Projeto,nome,nome do projeto,varchar,sim,200,—,—,—,não,—,não
 ENT-004 Projeto,descricao,descrição,text,não,5000,—,—,NULL,não,—,não
+ENT-004 Projeto,objetivo,objetivo metodológico do ciclo de coleta (DEC-137),text,não,5000,—,—,NULL,não,—,não
+ENT-004 Projeto,coordenador,nome do coordenador técnico (DEC-137); não vai à IA nem a log,varchar,não,200,—,—,NULL,não,—,pessoal
+ENT-004 Projeto,coleta_inicio,início previsto da coleta (DEC-137),date,não,—,YYYY-MM-DD,—,NULL,não,—,não
+ENT-004 Projeto,coleta_fim,fim previsto da coleta; não pode ser anterior a `coleta_inicio` (DEC-137),date,não,—,YYYY-MM-DD,≥ coleta_inicio,NULL,não,—,não
 ENT-004 Projeto,status,status do projeto,enum,sim,—,—,ativo; arquivado,ativo,não,—,não
 ENT-004 Projeto,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-005 Formulario,id,identificador do formulário,uuid,sim,36,UUID v4,—,—,sim,—,não
@@ -247,3 +251,14 @@ ENT-030 FalhaLogin,email_hmac,HMAC do e-mail normalizado (exista ou não a conta
 ENT-030 FalhaLogin,tentativas,falhas na janela,int,sim,—,—,0..100,0,não,—,não
 ENT-030 FalhaLogin,janela_inicio,início da janela de 15 min,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-030 FalhaLogin,bloqueado_ate,fim do bloqueio,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
+ENT-031 ImportacaoFormulario,id,identificador da importação,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-031 ImportacaoFormulario,tenant_id,tenant,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
+ENT-031 ImportacaoFormulario,projeto_id,projeto que recebe o formulário,uuid,sim,36,UUID v4,—,—,não,Projeto.id,não
+ENT-031 ImportacaoFormulario,nome_formulario,nome do formulário a criar,varchar,sim,200,—,—,—,não,—,não
+ENT-031 ImportacaoFormulario,estado,situação da importação (FL-004),enum,sim,—,—,enfileirada; aguardando_cota; em_andamento; concluida; falhou,enfileirada,não,—,não
+ENT-031 ImportacaoFormulario,total_paginas,páginas do envio,int,sim,—,—,1..50,—,não,—,não
+ENT-031 ImportacaoFormulario,chave_storage,"pasta dos arquivos enviados (NULL depois de apagados, RN-049)",varchar,não,500,—,—,NULL,não,—,não
+ENT-031 ImportacaoFormulario,formulario_id,formulário criado (só em concluida),uuid,não,36,UUID v4,—,NULL,não,Formulario.id,não
+ENT-031 ImportacaoFormulario,avisos,"ajustes da RN-049 por página e posição no original, sem texto lido",jsonb,não,—,JSON,—,NULL,não,—,não
+ENT-031 ImportacaoFormulario,criada_em,data do pedido,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
+ENT-031 ImportacaoFormulario,concluida_em,data em que terminou (concluida ou falhou),timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não

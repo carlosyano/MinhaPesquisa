@@ -117,11 +117,11 @@ saidas["revisoes.csv"] = para_csv(
 desatualizados = []
 for nome, conteudo in saidas.items():
     caminho = REG / nome
-    atual = caminho.read_text(encoding="utf-8") if caminho.exists() else None
+    atual = caminho.read_bytes().decode("utf-8") if caminho.exists() else None
     if atual != conteudo:
         desatualizados.append(nome)
         if "--check" not in sys.argv:
-            caminho.write_text(conteudo, encoding="utf-8")
+            caminho.write_bytes(conteudo.encode("utf-8"))  # LF em qualquer sistema
 
 if "--check" in sys.argv:
     if desatualizados:
