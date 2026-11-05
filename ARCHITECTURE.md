@@ -7,8 +7,11 @@
 ## 1. Situação atual
 
 IMP-001 aceito em 29/10/2026 (Gate 2), com o E2E com navegador pendente; IMP-002 aceito em
-03/11/2026; IMP-005 (aplicação local, CHG-011) aceito em 04/11/2026; próximo: IMP-003. Existem `apps/api`, `packages/db` e `tests/`; `apps/web`, `apps/worker`,
-`packages/motor-leitura`, `packages/contratos` e `infra/` ainda não foram criados.
+03/11/2026; IMP-005 (aplicação local, CHG-011) aceito em 04/11/2026; IMP-003 aceito em 05/11/2026;
+próximo: IMP-006 (importação de formulário, CHG-014), antes do IMP-004 (DEC-140). Existem `apps/api`
+(com o worker da leitura em `apps/api/src/leitura`, onde também entra o extrator de estrutura da
+DEC-141), `packages/db`, `packages/motor-leitura` e `tests/`; `apps/web`, `apps/worker`,
+`packages/contratos` e `infra/` ainda não foram criados.
 
 ## 2. Fontes de verdade (DEC-049)
 

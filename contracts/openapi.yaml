@@ -335,9 +335,10 @@ paths:
       summary: Cria nova versão em rascunho (opcionalmente copiando outra)
       description: |
         Alterações em versão publicada sempre criam nova versão (RN-042, CA-001). Sem
-        `copiar_de_versao_id`, a versão nasce com os 5 campos da RN-050; com ele, mantém as perguntas
-        da origem (DEC-135, CA-048).
-      x-trace: [RF-004, RF-011, CA-001, RN-042, RN-050, CA-048]
+        `copiar_de_versao_id`, a versão nasce com os 5 campos da RN-050; com ele, copia as perguntas
+        da origem, padroniza as dos 5 campos, injeta as que faltarem e dá sufixo a código reservado
+        em pergunta comum (RN-050, DEC-145, DEC-147, CA-048).
+      x-trace: [RF-004, RF-011, CA-001, RN-042, RN-050, CA-048, DEC-147]
       security:
         - sessionCookie: []
           csrfToken: []
