@@ -119,6 +119,18 @@ describe('AdaptadorClaude — requisição (DEC-122, RN-038, RN-045)', () => {
     for (const c of SCHEMA.campos) expect(corpo).toContain(c.chave);
   });
 
+  // @trace DEC-131, RN-045
+  it('as instruções ligam cada campo ao seu recorte, de cima para baixo, separados por faixa preta', async () => {
+    const t = transporte(() => mensagem(OK));
+    const comRecorte = { campos: SCHEMA.campos.map((c, i) => ({ ...c, recorte: i + 1 })) };
+    await adaptador(t.fetch).lerRecorte(recorte(), comRecorte);
+    const corpo = JSON.stringify(t.pedidos[0].corpo);
+    expect(corpo).toContain('"recorte":1');
+    expect(corpo).toContain('"recorte":2');
+    expect(JSON.stringify(t.pedidos[0].corpo.system)).toMatch(/faixa preta/);
+    expect(JSON.stringify(t.pedidos[0].corpo.system)).toMatch(/de cima para baixo/);
+  });
+
   // @trace RN-037, RN-045
   it('o modelo não recebe ferramentas: a IA nunca executa ações', async () => {
     const t = transporte(() => mensagem(OK));
