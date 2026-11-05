@@ -53,6 +53,8 @@ interface Preparada {
   motor: ReadEngine;
   recorte: Buffer;
   schema: CampoSchema;
+  /** Chave do item (código da pergunta e linha) de cada chave opaca, na mesma ordem. */
+  chaves: string[];
   estimadoUsd: number;
   inicio: string;
   cotacao: string;
@@ -181,7 +183,8 @@ export class WorkerLeitura {
     }
     await this.n.banco.noTenant(t.tenant_id, async (tx) => {
       await ajustar(tx, t.tenant_id, preparada.inicio, preparada.cotacao, preparada.estimadoUsd, resultado?.custoUsd ?? 0);
-      if (resultado) await this.gravarLeitura(tx, t, resultado.leituras);
+      const daOpaca = new Map(preparada.schema.campos.map((c, k) => [c.chave, preparada.chaves[k]]));
+      if (resultado) await this.gravarLeitura(tx, t, resultado.leituras.map((l) => ({ ...l, chave: daOpaca.get(l.chave) ?? '' })));
       else await this.registrarFalha(tx, t, falha!);
     });
   }
@@ -204,7 +207,9 @@ export class WorkerLeitura {
       await this.pausarPorCota(tx, t.aplicacao_id, 'sem_cotacao');
       return undefined;
     }
-    const motor = this.n.config.motorLeitura?.({ aplicacaoId: t.aplicacao_id, pagina: t.pagina });
+    // O motor vê só chaves opacas na ordem dos campos (c1, c2…), nunca o código da pergunta (RN-045).
+    const chaves = alvo.map(chaveItem);
+    const motor = this.n.config.motorLeitura?.({ aplicacaoId: t.aplicacao_id, pagina: t.pagina, campos: chaves });
     if (!motor) {
       // Sem chave do provedor configurada: a tarefa espera, sem contar tentativa.
       this.n.log(`leitura_sem_motor aplicacao=${t.aplicacao_id}`);
@@ -229,9 +234,13 @@ export class WorkerLeitura {
       await this.registrarFalha(tx, t, new ErroLeitura('erro', 'página ilegível'));
       return undefined;
     }
+    // Um recorte por pergunta, na ordem de `recortar`: as linhas da matriz dividem o mesmo (DEC-131).
+    const recorteDa = new Map<string, number>();
+    for (const i of alvo) if (!recorteDa.has(i.pergunta_id)) recorteDa.set(i.pergunta_id, recorteDa.size + 1);
     const schema: CampoSchema = {
-      campos: alvo.map((i) => ({
-        chave: chaveItem(i),
+      campos: alvo.map((i, k) => ({
+        chave: `c${k + 1}`,
+        recorte: recorteDa.get(i.pergunta_id)!,
         tipo: i.tipo,
         ...(i.opcoes.length ? { opcoes: i.opcoes } : i.tipo === 'sim_nao' ? { opcoes: ['sim', 'nao'] } : {}),
         ...(i.valor_min !== null ? { valor_min: i.valor_min } : {}),
@@ -243,7 +252,7 @@ export class WorkerLeitura {
       await this.pausarPorCota(tx, t.aplicacao_id, 'teto');
       return undefined;
     }
-    return { motor, recorte, schema, estimadoUsd, inicio: cota.inicio, cotacao: cota.cotacao };
+    return { motor, recorte, schema, chaves, estimadoUsd, inicio: cota.inicio, cotacao: cota.cotacao };
   }
 
   private async gravarLeitura(tx: Executor, t: Tarefa, leituras: { chave: string; valor: string | null; confianca: number }[]): Promise<void> {
@@ -331,9 +340,13 @@ export class WorkerLeitura {
   }
 }
 
+/** Altura da faixa preta entre dois recortes empilhados (DEC-131). */
+const FAIXA = 8;
+
 /**
  * Recortes das regiões dos campos (uma por pergunta; a matriz inteira num só), empilhados numa
- * imagem: o motor nunca recebe a página inteira (RN-038, DEC-048).
+ * imagem e separados por uma faixa preta: o motor nunca recebe a página inteira (RN-038, DEC-048)
+ * e sabe onde começa cada recorte (DEC-131).
  */
 export async function recortar(pagina: Buffer, itens: Pick<Item, 'pergunta_id' | 'regiao'>[]): Promise<Buffer> {
   const meta = await sharp(pagina).metadata();
@@ -352,12 +365,17 @@ export async function recortar(pagina: Buffer, itens: Pick<Item, 'pergunta_id' |
     partes.push({ input: await sharp(pagina).extract({ left, top, width, height }).toBuffer(), largura: width, altura: height });
   }
   const largura = Math.max(...partes.map((p) => p.largura));
-  const altura = partes.reduce((s, p) => s + p.altura, 0);
+  const altura = partes.reduce((s, p) => s + p.altura, 0) + FAIXA * (partes.length - 1);
+  const faixa = await sharp({ create: { width: largura, height: FAIXA, channels: 3, background: '#000000' } }).png().toBuffer();
   let y = 0;
-  const composicao = partes.map((p) => {
-    const c = { input: p.input, left: 0, top: y };
+  const composicao: { input: Buffer; left: number; top: number }[] = [];
+  partes.forEach((p, k) => {
+    if (k > 0) {
+      composicao.push({ input: faixa, left: 0, top: y });
+      y += FAIXA;
+    }
+    composicao.push({ input: p.input, left: 0, top: y });
     y += p.altura;
-    return c;
   });
   return sharp({ create: { width: largura, height: altura, channels: 3, background: '#ffffff' } })
     .composite(composicao)

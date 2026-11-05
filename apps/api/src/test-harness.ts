@@ -89,12 +89,13 @@ class MotorSimulado {
     return [...(this.registro.get(aplicacaoId) ?? [])];
   }
 
-  para(contexto: { aplicacaoId: string; pagina: number }): ReadEngine {
+  /** `contexto.campos` traduz as chaves opacas do schema (c1, c2…) para as chaves do roteiro. */
+  para(contexto: { aplicacaoId: string; pagina: number; campos: string[] }): ReadEngine {
     return {
       estimarCustoUsd: () => this.custo.estimadoUsd,
       lerRecorte: async (img: Buffer, schema: CampoSchema) => {
         const roteiro = this.roteiros.get(contexto.aplicacaoId) ?? {};
-        const campos = schema.campos.map((c) => c.chave);
+        const campos = schema.campos.map((c, k) => contexto.campos[k] ?? c.chave);
         let falha: TipoFalha | undefined;
         for (const c of campos) {
           const chave = `${contexto.aplicacaoId}|${c}`;
@@ -109,8 +110,9 @@ class MotorSimulado {
         if (falha) throw new ErroLeitura(falha);
         return {
           custoUsd: this.custo.realUsd,
-          leituras: campos.map((chave) => {
-            const l = roteiro[chave];
+          leituras: campos.map((codigo, k) => {
+            const chave = schema.campos[k].chave;
+            const l = roteiro[codigo];
             const lido: Leitura = !l ? { valor: null, confianca: 0.99 } : 'falha' in l ? (l.depois ?? { valor: null, confianca: 0.99 }) : l;
             return { chave, valor: lido.valor, confianca: lido.confianca, regiao: lido.regiao ?? { x: 0, y: 0, largura: 1, altura: 1 } };
           }),
@@ -392,6 +394,43 @@ export async function criarHarness() {
 
       async logs() {
         return logs.join('\n');
+      },
+
+      /** Valores como estão no banco, sem decifrar (DEC-131). */
+      async itensGravados(aplicacaoId: string) {
+        return n.banco.manutencao((tx) =>
+          linhas<{ pergunta_codigo: string; valor_ia: string | null; valor_final: string | null }>(
+            tx,
+            sql`SELECT p.codigo AS pergunta_codigo, i.valor_ia, i.valor_final
+                  FROM item_resposta i JOIN pergunta p ON p.id = i.pergunta_id
+                 WHERE i.aplicacao_id = ${aplicacaoId} ORDER BY p.ordem, i.id`,
+          ),
+        );
+      },
+    },
+
+    banco: {
+      /** UPDATE direto, sem a API; a recusa do banco devolve o nome da constraint (DEC-131). */
+      async tentarAtualizarAplicacao(
+        aplicacaoId: string,
+        m: { estado?: string; data_aplicacao?: string | null; local_aplicacao?: string | null; versao_id?: string | null },
+      ) {
+        const muda = (k: keyof typeof m) => (k in m ? 1 : 0);
+        try {
+          await n.banco.manutencao((tx) =>
+            tx.execute(sql`
+              UPDATE aplicacao
+                 SET estado = CASE WHEN ${muda('estado')} = 1 THEN ${m.estado ?? null} ELSE estado END,
+                     data_aplicacao = CASE WHEN ${muda('data_aplicacao')} = 1 THEN ${m.data_aplicacao ?? null}::date ELSE data_aplicacao END,
+                     local_aplicacao = CASE WHEN ${muda('local_aplicacao')} = 1 THEN ${m.local_aplicacao ?? null} ELSE local_aplicacao END,
+                     versao_id = CASE WHEN ${muda('versao_id')} = 1 THEN ${m.versao_id ?? null}::uuid ELSE versao_id END
+               WHERE id = ${aplicacaoId}`),
+          );
+          return { aceita: true };
+        } catch (e) {
+          const constraint = (e as { constraint?: string; cause?: { constraint?: string } }).constraint ?? (e as { cause?: { constraint?: string } }).cause?.constraint;
+          return { aceita: false, ...(constraint ? { constraint } : {}) };
+        }
       },
     },
 

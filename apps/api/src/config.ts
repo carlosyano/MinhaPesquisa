@@ -37,7 +37,7 @@ export interface Config {
    * simulado dos testes (DEC-123); o motor real recebe só o recorte e o schema (RN-045).
    * Sem motor configurado, nenhuma leitura é feita.
    */
-  motorLeitura?: (contexto: { aplicacaoId: string; pagina: number }) => ReadEngine;
+  motorLeitura?: (contexto: { aplicacaoId: string; pagina: number; campos: string[] }) => ReadEngine;
   /** Destino do log operacional (sem dado pessoal, RN-028); padrão: saída de erro. */
   log?: (linha: string) => void;
 }

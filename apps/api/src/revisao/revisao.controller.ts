@@ -29,6 +29,7 @@ import {
   iniciarLeitura,
   limiteConfianca,
   reais,
+  travarCpf,
   valorEfetivo,
   Avaliacao,
   type Item,
@@ -322,7 +323,8 @@ export class RevisaoController {
     };
     const faltam = Object.entries(obrigatorios).filter(([, v]) => v === null).map(([k]) => k);
     if (faltam.length) throw new ErroApi('ERR-006', { campos: faltam });
-    // Escolha para cada divergência do cadastro (CA-014).
+    // Escolha para cada divergência do cadastro (CA-014), lida já com o CPF travado (DEC-131).
+    await travarCpf(this.n, tx, cpf);
     const manter = corpo.manter_cadastro ?? {};
     const div = divergencias(itens, await cadastroPorCpf(this.n, tx, cpf));
     const semEscolha = div.filter((d) => manter[d] === undefined);
