@@ -187,9 +187,19 @@ describe('DEC-128 — confirmar só valor preenchido e no schema', () => {
   });
 
   // @trace DEC-128, RN-012
-  it('CPF lido com dígito verificador errado → confirmar é recusado', async () => {
+  it('CPF lido sem os 11 dígitos → confirmar é recusado', async () => {
+    const { id, alvo, etag } = await aRevisar({ CPF: { valor: '1234567890', confianca: 0.97 } }, 'CPF');
+    const r = await revisar(B.dig, id, [{ item_id: alvo.id, acao: 'confirmar' }], etag);
+    esperarErro(r, 'ERR-001');
+    expect(r.corpo.campos).toEqual(['acao']);
+  });
+
+  // @trace DEC-128, FL-001, CA-002
+  it('CPF com dígito verificador errado ainda se confirma: quem trata é a conclusão (aguardando_cpf)', async () => {
     const { id, alvo, etag } = await aRevisar({ CPF: { valor: CPF.invalido, confianca: 0.97 } }, 'CPF');
-    esperarErro(await revisar(B.dig, id, [{ item_id: alvo.id, acao: 'confirmar' }], etag), 'ERR-001');
+    const r = await revisar(B.dig, id, [{ item_id: alvo.id, acao: 'confirmar' }], etag);
+    expect(r.status, r.texto).toBe(200);
+    expect(item(r.corpo, 'CPF').estado).toBe('confirmado');
   });
 });
 
