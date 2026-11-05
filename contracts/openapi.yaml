@@ -1,12 +1,12 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.5.0
+  version: 0.5.1
   description: |
     API da aplicação local MinhaPesquisa (DEC-107) — digitalização de pesquisas em papel com
     leitura por IA, revisão humana e dashboards, em conformidade com a LGPD. Uma única usuária,
     com todas as permissões (DEC-109); servida só em 127.0.0.1 (DEC-113).
-    Fonte normativa: REQ v2.5 e PLANO.md v3.13. Contract-first — este arquivo valida
+    Fonte normativa: REQ v2.6 e PLANO.md v3.14. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: a única rota pública (`login`) declara `security: []`; sem MFA (DEC-108);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -1218,11 +1218,11 @@ paths:
       description: |
         Agregada, linha a linha ou linha por item (formato longo, RN-051), sem k-anonimato
         (DEC-109, DEC-110); toda exportação é auditada (CA-022). O arquivo é apagado após
-        `retencao_exportacao_dias` (RN-030). Sem assinatura fica fora (CA-021). Células de texto
-        que começam com `=`, `+`, `-`, `@`, tabulação ou retorno de carro recebem um apóstrofo
-        (DEC-161). Com `linha_por_item`, `filtros` → ERR-001 (DEC-163) e `rotulos` é ignorado
+        `retencao_exportacao_dias` (RN-030). Sem assinatura fica fora (CA-021). No CSV, células de
+        texto que começam com `=`, `+`, `-`, `@`, tabulação ou retorno de carro recebem um
+        apóstrofo; no XLSX saem como estão, em célula de texto, nunca como fórmula (DEC-166). Com `linha_por_item`, `filtros` → ERR-001 (DEC-163) e `rotulos` é ignorado
         (a planilha traz código e rótulo).
-      x-trace: [RF-010, RF-012, RN-051, CA-021, CA-022, CA-050, CA-051, DEC-014, DEC-109, DEC-110, DEC-153, DEC-161, DEC-163]
+      x-trace: [RF-010, RF-012, RN-051, CA-021, CA-022, CA-050, CA-051, DEC-014, DEC-109, DEC-110, DEC-153, DEC-163, DEC-166]
       security:
         - sessionCookie: []
           csrfToken: []
