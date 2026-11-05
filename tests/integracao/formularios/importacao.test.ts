@@ -596,13 +596,14 @@ describe('CA-047 exemplo 5 — teto de custo de IA (RN-036, DEC-051)', () => {
     await processarComRetentativas(h);
     await h.clock.advance(60 * MINUTO);
     await h.worker.processar();
-    expect((await consultarImportacao(u, r.corpo.id)).corpo).toMatchObject({ estado: 'aguardando_cota', aviso: 'ERR-003', formulario_id: null });
+    const u2 = await entrar(h, t.usuaria); // a sessão expirou por inatividade (30 min)
+    expect((await consultarImportacao(u2, r.corpo.id)).corpo).toMatchObject({ estado: 'aguardando_cota', aviso: 'ERR-003', formulario_id: null });
     expect(await h.extrator.chamadas(r.corpo.id)).toEqual([]);
 
     await h.seed.parametro({ tenantId: t.tenantId, chave: 'custo_ia_teto', valor: '600.00' });
     await h.clock.advance(MINUTO);
     await processarComRetentativas(h);
-    expect((await consultarImportacao(u, r.corpo.id)).corpo).toMatchObject({ estado: 'concluida', aviso: null });
+    expect((await consultarImportacao(u2, r.corpo.id)).corpo).toMatchObject({ estado: 'concluida', aviso: null });
   });
 
   // @trace RN-036, RN-049, DEC-051, DEC-058
@@ -654,6 +655,11 @@ describe('CA-047 exemplo 5 — teto de custo de IA (RN-036, DEC-051)', () => {
 });
 
 describe('listFormImports, getFormImport, idempotência e isolamento', () => {
+  // O teste do teto avança o relógio 60 min: a sessão da usuária do arquivo expirou por inatividade.
+  beforeAll(async () => {
+    c = await entrar(h, T.usuaria);
+  });
+
   // @trace RF-011, TL-015
   it('listFormImports traz as importações do projeto, da mais recente para a mais antiga', async () => {
     const id = await projetoCriado(c, 'Lista de importações');
