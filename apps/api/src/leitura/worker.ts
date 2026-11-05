@@ -162,11 +162,11 @@ export class WorkerLeitura {
     const preparada = await this.n.banco.noTenant(t.tenant_id, (tx) => this.prepararChamada(tx, t));
     if (!preparada) return;
     let resultado: Awaited<ReturnType<ReadEngine['lerRecorte']>> | undefined;
-    let falha: ErroLeitura['tipo'] | undefined;
+    let falha: ErroLeitura | undefined;
     try {
       resultado = await preparada.motor.lerRecorte(preparada.recorte, preparada.schema);
     } catch (e) {
-      falha = e instanceof ErroLeitura ? e.tipo : 'erro';
+      falha = e instanceof ErroLeitura ? e : new ErroLeitura('erro', e instanceof Error ? e.name : 'erro');
     }
     await this.n.banco.noTenant(t.tenant_id, async (tx) => {
       await ajustar(tx, t.tenant_id, preparada.inicio, preparada.cotacao, preparada.estimadoUsd, resultado?.custoUsd ?? 0);
@@ -207,7 +207,7 @@ export class WorkerLeitura {
            ORDER BY ordem_envio LIMIT 1`,
     );
     if (!pagina) {
-      await this.registrarFalha(tx, t, 'erro');
+      await this.registrarFalha(tx, t, new ErroLeitura('erro', 'página sem imagem'));
       return undefined;
     }
     const recorte = await recortar(await this.n.config.armazenamento.ler(pagina.chave_storage), alvo);
@@ -254,9 +254,11 @@ export class WorkerLeitura {
     if (a.estado === 'em_leitura') await this.finalizarSeCompleta(tx, t.tenant_id, t.aplicacao_id);
   }
 
-  private async registrarFalha(tx: Executor, t: Tarefa, tipo: ErroLeitura['tipo']): Promise<void> {
+  private async registrarFalha(tx: Executor, t: Tarefa, falha: ErroLeitura): Promise<void> {
+    const tipo = falha.tipo;
     const tentativa = t.tentativas + 1;
-    this.n.log(`leitura aplicacao=${t.aplicacao_id} pagina=${t.pagina} grupo=${t.grupo} resultado=${tipo} tentativa=${tentativa}`);
+    // O detalhe é texto fixo do motor (classe do erro, status HTTP), nunca conteúdo lido (RN-028).
+    this.n.log(`leitura aplicacao=${t.aplicacao_id} pagina=${t.pagina} grupo=${t.grupo} resultado=${tipo} tentativa=${tentativa} detalhe="${falha.message}"`);
     if (tentativa <= ESPERAS_MS.length) {
       await tx.execute(sql`
         UPDATE tarefa_leitura SET tentativas = ${tentativa}, ultima_falha = ${tipo},
