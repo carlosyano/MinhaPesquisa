@@ -216,7 +216,7 @@ ENT-026 Exportacao,tenant_id,tenant,uuid,sim,36,UUID v4,—,—,não,Tenant.id,n
 ENT-026 Exportacao,usuario_id,quem pediu,uuid,sim,36,UUID v4,—,—,não,Usuario.id,não
 ENT-026 Exportacao,projeto_ids,projetos incluídos,uuid[],sim,—,UUID v4,—,—,não,—,não
 ENT-026 Exportacao,formato,formato,enum,sim,—,—,csv; xlsx,—,não,—,não
-ENT-026 Exportacao,escopo,escopo,enum,sim,—,—,agregado; linha_a_linha,—,não,—,não
+ENT-026 Exportacao,escopo,"escopo (`linha_por_item`: formato longo, RN-051)",enum,sim,—,—,agregado; linha_a_linha; linha_por_item,—,não,—,não
 ENT-026 Exportacao,status,situação,enum,sim,—,—,enfileirada; em_andamento; concluida; falhou; cancelada,enfileirada,não,—,não
 ENT-026 Exportacao,chave_storage,objeto gerado (NULL até concluir ou após expurgo),varchar,não,500,—,—,NULL,não,—,não
 ENT-026 Exportacao,criado_em,data do pedido,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não

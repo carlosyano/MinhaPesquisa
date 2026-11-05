@@ -1,16 +1,18 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005) · CHG-013 aceita na v2.3 · CHG-014 aceita na v2.4
-Versão: 2.4
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011) · 05/11/2026 (v2.3, CHG-013; v2.4, CHG-014)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005) · CHG-013 aceita na v2.3 · CHG-014 aceita na v2.4 · CHG-015 aceita na v2.5
+Versão: 2.5
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011) · 05/11/2026 (v2.3, CHG-013; v2.4, CHG-014; v2.5, CHG-015)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado), aplicado no que couber à aplicação local da DEC-107
 Responsável: Carlos Yano
 
 Nota da v2.0 e da v2.1 (CHG-011): o produto deixa de ser um SaaS na nuvem e passa a ser uma aplicação local num notebook, usada por uma única pessoa (DEC-107 a DEC-112 e DEC-117). A v2.1 propaga as decisões às regras, aos requisitos, às telas, aos estados, aos critérios de aceite, ao catálogo de erros e à matriz (IMP-005). Saíram os CA-010, CA-016, CA-025, CA-026b, CA-034, CA-037b, CA-038 e CA-043, as telas TL-002, TL-013 e TL-014 e o TS-004. As entidades de perfis, vínculos, concessões, reservas e tokens continuam no dicionário porque as tabelas ficam no banco sem uso (DEC-116). Nos fluxos, estados e CAs, "digitalizador", "revisor", "administrador" e "analista" designam papéis que a própria usuária exerce (DEC-109).
 
-Nota da v2.4 (CHG-014, Change Request de 05/11/2026 em `docs/historico/`): o formulário pode ser criado a partir de um formulário que já existe, em branco ou preenchido com dados fictícios, com a estrutura lida pela IA e curada pela usuária (RF-011, DEC-132 a DEC-139). Todo rascunho novo já nasce com os 5 campos obrigatórios (DEC-135), e o projeto ganha objetivo, coordenador e período de coleta (DEC-137). A exportação em formato longo do mesmo documento fica para o IMP-004 e ainda não entra nesta versão.
+Nota da v2.4 (CHG-014, Change Request de 05/11/2026 em `docs/historico/`): o formulário pode ser criado a partir de um formulário que já existe, em branco ou preenchido com dados fictícios, com a estrutura lida pela IA e curada pela usuária (RF-011, DEC-132 a DEC-139). Todo rascunho novo já nasce com os 5 campos obrigatórios (DEC-135), e o projeto ganha objetivo, coordenador e período de coleta (DEC-137). A exportação em formato longo do mesmo documento entra na v2.5 (CHG-015).
+
+Nota da v2.5 (CHG-015, seção 3 do mesmo Change Request): a exportação ganha o escopo `linha_por_item` (formato longo), uma linha por item respondido, com nome e CPF do respondente, pronta para tabela dinâmica (RF-012, RN-051, DEC-153 a DEC-163). A exportação passa a neutralizar fórmulas em células de texto (DEC-161).
 
 1. Resumo em linguagem simples
 
@@ -56,6 +58,7 @@ Uma única instituição (clínica, cooperativa ou outra entidade que conduza pe
 - Armazenamento estruturado por item de resposta.
 - Relatórios e dashboards por projeto, por formulário, por respondente e por grupo dinâmico (filtros por idade, estado civil, condição de saúde etc.).
 - Acesso por senha local, trilha de auditoria, exportação e direitos do titular.
+- Exportação em formato longo (uma linha por item, XLSX ou CSV), pronta para tabela dinâmica (RF-012, DEC-153).
 - Instalação local, disco cifrado e backup diário cifrado em disco externo (DEC-107, DEC-117).
 
 2.7 Fora do escopo da v1 (etapa posterior)
@@ -218,6 +221,17 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-148 | 05/11/2026 | negócio | Nome do coordenador apagado e restauração de backup (Q-049) | Aceitar o risco; reaplicar após o restore | Risco aceito: a restauração de um backup anterior traz de volta o nome do coordenador apagado, que a usuária apaga de novo; o nome não tem retenção própria e não entra na ListaEliminacoes | Nome da equipe, num sistema usado só para teste (DEC-119) (revisão focada da CHG-014, S-06) | definitivo | Baixo | DEC-137, DEC-120, RN-031 |
 | DEC-149 | 05/11/2026 | negócio | Endereço e aplicador no formulário importado (Q-050) | A IA também reconhece; aceitar o risco | O `campo_padrao` da importação aceita também `endereco` e `aplicador`: a pergunta reconhecida recebe a marcação (`campo_respondente = endereco` ou `campo_aplicacao = aplicador`), o código ENDERECO ou APLICADOR, o tipo `texto_curto` e a sensibilidade `identificacao` (RN-047). Esses dois não são obrigatórios nem injetados | Endereço é identificação (RN-039) e não pode ir à IA junto com saúde (revisão focada da CHG-014, S-16) | definitivo | Médio | RN-039, RN-047, RN-049, DEC-097, DEC-144 |
 | DEC-152 | 05/11/2026 | negócio | Enunciado e obrigatoriedade de endereço e aplicador no formulário importado (Q-051) | "Endereço" e "Aplicador" | Com enunciado vazio, a pergunta reconhecida como `endereco` recebe "Endereço do respondente" e a reconhecida como `aplicador`, "Nome do aplicador". As duas ficam com `obrigatorio = false`; a pessoa pode torná-las obrigatórias na edição do rascunho | Endereço e aplicador são opcionais no formulário, ao contrário dos 5 campos da RN-050 (resposta do responsável) | definitivo | Baixo | RN-049, DEC-149 |
+| DEC-153 | 05/11/2026 | negócio | Exportação em formato longo (Change Request de 05/11/2026, seção 3) | Só agregado e linha a linha; também uma linha por item | A exportação ganha o escopo `linha_por_item` (formato longo): uma linha por item de cada aplicação, com as colunas e as regras da RN-051 (RF-012). Os escopos `agregado` e `linha_a_linha` continuam como estão (RF-010) | A planilha sai pronta para tabela dinâmica, sem Power Query nem macros (CHG-015) | definitivo | Médio | RF-010, RF-012, RN-051, ENT-026, CA-050 |
+| DEC-154 | 05/11/2026 | negócio | Linha de matriz no formato longo (Q-052) | Coluna própria; código composto na pergunta | A coluna `Codigo_Linha` traz o código da linha da matriz (RN-019) e fica vazia nas outras perguntas; `Codigo_Pergunta` é sempre o código da pergunta | O código da pergunta continua estável para filtrar e comparar versões (RN-018) (CHG-015) | definitivo | Baixo | RN-018, RN-019, RN-051, CA-050 |
+| DEC-155 | 05/11/2026 | negócio | CPF no formato longo (Q-053) | 11 dígitos sem pontuação; com pontuação; mascarado | CPF completo, com 11 dígitos sem pontuação (§5.4) e gravado como texto, como na exportação linha a linha (DEC-072); a exportação é auditada (RN-051) | Formato estável para cruzar planilhas, sem perder o zero à esquerda (CHG-015) | definitivo | Alto | DEC-072, RN-013, RN-051, CA-050 |
+| DEC-156 | 05/11/2026 | negócio | Valor de escala, número, data e texto no formato longo (Q-054) | Na coluna do código, com rótulo vazio; repetido no rótulo | Em escala, número, data, texto curto e texto livre, o valor no formato canônico (§5.4) vai em `Codigo_Opcao_Valor`, e `Rotulo_Opcao_Valor` fica vazio | Uma só coluna de valor; o rótulo é só de opção (CHG-015) | definitivo | Baixo | RN-051, CA-050 |
+| DEC-157 | 05/11/2026 | negócio | Aplicações no formato longo (Q-055) | Só concluídas com assinatura; também em revisão | Só aplicações `concluida` com assinatura `presente` (CA-021), dos projetos pedidos e com `data_aplicacao` no período, quando informado | Valor em revisão não é definitivo, e sem assinatura não há consentimento (DEC-006) (CHG-015) | definitivo | Alto | CA-021, DEC-006, RN-051, CA-050 |
+| DEC-158 | 05/11/2026 | negócio | Item sem resposta no formato longo (Q-056) | Uma linha com valor vazio e a situação; omitir | O item em branco, ilegível, rasurado ou "não se aplica" gera uma linha com `Codigo_Opcao_Valor` e `Rotulo_Opcao_Valor` vazios e a coluna `Situacao` com o estado (`em_branco`, `ilegivel`, `rasurado`, `nao_se_aplica`); o item com valor tem `Situacao = respondida`. `nenhuma_das_anteriores` marcada é uma opção como as outras | Os estados não viram zero nem "não" (RN-020), e a falta de resposta fica visível na planilha (CHG-015) | definitivo | Médio | RN-020, RN-047, RN-051, CA-050 |
+| DEC-159 | 05/11/2026 | negócio | Formatos do formato longo (Q-057) | XLSX e CSV; só XLSX | XLSX e CSV, como as demais exportações (DEC-014) | Mesma escolha da DEC-014 (CHG-015) | definitivo | Baixo | DEC-014, RN-051, CA-051 |
+| DEC-160 | 05/11/2026 | negócio | Identificador da aplicação no formato longo (Q-058) | UUID da aplicação; número sequencial da exportação | `ID_Aplicacao` é o identificador da aplicação no sistema (UUID), o mesmo das telas e da auditoria | Permite voltar à aplicação e juntar exportações diferentes (CHG-015) | definitivo | Baixo | ENT-010, RN-051, CA-050 |
+| DEC-161 | 05/11/2026 | negócio | Fórmulas em células exportadas (Q-059) | Neutralizar com apóstrofo; não tratar | Em toda exportação em CSV ou XLSX (RF-010, RF-012), a célula de texto que começa com `=`, `+`, `-`, `@`, tabulação ou retorno de carro recebe um apóstrofo (`'`) na frente. Os valores de `escala` e `numero` e as datas, já validados no formato canônico (§5.4), saem como estão | Texto lido do papel ou digitado na revisão não pode virar fórmula ao abrir a planilha (RN-037; PLANO §12.3, F-19) (CHG-015) | definitivo | Médio | RN-037, RN-051, CA-051 |
+| DEC-162 | 05/11/2026 | negócio | Dados de identificação no formato longo (Q-060) | Só o CPF; nome ao lado do CPF; nome e data de nascimento | A coluna `Nome` (nome do cadastro do respondente) fica ao lado do CPF. As perguntas marcadas como nome, data de nascimento ou CPF do respondente e como data da aplicação não viram linhas: nome, CPF e data da aplicação já estão nas colunas, e a data de nascimento fica fora da planilha | O responsável precisa do nome do respondente na planilha; a data de nascimento não é necessária (minimização) (CHG-015) | definitivo | Alto | RN-013, RN-051, DEC-072, CA-050 |
+| DEC-163 | 05/11/2026 | negócio | Recorte do formato longo (Q-061) | Só projetos e período; também os filtros do dashboard | O formato longo recorta só por projetos e período (`data_aplicacao`; sem período, todas as aplicações). `filtros` enviados com `linha_por_item` são recusados com ERR-001 (`campos`: `filtros`) até os filtros do dashboard existirem (RF-009, IMP-004) | Os filtros dependem do RF-009, ainda não implementado (CHG-015) | provisório | Baixo | RF-009, RN-051, CA-051 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -429,6 +443,28 @@ Todo rascunho tem exatamente uma pergunta para cada marcação da tabela abaixo.
 | CPF | cpf | CPF | `campo_respondente = cpf` | identificacao (RN-047) |
 | DATA_APLICACAO | data | Data da aplicação | `campo_aplicacao = data_aplicacao` | outro |
 | LOCAL_APLICACAO | texto_curto | Local da aplicação | `campo_aplicacao = local_aplicacao` | outro |
+
+RN-051 — Exportação em formato longo (DEC-153 a DEC-163)
+O escopo `linha_por_item` gera um arquivo XLSX ou CSV (DEC-159) com uma linha de cabeçalho e estas colunas, nesta ordem:
+
+| Coluna | Conteúdo |
+|---|---|
+| ID_Aplicacao | identificador da aplicação (UUID, DEC-160) |
+| CPF | CPF do cadastro do respondente, completo, com 11 dígitos sem pontuação, como texto (DEC-155) |
+| Nome | nome do cadastro do respondente (DEC-162) |
+| Data_Aplicacao | data da aplicação, `YYYY-MM-DD` |
+| Codigo_Pergunta | código da pergunta (RN-018) |
+| Codigo_Linha | código da linha da matriz (RN-019); vazio nas outras perguntas (DEC-154) |
+| Codigo_Opcao_Valor | código da opção marcada; em escala, número, data, texto curto e texto livre, o valor no formato canônico (§5.4, DEC-156); vazio quando `Situacao` não é `respondida` |
+| Rotulo_Opcao_Valor | rótulo da opção na versão da aplicação; vazio quando o valor não é opção ou não há valor |
+| Situacao | `respondida`, `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica` (DEC-158) |
+
+Entram só as aplicações `concluida` com assinatura `presente` (CA-021, DEC-157), dos projetos pedidos e com `data_aplicacao` no período, quando informado; sem período, todas. Os valores são os de `valor_final`. Em cada aplicação, cada pergunta da versão gera linhas assim:
+1. `multipla_escolha`: uma linha por opção marcada, na ordem das opções na versão; `nenhuma_das_anteriores` é uma opção como as outras;
+2. `matriz`: uma linha por linha da matriz, com a opção marcada nela;
+3. demais tipos: uma linha;
+4. item em branco, ilegível, rasurado ou "não se aplica": uma linha, com valor e rótulo vazios e a situação (RN-020); na matriz, uma por linha da matriz.
+As perguntas marcadas como nome, data de nascimento ou CPF do respondente (`campo_respondente`) e como data da aplicação (`campo_aplicacao = data_aplicacao`) não viram linhas (DEC-162). As linhas seguem a ordem de `Data_Aplicacao` e de `ID_Aplicacao` e, dentro da aplicação, a ordem das perguntas na versão (página e ordem) e das linhas da matriz. Sem aplicação que entre, o arquivo traz só o cabeçalho. As células de texto são neutralizadas contra fórmulas (DEC-161). Os filtros do dashboard não se aplicam (DEC-163). A exportação é auditada uma vez, com escopo, formato, projetos e número de aplicações, sem valores (RN-028); esse registro vale como o da exibição completa do CPF (DEC-072). O arquivo é apagado após `retencao_exportacao_dias` (RN-030, DEC-069), e a partir daí a consulta da exportação não traz mais o link.
 
 5. Modelo e dicionário de dados
 
@@ -835,13 +871,13 @@ Apagado integralmente na eliminação do titular (CA-023).
 | usuario_id | quem pediu | uuid | sim | 36 | UUID v4 | — | — | não | Usuario.id | não |
 | projeto_ids | projetos incluídos | uuid[] | sim | — | UUID v4 | — | — | não | — | não |
 | formato | formato | enum | sim | — | — | csv; xlsx | — | não | — | não |
-| escopo | escopo | enum | sim | — | — | agregado; linha_a_linha | — | não | — | não |
+| escopo | escopo (`linha_por_item`: formato longo, RN-051) | enum | sim | — | — | agregado; linha_a_linha; linha_por_item | — | não | — | não |
 | status | situação | enum | sim | — | — | enfileirada; em_andamento; concluida; falhou; cancelada | enfileirada | não | — | não |
 | chave_storage | objeto gerado (NULL até concluir ou após expurgo) | varchar | não | 500 | — | — | NULL | não | — | não |
 | criado_em | data do pedido | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 | expira_em | data de expurgo do arquivo | timestamp | não | — | ISO 8601 UTC | — | concluida + retencao_exportacao_dias | não | — | não |
 
-Linha a linha contém dados pessoais em repouso: cancelada e apagada na eliminação do titular (CA-023).
+Linha a linha e linha por item contêm dados pessoais em repouso: canceladas e apagadas na eliminação do titular (CA-023).
 
 **ENT-027 Sessao**
 
@@ -1035,7 +1071,7 @@ Estado final: dashboard exibido.
 Quem executa: A usuária (exportação agregada ou linha a linha, direitos do titular e auditoria; DEC-109).
 Quando pode: Sempre que tiver sessão.
 Quando não pode: Pedido do titular em estado que não permite a ação.
-Entradas: formato (CSV/XLSX), rótulos ou códigos, filtros; para direitos do titular, CPF do titular e tipo do pedido. Consulta da trilha de auditoria (TL-011).
+Entradas: formato (CSV/XLSX), escopo (agregado, linha a linha ou linha por item; o formato longo é o RF-012), rótulos ou códigos, filtros; para direitos do titular, CPF do titular e tipo do pedido. Consulta da trilha de auditoria (TL-011).
 Sucesso: arquivo gerado, auditoria registrada.
 Erro e timeout: ERR-018 (pedido em estado que não permite execução), timeout de 60 s no job.
 Registros alterados: Auditoria, PedidoTitular (se for direito do titular).
@@ -1052,6 +1088,17 @@ Erro e timeout: ERR-001 (validação), ERR-029 (arquivo recusado), ERR-003 (avis
 Registros alterados: ImportacaoFormulario, Formulario, Versao, Pergunta, Opcao, LinhaMatriz, Projeto, Auditoria.
 Mensagens: "Formulário importado" ou a mensagem do ERR-044.
 Estado final: importação em `concluida` (formulário em rascunho) ou `falhou` (nada criado).
+
+**RF-012 — Exportação em formato longo (CHG-015)**
+Quem executa: A usuária; o arquivo é gerado pelo worker assíncrono.
+Quando pode: Sempre que tiver sessão.
+Quando não pode: Com `filtros` (ERR-001, DEC-163); projeto inexistente (ERR-002).
+Entradas: formato (CSV ou XLSX), projetos e, opcionalmente, período (`exportData` com escopo `linha_por_item`).
+Sucesso: arquivo no formato longo da RN-051, disponível pelo link da consulta da exportação até `retencao_exportacao_dias` (DEC-069); auditoria registrada.
+Erro e timeout: ERR-001 (validação), ERR-002 (projeto não encontrado), ERR-019 (Idempotency-Key reusada com outro conteúdo); timeout de 60 s no job (seção 6.6), com a exportação em `falhou`.
+Registros alterados: Exportacao, Auditoria.
+Mensagens: "Exportação concluída".
+Estado final: exportação `concluida` (arquivo disponível até expirar) ou `falhou`.
 
 6.2 Requisitos não funcionais (RNF)
 
@@ -1089,7 +1136,7 @@ Para cada tela, os estados obrigatórios (Bloco P, P.11): carregando, vazio, suc
 | TL-007 | Revisão lado a lado | carregando, vazio, sucesso (salvo), erro (validação ou edição concorrente), sem permissão (estado não admite revisão), tempo esgotado |
 | TL-008 | Dashboard | carregando, vazio (sem dados), sucesso (gráficos), erro, sem permissão, tempo esgotado |
 | TL-009 | Ficha individual | carregando, vazio, sucesso (evolução), erro, sem permissão (sessão expirada), tempo esgotado |
-| TL-010 | Exportação | carregando, vazio, sucesso (arquivo gerado), erro, sem permissão, tempo esgotado |
+| TL-010 | Exportação (agregada, linha a linha ou linha por item) | carregando, vazio, sucesso (arquivo gerado), erro, sem permissão, tempo esgotado |
 | TL-011 | Auditoria | carregando, vazio, sucesso (lista), erro, sem permissão, tempo esgotado |
 | TL-012 | Direitos do titular | carregando, vazio, sucesso (pedido executado), erro, sem permissão, tempo esgotado |
 | TL-013 | Retirada na v2.1 (sem usuários, perfis e concessões, DEC-109) | — |
@@ -1728,6 +1775,46 @@ E a auditoria registra a alteração sem o nome do coordenador (RN-027)
 | 3 | updateProject | — | 2027-03-31 | 2026-12-01 | Recusado com ERR-001 (`campos`: `coleta_fim`) |
 | 4 | updateProject, num projeto que tinha "Ana Souza" | `null` | — | — | Gravado; o nome é apagado (DEC-137) |
 
+**US-012 — Como usuária, quero exportar os dados em formato longo, uma linha por item, para analisar na planilha sem transformar os dados.**
+Relacionado a: RF-012, CA-021, CA-050, CA-051
+
+CA-050 — Planilha em formato longo
+Dado que o projeto "Saúde 60+" tem a aplicação A1 (`concluida`, assinatura `presente`, data da aplicação 2026-11-05) da respondente "Maria da Silva", CPF "529.982.247-25", e a aplicação A2 (`concluida`, assinatura `ausente`)
+E a versão das duas tem, nesta ordem, NOME, DATA_NASCIMENTO, CPF, DATA_APLICACAO, LOCAL_APLICACAO, BENS_POSSUIDOS (`multipla_escolha`), SATISFACAO_COM (`matriz`, linhas `moradia` e `saude`), PESO (`numero`), FUMA (`sim_nao`) e DOENCAS (`multipla_escolha`)
+Quando a usuária exporta o projeto com escopo `linha_por_item`, formato XLSX e sem período
+Então o arquivo tem o cabeçalho ID_Aplicacao, CPF, Nome, Data_Aplicacao, Codigo_Pergunta, Codigo_Linha, Codigo_Opcao_Valor, Rotulo_Opcao_Valor, Situacao
+E só as linhas da A1, na ordem da tabela (a A2 fica fora, CA-021)
+E todas com o ID da A1, CPF "52998224725", Nome "Maria da Silva" e Data_Aplicacao 2026-11-05
+E não há linhas de NOME, DATA_NASCIMENTO, CPF nem DATA_APLICACAO (DEC-162)
+E a auditoria registra a exportação uma vez, sem valores
+
+| Exemplo | Item da A1 | Codigo_Pergunta | Codigo_Linha | Codigo_Opcao_Valor | Rotulo_Opcao_Valor | Situacao |
+|---|---|---|---|---|---|---|
+| 1 | LOCAL_APLICACAO = "Clínica Centro" | LOCAL_APLICACAO | (vazio) | Clínica Centro | (vazio) | respondida |
+| 2 | BENS_POSSUIDOS = `carro;geladeira`, 1ª opção | BENS_POSSUIDOS | (vazio) | carro | Carro | respondida |
+| 3 | BENS_POSSUIDOS, 2ª opção | BENS_POSSUIDOS | (vazio) | geladeira | Geladeira | respondida |
+| 4 | SATISFACAO_COM, linha `moradia` = `boa` | SATISFACAO_COM | moradia | boa | Boa | respondida |
+| 5 | SATISFACAO_COM, linha `saude` ilegível | SATISFACAO_COM | saude | (vazio) | (vazio) | ilegivel |
+| 6 | PESO = `72.5` | PESO | (vazio) | 72.5 | (vazio) | respondida |
+| 7 | FUMA em branco | FUMA | (vazio) | (vazio) | (vazio) | em_branco |
+| 8 | DOENCAS = `nenhuma_das_anteriores` | DOENCAS | (vazio) | nenhuma_das_anteriores | Nenhuma das anteriores | respondida |
+
+CA-051 — Recorte, formato, fórmulas e retenção do formato longo
+Dado o projeto "Saúde 60+" do CA-050
+Quando a usuária pede a exportação com escopo `linha_por_item`
+Então o resultado segue a tabela
+
+| Exemplo | Situação | Resultado esperado |
+|---|---|---|
+| 1 | Com `filtros` | Recusado com ERR-001 — Revise os campos destacados e tente novamente. (`campos`: `filtros`); nada é gravado |
+| 2 | Projeto inexistente em `projeto_ids` | Recusado com ERR-002 — O recurso solicitado não existe ou você não tem acesso.; nada é gravado |
+| 3 | Período de 2026-12-01 a 2026-12-31, sem aplicação nele | Exportação `concluida`; arquivo só com o cabeçalho |
+| 4 | Formato CSV | Mesmas colunas e linhas do CA-050 |
+| 5 | LOCAL_APLICACAO da A1 gravado como `=HYPERLINK("http://exemplo.invalid")` | Codigo_Opcao_Valor sai `'=HYPERLINK("http://exemplo.invalid")` (DEC-161) |
+| 6 | Nome do cadastro gravado como `@Maria` | Nome sai `'@Maria` (DEC-161) |
+| 7 | PESO = `-3` | Codigo_Opcao_Valor sai `-3`, sem apóstrofo (DEC-161) |
+| 8 | 8 dias depois de concluída a exportação | Arquivo apagado; a consulta da exportação traz `url_download` nulo (DEC-069) |
+
 8. Rastreabilidade e catálogo de erros
 
 8.1 Matriz de Rastreabilidade (completa)
@@ -1747,6 +1834,7 @@ A matriz completa é mantida em `registros/matriz_rastreabilidade.csv`, idêntic
 | RF-009 | RN-026 | ENT-012 | FL-001 | US-004, US-007, US-008 | CA-009, CA-011, CA-017, CA-021, CA-031 | — | getDashboardAggregated, listGroups, createGroup, deleteGroup, findRespondent, getIndividualRecord | CMP-Dashboard | IMP-004 |
 | RF-010 | RN-027, RN-030, RN-031 | ENT-009, ENT-013, ENT-018, ENT-019, ENT-023, ENT-026 | FL-001, FL-003 | US-005, US-009 | CA-021, CA-022, CA-023, CA-024 | TS-005, TS-008 | exportData, getExport, createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, cancelDataSubjectRequest, listAuditEvents | CMP-LGPD | IMP-004 |
 | RF-011 | RN-017, RN-018, RN-019, RN-036, RN-037, RN-038, RN-047, RN-049, RN-050 | ENT-004, ENT-005, ENT-006, ENT-007, ENT-008, ENT-024, ENT-031 | FL-004 | US-006, US-011 | CA-045, CA-046, CA-047, CA-048, CA-049 | — | importForm, listFormImports, getFormImport, extractFormStructure (interna) | CMP-Forms | IMP-006 |
+| RF-012 | RN-020, RN-030, RN-037, RN-051 | ENT-009, ENT-010, ENT-011, ENT-013, ENT-026 | FL-001 | US-009, US-012 | CA-021, CA-050, CA-051 | — | exportData, getExport | CMP-LGPD | IMP-007 |
 
 8.2 Catálogo de Erros (ERR)
 
@@ -1842,6 +1930,16 @@ Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, f
 | Q-049 | 05/11/2026 | Nome do coordenador apagado e restauração de backup | A restauração reaplica só eliminações de respondentes; o nome apagado voltaria (revisão focada da CHG-014, S-06) | A: aceitar o risco | B: registrar e reaplicar após o restore | — | A | Risco aceito; a usuária apaga de novo | Aceitar o risco (Carlos Yano, 05/11/2026). Incorporada como DEC-148. | respondida | DEC-137, DEC-148 |
 | Q-050 | 05/11/2026 | Endereço e aplicador no formulário importado | Só os 5 campos eram reconhecidos; "Endereço" entraria como `saude` e iria à IA junto com saúde (RN-039; revisão focada da CHG-014, S-16) | A: a IA também reconhece endereço e aplicador | B: aceitar o risco | — | A | Endereço e aplicador reconhecidos como identificação, sem injeção | IA também reconhece (Carlos Yano, 05/11/2026). Incorporada como DEC-149. | respondida | RN-039, RN-049, DEC-149 |
 | Q-051 | 05/11/2026 | Enunciado padrão de endereço e aplicador | A RN-049 (passo 1) dá o enunciado padrão à pergunta reconhecida com enunciado vazio, mas a DEC-149 não fixa o enunciado de `endereco` e `aplicador`, que não estão na tabela da RN-050 (IA-DEV do IMP-006) | A: "Endereço" e "Aplicador" | B: "Endereço do respondente" e "Nome do aplicador" | — | A | Enunciados "Endereço do respondente" e "Nome do aplicador"; as duas perguntas não são obrigatórias | B, e os dois não são obrigatórios no formulário (Carlos Yano, 05/11/2026). Incorporada como DEC-152. | respondida | RN-049, DEC-149, DEC-151, DEC-152 |
+| Q-052 | 05/11/2026 | Linha de matriz no formato longo | O Change Request faz cada linha da matriz virar uma linha da planilha, mas não diz onde vai o código da linha | A: coluna própria `Codigo_Linha` | B: código composto em `Codigo_Pergunta` (ex.: SATISFACAO_COM_moradia) | — | A | Coluna `Codigo_Linha`, vazia fora da matriz | De acordo (Carlos Yano, 05/11/2026). Incorporada como DEC-154. | respondida | RN-019, RN-051, DEC-154 |
+| Q-053 | 05/11/2026 | CPF no formato longo | O exemplo do Change Request mostra o CPF com pontuação; o formato canônico (§5.4) é sem pontuação | A: 11 dígitos sem pontuação, completo, auditado (DEC-072) | B: com pontuação | C: mascarado | A | CPF completo, 11 dígitos sem pontuação, como texto | De acordo (Carlos Yano, 05/11/2026). Incorporada como DEC-155. | respondida | DEC-072, RN-051, DEC-155 |
+| Q-054 | 05/11/2026 | Valor de escala, número, data e texto no formato longo | O Change Request só mostra opções; não diz onde vai o valor das perguntas sem opção | A: valor canônico em `Codigo_Opcao_Valor`, rótulo vazio | B: valor repetido no rótulo | — | A | Valor em `Codigo_Opcao_Valor`, rótulo vazio | De acordo (Carlos Yano, 05/11/2026). Incorporada como DEC-156. | respondida | RN-051, DEC-156 |
+| Q-055 | 05/11/2026 | Aplicações no formato longo | O Change Request não diz se entram aplicações em revisão ou sem assinatura | A: só concluídas com assinatura presente (CA-021) | B: também em revisão | — | A | Só `concluida` com assinatura `presente` | De acordo (Carlos Yano, 05/11/2026). Incorporada como DEC-157. | respondida | CA-021, RN-051, DEC-157 |
+| Q-056 | 05/11/2026 | Item sem resposta no formato longo | Sem regra, o item em branco, ilegível, rasurado ou "não se aplica" sumiria da planilha ou se confundiria com zero (RN-020) | A: uma linha com valor vazio e a coluna `Situacao`; `nenhuma_das_anteriores` como opção comum | B: omitir o item | — | A | Uma linha com valor vazio e a situação | De acordo (Carlos Yano, 05/11/2026). Incorporada como DEC-158. | respondida | RN-020, RN-051, DEC-158 |
+| Q-057 | 05/11/2026 | Formatos do formato longo | O Change Request fala só em XLSX; as demais exportações têm XLSX e CSV (DEC-014) | A: XLSX e CSV | B: só XLSX | — | A | XLSX e CSV | De acordo (Carlos Yano, 05/11/2026). Incorporada como DEC-159. | respondida | DEC-014, RN-051, DEC-159 |
+| Q-058 | 05/11/2026 | Identificador da aplicação no formato longo | O exemplo do Change Request usa `app-001`; o sistema identifica a aplicação por UUID | A: UUID da aplicação | B: número sequencial da exportação | — | A | UUID da aplicação | De acordo (Carlos Yano, 05/11/2026). Incorporada como DEC-160. | respondida | ENT-010, RN-051, DEC-160 |
+| Q-059 | 05/11/2026 | Fórmulas em células exportadas | Texto lido do papel é gravado como veio; uma célula que começa com `=` vira fórmula ao abrir a planilha (PLANO §12.3, F-19) | A: apóstrofo antes de `=`, `+`, `-`, `@`, tabulação e retorno de carro | B: não tratar | — | A | Apóstrofo na frente das células de texto que começam com esses caracteres; números e datas canônicos saem como estão | De acordo (Carlos Yano, 05/11/2026). Incorporada como DEC-161. | respondida | RN-037, RN-051, DEC-161 |
+| Q-060 | 05/11/2026 | Dados de identificação no formato longo | O Change Request traz só o CPF; as perguntas de nome e data de nascimento virariam linhas da planilha | A: só o CPF; nome e data de nascimento não entram (minimização) | B: coluna `Nome` ao lado do CPF; data de nascimento fora | C: nome e data de nascimento como colunas | A | Coluna `Nome` ao lado do CPF; data de nascimento fora; perguntas de identificação e de data da aplicação não viram linhas | "No excel gerado eu preciso do nome do respondente" (Carlos Yano, 05/11/2026): B. Incorporada como DEC-162. | respondida | RN-051, DEC-072, DEC-162 |
+| Q-061 | 05/11/2026 | Recorte do formato longo | O contrato aceita os filtros do dashboard, que só existem no IMP-004 (RF-009) | A: só projetos e período; `filtros` → ERR-001 até o IMP-004 | B: esperar os filtros do dashboard | — | A | Só projetos e período; `filtros` recusados com ERR-001 | De acordo (Carlos Yano, 05/11/2026). Incorporada como DEC-163. | respondida | RF-009, RN-051, DEC-163 |
 
 10. Gates externos (GX)
 
@@ -1870,7 +1968,7 @@ Testes sentinela são casos de teste de alto nível que validam os riscos críti
 
 Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tools/validar_consistencia.py`; o resultado do script prevalece sobre este texto.
 
-- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-011, RNF-001 a RNF-014, RN-001 a RN-050, ENT-001 a ENT-031, FL-001 a FL-004, TL-001 a TL-015, US-001 a US-011, 44 CAs (CA-001 a CA-049 e CA-014b, sem os retirados na v2.1: CA-010, CA-016, CA-025, CA-026b, CA-034, CA-037b, CA-038 e CA-043), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-082 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), as DEC seguintes da REQ e do PLANO até a DEC-152, Q-001 a Q-051 e GX-001. Verificado por script (IDs citados existem nos registros).
+- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-012, RNF-001 a RNF-014, RN-001 a RN-051, ENT-001 a ENT-031, FL-001 a FL-004, TL-001 a TL-015, US-001 a US-012, 46 CAs (CA-001 a CA-051 e CA-014b, sem os retirados na v2.1: CA-010, CA-016, CA-025, CA-026b, CA-034, CA-037b, CA-038 e CA-043), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-082 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), as DEC seguintes da REQ e do PLANO até a DEC-165, Q-001 a Q-061 e GX-001. Verificado por script (IDs citados existem nos registros).
 - [x] 2. BDD com dados concretos: tabelas de exemplos nos CAs de alto risco CA-002, CA-008, CA-012, CA-023, CA-029, CA-030 e CA-032 (adicionadas na v1.3; na v1.2 só o CA-029 tinha tabela).
 - [x] 3. Estados e fluxos fechados: FL-001 com tabela de criação e entradas em `aguardando_cota`; FL-002 com ordem de avaliação explícita; FL-004 com as transições da importação (CHG-014). Estados verificados por script contra o dicionário e o contrato.
 - [x] 4. Dicionário de dados completo: 31 entidades com as 11 propriedades; `registros/dicionario_dados.csv` idêntico, verificado por script.
