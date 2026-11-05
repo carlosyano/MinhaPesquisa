@@ -49,7 +49,7 @@ export function lerCsv(bytes: Buffer): string[][] {
   return linhas;
 }
 
-/** Célula do XLSX: texto, número ou fórmula (que a exportação nunca deve gravar, DEC-161). */
+/** Célula do XLSX: texto, número ou fórmula (que a exportação nunca deve gravar, DEC-166). */
 export interface Celula {
   tipo: 'texto' | 'numero' | 'formula' | 'vazia';
   valor: string;

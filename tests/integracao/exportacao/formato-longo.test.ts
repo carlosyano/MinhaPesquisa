@@ -101,7 +101,7 @@ describe('CA-050 — planilha em formato longo (RN-051)', () => {
     for (const ident of ['NOME', 'DATA_NASCIMENTO', 'CPF', 'DATA_APLICACAO']) expect(perguntas.has(ident)).toBe(false);
   });
 
-  // @trace CA-050, DEC-155, DEC-161, DEC-165
+  // @trace CA-050, DEC-155, DEC-165, DEC-166
   it('XLSX: uma planilha "Dados"; CPF e datas são texto, o PESO é número, e nenhuma célula é fórmula', async () => {
     const a = await exportada(h, c, corpo([saude]));
     expect(a.contentType).toMatch(/^application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
@@ -308,7 +308,7 @@ describe('CA-051 — recorte, formato, fórmulas e retenção (RN-051)', () => {
     expect((await h.inspect.exportacao(a.id)).chave_storage).toBe(`tenant/${T.tenantId}/exportacao/${a.id}.csv`);
   });
 
-  describe('exemplos 5 a 7: neutralização de fórmulas (DEC-161)', () => {
+  describe('exemplos 5 a 7: neutralização de fórmulas (DEC-166)', () => {
     let projeto: string;
     let id: string;
     beforeAll(async () => {
@@ -329,31 +329,38 @@ describe('CA-051 — recorte, formato, fórmulas e retenção (RN-051)', () => {
       );
     });
 
-    // @trace CA-051, DEC-161, RN-037
-    it.each(['xlsx', 'csv'] as const)('%s: o texto que começa com = ou @ recebe o apóstrofo; o número -3 sai como está', async (formato) => {
-      const l = linhas(await exportada(h, c, corpo([projeto], { formato })), formato).slice(1);
+    // @trace CA-051, DEC-166, RN-037
+    it('csv: o texto que começa com = ou @ recebe o apóstrofo; o número -3 sai como está', async () => {
+      const l = linhas(await exportada(h, c, corpo([projeto], { formato: 'csv' })), 'csv').slice(1);
       expect(l.length).toBeGreaterThan(0);
       for (const linha of l) expect(linha.slice(0, 3)).toEqual([id, CPF_FORMULAS, "'@Maria"]);
       expect(l.find((x) => x[4] === 'LOCAL_APLICACAO')![6]).toBe(`'=HYPERLINK("http://exemplo.invalid")`);
       expect(l.find((x) => x[4] === 'PESO')![6]).toBe('-3');
     });
 
-    // @trace CA-051, DEC-161, DEC-165
-    it('xlsx: o -3 é célula numérica e nenhuma célula é fórmula', async () => {
-      const celulas = celulasXlsx(await exportada(h, c, corpo([projeto])));
+    // @trace CA-051, DEC-166, DEC-165, RN-037
+    it('xlsx: o texto sai sem apóstrofo, em célula de texto; o -3 é célula numérica; nenhuma célula é fórmula', async () => {
+      const celulas = celulasXlsx(await exportada(h, c, corpo([projeto]))).slice(1);
+      expect(celulas.length).toBeGreaterThan(0);
+      for (const linha of celulas) {
+        expect(linha[0]).toEqual({ tipo: 'texto', valor: id });
+        expect(linha[2]).toEqual({ tipo: 'texto', valor: '@Maria' });
+      }
+      expect(celulas.find((x) => x[4].valor === 'LOCAL_APLICACAO')![6]).toEqual({ tipo: 'texto', valor: '=HYPERLINK("http://exemplo.invalid")' });
       expect(celulas.find((x) => x[4].valor === 'PESO')![6]).toEqual({ tipo: 'numero', valor: '-3' });
       expect(celulas.flat().some((x) => x.tipo === 'formula')).toBe(false);
     });
   });
 
-  // @trace DEC-161, RN-037
-  it.each(['+SOMA(1;2)', '-2+3', '@SOMA(A1)'])('texto que começa com %s recebe o apóstrofo no CSV e no XLSX', async (local) => {
+  // @trace DEC-166, RN-037
+  it.each(['+SOMA(1;2)', '-2+3', '@SOMA(A1)'])('texto que começa com %s: apóstrofo no CSV; no XLSX, como está, em célula de texto', async (local) => {
     const { projeto, form } = await projetoComFormulario(`Prefixo ${local}`);
     await conferida(h, c, projeto, form, leituraA1({ CPF: { valor: CPF.maria, confianca: 0.97 }, LOCAL_APLICACAO: { valor: local, confianca: 0.97 } }), ACOES_A1);
-    for (const formato of ['xlsx', 'csv'] as const) {
-      const l = linhas(await exportada(h, c, corpo([projeto], { formato })), formato);
-      expect(l.find((x) => x[4] === 'LOCAL_APLICACAO')![6], formato).toBe(`'${local}`);
-    }
+    const csv = linhas(await exportada(h, c, corpo([projeto], { formato: 'csv' })), 'csv');
+    expect(csv.find((x) => x[4] === 'LOCAL_APLICACAO')![6]).toBe(`'${local}`);
+    const xlsx = celulasXlsx(await exportada(h, c, corpo([projeto])));
+    expect(xlsx.find((x) => x[4].valor === 'LOCAL_APLICACAO')![6]).toEqual({ tipo: 'texto', valor: local });
+    expect(xlsx.flat().some((x) => x.tipo === 'formula')).toBe(false);
   });
 
   // @trace CA-051, DEC-069, RN-030, DEC-165

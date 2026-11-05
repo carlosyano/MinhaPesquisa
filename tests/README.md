@@ -71,8 +71,9 @@ No IMP-007 (exportação em formato longo, CHG-015, DEC-164 e DEC-165) a interfa
 relógio da leitura, e o `clock.advance` também roda o job diário que apaga os arquivos vencidos
 (DEC-069). Os links de `getExport` precisam ser baixáveis com `fetch`, como os das imagens. O CSV e o
 XLSX são lidos por `support/planilha.ts`, sem depender da biblioteca que gera os arquivos (autoteste
-em `support/planilha.test.ts`). A neutralização de fórmulas (DEC-161) é conferida no valor gravado
-na célula: o apóstrofo faz parte do texto, no CSV e no XLSX.
+em `support/planilha.test.ts`). A neutralização de fórmulas (DEC-166, que substitui a DEC-161) é
+conferida no valor gravado: no CSV o apóstrofo faz parte do texto; no XLSX o texto sai como está, em
+célula do tipo texto, e nenhuma célula é fórmula.
 
 ## Cobertura
 
@@ -103,7 +104,7 @@ na célula: o apóstrofo faz parte do texto, no CSV e no XLSX.
 | `integracao/formularios/importacao.test.ts` | RF-011, CA-045, CA-046, CA-047 (exemplos 1 a 8), RN-049, FL-004, DEC-136, DEC-143, DEC-144, DEC-149, T-02 |
 | `integracao/formularios/campos-padrao.test.ts` | CA-048 (exemplos 1 a 9), RN-050, DEC-143, DEC-145, DEC-146, DEC-147 |
 | `integracao/projetos/ciclo-coleta.test.ts` | CA-049, DEC-137, RN-027, RN-028 |
-| `integracao/exportacao/formato-longo.test.ts` | RF-012, CA-050, CA-051 (exemplos 1 a 8), CA-021, RN-051, DEC-153 a DEC-165 |
+| `integracao/exportacao/formato-longo.test.ts` | RF-012, CA-050, CA-051 (exemplos 1 a 8), CA-021, RN-051, DEC-153 a DEC-160, DEC-162 a DEC-166 |
 | `support/planilha.test.ts` | autoteste da leitura de CSV (DEC-165) e de XLSX |
 | `support/arquivos.test.ts` | autoteste dos geradores de PDF, QR, EXIF e arquivos de limite |
 | `support/apoio.test.ts` | autoteste do apoio (catálogo de erros, sem os erros descontinuados na REQ v2.1) |
