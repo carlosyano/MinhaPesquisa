@@ -37,6 +37,14 @@
 //   reserva prévia do custo estimado e o ajuste pelo custo real (DEC-051);
 // - tudo o que a API, o worker e o motor escrevem no log, para provar que não há valores pessoais
 //   (RN-028, CA-008).
+//
+// Acrescentado no IA-TEST do IMP-006 (CHG-014, DEC-141, DEC-142):
+// - o extrator de estrutura simulado no lugar do adaptador Claude da importação, programado por
+//   página, com as falhas e o custo como no motor (DEC-123). As tarefas da importação rodam no
+//   mesmo worker e relógio da leitura: só em `worker.processar()` e em `clock.advance`;
+// - inspeção da importação (estado no banco, tarefas e arquivos que restam na pasta);
+// - rascunho gravado direto no banco como antes da REQ v2.4, sem os 5 campos da RN-050, para os
+//   testes do IMP-002 que precisam de versão incompleta (PLANO §11).
 
 /** Resultado de um script local: código de saída e tudo o que ele escreveu no terminal. */
 export interface SaidaScript {
@@ -123,6 +131,62 @@ export interface ChamadaMotor {
   em: Date;
 }
 
+/** Campo da RN-050 (ou da DEC-149) que o extrator diz que a pergunta é (DEC-144). */
+export type CampoPadrao = 'nome' | 'data_nascimento' | 'cpf' | 'data_aplicacao' | 'local_aplicacao' | 'endereco' | 'aplicador';
+
+/**
+ * Uma pergunta como o extrator a devolve (RN-049, DEC-141): só o que está impresso. `tipo` é um
+ * dos 10 do ENT-007 ou `desconhecido`; `faixa` vale para escala e número.
+ */
+export interface PerguntaExtraida {
+  enunciado: string;
+  tipo: string;
+  opcoes?: string[];
+  linhas?: string[];
+  faixa?: { min: number; max: number } | null;
+  campo_padrao?: CampoPadrao | null;
+}
+
+/**
+ * O que o extrator simulado devolve para uma página. `falha` faz as primeiras `vezes` chamadas da
+ * página falharem (tempo esgotado, erro do provedor ou saída fora do schema, DEC-142); depois
+ * devolve `depois` (ou nenhuma pergunta).
+ */
+export type PaginaExtraida =
+  | { perguntas: PerguntaExtraida[] }
+  | { falha: { tipo: 'tempo_esgotado' | 'erro' | 'malformada'; vezes: number }; depois?: { perguntas: PerguntaExtraida[] } };
+
+/** Páginas de uma importação, numeradas a partir de 1 na ordem do envio. Página não programada: nenhuma pergunta. */
+export type RoteiroImportacao = Record<number, PaginaExtraida>;
+
+/** Uma chamada ao extrator, como ele a recebeu (DEC-141). */
+export interface ChamadaExtrator {
+  pagina: number;
+  /** Dimensões da imagem enviada, em pixels (no máximo 2000 no lado maior, PLANO §4.8). */
+  largura: number;
+  altura: number;
+  resultado: 'ok' | 'tempo_esgotado' | 'erro' | 'malformada';
+  em: Date;
+}
+
+/** ImportacaoFormulario (ENT-031) e o que sobra dela no banco e na pasta. */
+export interface ImportacaoGravada {
+  estado: 'enfileirada' | 'aguardando_cota' | 'em_andamento' | 'concluida' | 'falhou';
+  chave_storage: string | null;
+  /** Arquivos que restam na pasta `tenant/<tenant>/importacao/<importação>/` (DEC-142). */
+  objetos: number;
+  /** Linhas de `tarefa_importacao` que restam, por página (DEC-142). */
+  tarefas: { pagina: number; estado: string; tentativas: number }[];
+}
+
+/** Contagens do tenant para provar que uma importação recusada ou que falhou não criou nada. */
+export interface ContagemImportacao {
+  importacoes: number;
+  formularios: number;
+  /** Arquivos em todas as pastas de importação do tenant. */
+  objetos: number;
+}
+
 export interface RespondenteGravado {
   id: string;
   /** Decifrados pelo harness; null quando anonimizado. */
@@ -205,6 +269,18 @@ export interface Harness {
      * como um arquivo corrompido no disco (DEC-130). Acrescentado na CHG-013.
      */
     corromperPagina(aplicacaoId: string, numeroPagina: number): Promise<void>;
+    /**
+     * Troca, na pasta da importação, o arquivo de onde sai a página por bytes que não são imagem
+     * (FL-004: página que não se lê do disco). Acrescentado no IA-TEST do IMP-006.
+     */
+    corromperPaginaImportacao(importacaoId: string, numeroPagina: number): Promise<void>;
+    /**
+     * Formulário com a versão 1 em rascunho gravada direto no banco, exatamente com `conteudo`,
+     * como um rascunho criado antes da REQ v2.4: sem a injeção nem as recusas da RN-050 (PLANO
+     * §11). O conteúdo segue o formato do `VersionContent` e as demais regras do IMP-002 (códigos
+     * únicos, sensibilidade da RN-047). Acrescentado no IA-TEST do IMP-006.
+     */
+    rascunhoAntigo(dados: { tenantId: string; projetoId: string; nome: string; conteudo: unknown }): Promise<{ formId: string; versaoId: string }>;
   };
 
   /** Motor de leitura simulado (DEC-123), no lugar do adaptador Claude. */
@@ -215,6 +291,16 @@ export interface Harness {
     custo(dados: { estimadoUsd: number; realUsd: number }): void;
     /** Chamadas feitas ao motor para a aplicação, em ordem. */
     chamadas(aplicacaoId: string): Promise<ChamadaMotor[]>;
+  };
+
+  /** Extrator de estrutura simulado da importação (DEC-141), no lugar do adaptador Claude. */
+  extrator: {
+    /** Páginas da importação; vale para as chamadas feitas depois, inclusive nas retentativas. */
+    programar(importacaoId: string, roteiro: RoteiroImportacao): void;
+    /** Custo de cada chamada em dólar: o estimado antes (reserva) e o real depois (DEC-051). Padrão 0. */
+    custo(dados: { estimadoUsd: number; realUsd: number }): void;
+    /** Chamadas feitas ao extrator para a importação, em ordem. */
+    chamadas(importacaoId: string): Promise<ChamadaExtrator[]>;
   };
 
   worker: {
@@ -247,6 +333,10 @@ export interface Harness {
      * fica cifrado (RN-025, DEC-131). Acrescentado na CHG-013.
      */
     itensGravados(aplicacaoId: string): Promise<{ pergunta_codigo: string; valor_ia: string | null; valor_final: string | null }[]>;
+    /** Acrescentado no IA-TEST do IMP-006. */
+    importacao(importacaoId: string): Promise<ImportacaoGravada>;
+    /** Acrescentado no IA-TEST do IMP-006. */
+    contagemImportacao(tenantId: string): Promise<ContagemImportacao>;
   };
 
   /** Gravação direta no banco, como um caminho futuro que não passe pela API (DEC-131). */
