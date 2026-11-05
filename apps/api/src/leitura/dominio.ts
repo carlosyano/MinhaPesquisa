@@ -37,17 +37,24 @@ export interface Cota {
   cotacao: string | null;
 }
 
+/**
+ * Cota do mês. Atingida quando o consumido chega ao teto ou quando a menor reserva recusada no mês
+ * ainda não cabe (DEC-130): assim a fila só volta quando o teto sobe ou o mês vira.
+ */
 export async function cotaDoTenant(n: Nucleo, tx: Executor, tenantId: string): Promise<Cota> {
   const { inicio, fim } = competencia(n.agora());
   const teto = await parametro(tx, 'custo_ia_teto', tenantId, null);
   const r = await linha<{ consumido: string; atingido: boolean; cotacao: string | null }>(
     tx,
-    sql`SELECT coalesce((SELECT valor_reais FROM consumo_ia WHERE tenant_id = ${tenantId} AND competencia = ${inicio}::date), 0)::text AS consumido,
-               coalesce((SELECT valor_reais FROM consumo_ia WHERE tenant_id = ${tenantId} AND competencia = ${inicio}::date), 0) >= ${teto}::numeric AS atingido,
+    sql`SELECT coalesce(c.valor_reais, 0)::text AS consumido,
+               coalesce(c.valor_reais, 0) >= ${teto}::numeric
+                 OR coalesce(c.valor_reais + c.reserva_recusada_reais > ${teto}::numeric, false) AS atingido,
                (SELECT valor FROM parametro_configuracao
                  WHERE chave = 'cotacao_usd_brl' AND competencia = ${inicio}::date AND projeto_id IS NULL
                    AND (tenant_id IS NULL OR tenant_id = ${tenantId})
-                 ORDER BY (tenant_id IS NOT NULL) DESC LIMIT 1) AS cotacao`,
+                 ORDER BY (tenant_id IS NOT NULL) DESC LIMIT 1) AS cotacao
+          FROM (SELECT 1) AS um
+          LEFT JOIN consumo_ia c ON c.tenant_id = ${tenantId} AND c.competencia = ${inicio}::date`,
   );
   return { inicio, fim, teto, consumido: r!.consumido, atingido: r!.atingido, cotacao: r!.cotacao };
 }
@@ -56,21 +63,27 @@ export const reais = (v: string) => Number(v).toFixed(2);
 
 /**
  * Reserva atômica do custo estimado antes da chamada (DEC-051): só grava se o consumido, com a
- * reserva, não passar do teto. Devolve false quando não cabe.
+ * reserva, não passar do teto. Devolve false quando não cabe, guardando a menor reserva recusada
+ * do mês (DEC-130).
  */
 export async function reservar(tx: Executor, tenantId: string, cota: Cota, estimadoUsd: number): Promise<boolean> {
   await tx.execute(sql`
     INSERT INTO consumo_ia (tenant_id, competencia, valor_reais) VALUES (${tenantId}, ${cota.inicio}::date, 0)
     ON CONFLICT (tenant_id, competencia) DO NOTHING`);
+  const reserva = sql`round(${String(estimadoUsd)}::numeric * ${cota.cotacao}::numeric, 6)`;
   const r = await linhas(
     tx,
-    sql`UPDATE consumo_ia SET valor_reais = valor_reais + round(${String(estimadoUsd)}::numeric * ${cota.cotacao}::numeric, 6)
+    sql`UPDATE consumo_ia SET valor_reais = valor_reais + ${reserva}
          WHERE tenant_id = ${tenantId} AND competencia = ${cota.inicio}::date
            AND valor_reais < ${cota.teto}::numeric
-           AND valor_reais + round(${String(estimadoUsd)}::numeric * ${cota.cotacao}::numeric, 6) <= ${cota.teto}::numeric
+           AND valor_reais + ${reserva} <= ${cota.teto}::numeric
          RETURNING tenant_id`,
   );
-  return r.length === 1;
+  if (r.length === 1) return true;
+  await tx.execute(sql`
+    UPDATE consumo_ia SET reserva_recusada_reais = least(coalesce(reserva_recusada_reais, ${reserva}), ${reserva})
+     WHERE tenant_id = ${tenantId} AND competencia = ${cota.inicio}::date`);
+  return false;
 }
 
 /** Troca a reserva pelo custo real (sucesso) ou a devolve (falha, `realUsd` 0). */
@@ -359,7 +372,10 @@ interface LinhaPagina {
   registro_ok: boolean;
 }
 
-/** Corpo `Application` do contrato. CPF mascarado até a revisão ser aberta (RN-013). */
+/** CPF completo só com a revisão aberta e a aplicação ainda em revisão (RN-013, DEC-126). */
+export const cpfExibido = (a: Pick<LinhaAplicacao, 'cpf_exibido_em' | 'estado'>) => a.cpf_exibido_em !== null && ESTADOS_REVISAO.has(a.estado);
+
+/** Corpo `Application` do contrato. CPF mascarado fora da revisão aberta (RN-013, DEC-126). */
 export async function corpoAplicacao(n: Nucleo, tx: Executor, a: LinhaAplicacao, extra: { cadastro_existente?: Cadastro | null } = {}) {
   const paginas = await linhas<LinhaPagina>(
     tx,
@@ -367,7 +383,7 @@ export async function corpoAplicacao(n: Nucleo, tx: Executor, a: LinhaAplicacao,
          WHERE aplicacao_id = ${a.id} AND expurgada_em IS NULL ORDER BY ordem_envio, id`,
   );
   const itens = await carregarItens(n, tx, a.id);
-  const exibir = a.cpf_exibido_em !== null;
+  const exibir = cpfExibido(a);
   const mascarar = (i: Item, v: string | null) => (i.tipo !== 'cpf' || exibir || v === null ? v : /^\d{11}$/.test(v) ? mascararCpf(v) : '***');
   const cpf = cpfDaAplicacao(itens);
   const div = cpf && ESTADOS_REVISAO.has(a.estado) ? divergencias(itens, await cadastroPorCpf(n, tx, cpf)) : [];

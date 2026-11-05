@@ -226,6 +226,18 @@ export async function criarHarness() {
             ON CONFLICT (tenant_id, competencia) DO UPDATE SET valor_reais = consumo_ia.valor_reais + EXCLUDED.valor_reais`),
         );
       },
+
+      /** Arquivo da página trocado por bytes que não são imagem (DEC-130). */
+      async corromperPagina(aplicacaoId: string, numeroPagina: number) {
+        const chaves = await n.banco.manutencao((tx) =>
+          linhas<{ chave_storage: string }>(
+            tx,
+            sql`SELECT chave_storage FROM pagina_aplicacao
+                 WHERE aplicacao_id = ${aplicacaoId} AND tipo = 'formulario' AND numero_pagina = ${numeroPagina}`,
+          ),
+        );
+        for (const { chave_storage } of chaves) await armazenamento.gravar(chave_storage, Buffer.from('arquivo corrompido'), 'image/jpeg');
+      },
     },
 
     motor: {

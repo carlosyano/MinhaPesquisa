@@ -64,8 +64,11 @@ export async function vincular(n: Nucleo, tx: Executor, ator: Ator, aplicacaoId:
   return id;
 }
 
-/** Respondente sem nenhuma aplicação concluída é anonimizado (DEC-078), com registro na ListaEliminacoes. */
-async function anonimizarSemAplicacao(n: Nucleo, tx: Executor, ator: Ator, respondenteId: string, exceto: string): Promise<void> {
+/**
+ * Respondente sem nenhuma aplicação concluída é anonimizado (DEC-078), com registro na
+ * ListaEliminacoes. Vale na nova conclusão e no descarte da aplicação reaberta (DEC-130).
+ */
+export async function anonimizarSemAplicacao(n: Nucleo, tx: Executor, ator: Ator, respondenteId: string, exceto: string): Promise<void> {
   const outras = await linha<{ n: number }>(
     tx,
     sql`SELECT count(*)::int AS n FROM aplicacao WHERE respondente_id = ${respondenteId} AND estado = 'concluida' AND id <> ${exceto}`,
@@ -108,7 +111,7 @@ export async function anexarAssinatura(n: Nucleo, tx: Executor, ator: Ator, a: L
   const respondenteId = await vincular(n, tx, ator, a.id, itens, a.manter_cadastro ?? {});
   await tx.execute(sql`
     UPDATE aplicacao SET estado = 'concluida', aviso = NULL, assinatura = 'presente', respondente_id = ${respondenteId},
-                         respondente_anterior_id = NULL, concluida_em = ${n.agora()}, versao = versao + 1
+                         respondente_anterior_id = NULL, concluida_em = ${n.agora()}, cpf_exibido_em = NULL, versao = versao + 1
      WHERE id = ${a.id}`);
   await n.auditar(tx, ator, 'ANEXAR_ASSINATURA', 'Aplicacao', a.id, { resultado: 'concluida' });
 }
