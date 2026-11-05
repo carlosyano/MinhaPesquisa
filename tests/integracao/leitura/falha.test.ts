@@ -1,6 +1,6 @@
 // Falha da leitura e nova leitura (CA-041, RF-007, FL-001, REQ §6.6). Retentativas automáticas
-// em 1, 2 e 4 s pelo relógio do harness; tempo esgotado, erro do provedor e saída malformada são
-// falhas da chamada (DEC-123).
+// em 1 e 2 s pelo relógio do harness, 3 chamadas no total (DEC-129); tempo esgotado, erro do
+// provedor e saída malformada são falhas da chamada (DEC-123).
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { esperarErro } from '../../support/catalogo.js';
@@ -8,7 +8,7 @@ import { chaveIdempotencia, type Cliente } from '../../support/cliente.js';
 import { entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import { enviar, formularioPublicado, projetoCriado, type FormularioPublicado } from '../../support/formularios.js';
 import { criarHarness, type Harness, type RoteiroLeitura } from '../../support/harness.js';
-import { consultar, conteudoLeitura, enviarELer, leiturasCompletas, paginasJpeg, prepararCotacao } from '../../support/leitura.js';
+import { consultar, conteudoLeitura, enviarELer, leiturasCompletas, paginasJpeg, calibrarConfianca, prepararCotacao } from '../../support/leitura.js';
 
 let h: Harness;
 let A: TenantPronto;
@@ -19,6 +19,7 @@ let f: FormularioPublicado;
 beforeAll(async () => {
   h = await criarHarness();
   await prepararCotacao(h);
+  await calibrarConfianca(h);
   A = await tenantComUsuaria(h, 'Tenant A');
   const admin = await entrar(h, A.usuaria);
   projeto = await projetoCriado(admin, 'Saúde Idoso');
@@ -33,7 +34,7 @@ async function estado(id: string): Promise<string> {
   return (await consultar(dig, id)).corpo.estado;
 }
 
-/** Avança o relógio pelas esperas das retentativas (1, 2 e 4 s) e uma folga, rodando o worker. */
+/** Avança o relógio pelas esperas das retentativas (1 e 2 s, DEC-129) com folga, rodando o worker. */
 async function esgotarRetentativas(): Promise<void> {
   for (const ms of [1_000, 2_000, 4_000, 8_000]) {
     await h.clock.advance(ms);
@@ -59,19 +60,19 @@ describe('CA-041 — retentativas automáticas', () => {
     expect(await tentativasDoCampo(id, 'HORAS_SONO')).toEqual([tipo, tipo, 'ok']);
   });
 
-  // @trace CA-041, ERR-041, FL-001
-  it('falha persistente → erro_leitura depois das retentativas, com auditoria; nunca antes da terceira falha', async () => {
+  // @trace CA-041, ERR-041, FL-001, DEC-129
+  it('falha persistente → erro_leitura na terceira falha, com auditoria; exatamente 3 chamadas', async () => {
     const id = await enviarELer(h, dig, projeto, f, falhando('tempo_esgotado', 10));
     expect(await estado(id)).toBe('em_leitura');
     await h.clock.advance(1_000);
     await h.worker.processar();
-    expect(await estado(id)).toBe('em_leitura');
-    await esgotarRetentativas();
+    expect(await estado(id)).toBe('em_leitura'); // duas falhas: a terceira chamada espera 2 s
+    await h.clock.advance(2_000);
+    await h.worker.processar();
     expect(await estado(id)).toBe('erro_leitura');
+    await esgotarRetentativas();
     const tentativas = await tentativasDoCampo(id, 'HORAS_SONO');
-    expect(tentativas.length).toBeGreaterThanOrEqual(3);
-    expect(tentativas.length).toBeLessThanOrEqual(4);
-    expect(tentativas.every((t) => t === 'tempo_esgotado')).toBe(true);
+    expect(tentativas).toEqual(['tempo_esgotado', 'tempo_esgotado', 'tempo_esgotado']);
     expect(await h.inspect.auditoria(A.tenantId)).toContainEqual(expect.objectContaining({ registro_id: id }));
   });
 });

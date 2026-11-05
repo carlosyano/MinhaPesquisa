@@ -171,7 +171,7 @@ describe('AdaptadorClaude — resposta (RN-045, DEC-047, DEC-051)', () => {
     ['HTTP 429', () => Response.json({ type: 'error', error: { type: 'rate_limit_error', message: 'limite' } }, { status: 429 })],
     ['recusa do modelo', () => mensagem('', { stop_reason: 'refusal', content: [] })],
     ['resposta cortada por max_tokens', () => mensagem('{"campos": [', { stop_reason: 'max_tokens' })],
-  ])('%s → ErroLeitura, numa só tentativa (as retentativas de 1, 2 e 4 s são do worker)', async (_n, responder) => {
+  ])('%s → ErroLeitura, numa só tentativa (as retentativas de 1 e 2 s são do worker)', async (_n, responder) => {
     const t = transporte(responder);
     const erro = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA).catch((e: unknown) => e);
     expect(erro).toBeInstanceOf(ErroLeitura);

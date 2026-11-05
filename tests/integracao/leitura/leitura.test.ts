@@ -16,7 +16,7 @@ import {
   item,
   ITENS,
   leiturasCompletas,
-  prepararCotacao,
+  calibrarConfianca, prepararCotacao,
   revisar,
   type ItemRevisao,
 } from '../../support/leitura.js';
@@ -30,6 +30,7 @@ let f: FormularioPublicado;
 beforeAll(async () => {
   h = await criarHarness();
   await prepararCotacao(h);
+  await calibrarConfianca(h);
   A = await tenantComUsuaria(h, 'Tenant A');
   const admin = await entrar(h, A.usuaria);
   projeto = await projetoCriado(admin, 'Saúde Idoso');
