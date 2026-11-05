@@ -2,7 +2,8 @@
 // IMP-005 e IMP-006, DEC-053). Sobe PostgreSQL 17 real (Testcontainers) com papéis, migrações e RLS, e a
 // API real com relógio controlado. O worker de leitura é o real (DEC-124), com o motor simulado
 // no lugar do adaptador Claude (DEC-123), e só roda quando o teste pede; nele rodam também as
-// tarefas da importação de formulário, com o extrator de estrutura simulado (DEC-141, DEC-142).
+// tarefas da importação de formulário, com o extrator de estrutura simulado (DEC-141, DEC-142), e
+// as da exportação, com o expurgo dos arquivos vencidos (DEC-165, DEC-069).
 // Os scripts de instalação e de redefinição de senha rodam
 // pelo mesmo código do script de linha de comando. Só para testes: nunca é importado pela
 // aplicação.
@@ -31,6 +32,7 @@ import { chavePaginaImportacao, pastaImportacao } from './leitura/importacao.js'
 import type { PerguntaLida } from './regras/importacao.js';
 import { MINUTO } from './infra/relogio.js';
 import { criarTenantComUsuaria, instalar, redefinirSenha } from './scripts/instalacao.js';
+import { chaveExportacao } from './exportacao/worker.js';
 
 const RAIZ = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -511,6 +513,34 @@ export async function criarHarness() {
           ),
         );
         return { importacoes: r!.importacoes, formularios: r!.formularios, objetos: await armazenamento.contar(`tenant/${tenantId}/importacao/`) };
+      },
+
+      /** Exportacao (ENT-026) e os arquivos dela que restam na pasta (DEC-165). */
+      async exportacao(exportacaoId: string) {
+        const e = await n.banco.manutencao((tx) =>
+          linha<{ tenant_id: string; status: string; formato: 'csv' | 'xlsx'; escopo: string; chave_storage: string | null; expira_em: Date | null }>(
+            tx,
+            sql`SELECT tenant_id, status, formato, escopo, chave_storage, expira_em FROM exportacao WHERE id = ${exportacaoId}`,
+          ),
+        );
+        if (!e) throw new Error(`exportação ${exportacaoId} não existe`);
+        const { tenant_id, ...resto } = e;
+        return {
+          ...resto,
+          expira_em: e.expira_em ? new Date(e.expira_em) : null,
+          objetos: await armazenamento.contar(chaveExportacao(tenant_id, exportacaoId, e.formato)),
+        } as never;
+      },
+
+      async contagemExportacao(tenantId: string) {
+        const r = await n.banco.manutencao((tx) =>
+          linha<{ exportacoes: number; tarefas: number }>(
+            tx,
+            sql`SELECT (SELECT count(*)::int FROM exportacao WHERE tenant_id = ${tenantId}) AS exportacoes,
+                       (SELECT count(*)::int FROM tarefa_exportacao WHERE tenant_id = ${tenantId}) AS tarefas`,
+          ),
+        );
+        return { exportacoes: r!.exportacoes, objetos: await armazenamento.contar(`tenant/${tenantId}/exportacao/`), tarefas: r!.tarefas };
       },
 
       /** Valores como estão no banco, sem decifrar (DEC-131). */

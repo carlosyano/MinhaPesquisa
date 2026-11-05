@@ -1,7 +1,7 @@
 # Arquitetura do Projeto MinhaPesquisa
 
 > Mapa do repositório para pessoas e agentes de IA. Resume o que está decidido em
-> `docs/architecture/PLANO.md` (v3.14) e aponta a fonte de verdade de cada artefato.
+> `docs/architecture/PLANO.md` (v3.15) e aponta a fonte de verdade de cada artefato.
 > Em conflito, vale a precedência do PLANO: decisões de negócio → REQ → PLANO/DEC técnicas → Bloco P.
 
 ## 1. Situação atual
@@ -10,7 +10,7 @@ IMP-001 aceito em 29/10/2026 (Gate 2), com o E2E com navegador pendente; IMP-002
 03/11/2026; IMP-005 (aplicação local, CHG-011) aceito em 04/11/2026; IMP-003 e IMP-006 aceitos em 05/11/2026;
 próximo: IMP-007 (exportação em formato longo, CHG-015), antes do IMP-004 (DEC-164). Existem `apps/api`
 (com o worker da leitura em `apps/api/src/leitura`, onde também entra o extrator de estrutura da
-DEC-141), `packages/db`, `packages/motor-leitura` e `tests/`; `apps/web`, `apps/worker`,
+DEC-141, e com a exportação em `apps/api/src/exportacao`, DEC-167), `packages/db`, `packages/motor-leitura` e `tests/`; `apps/web`, `apps/worker`,
 `packages/contratos` e `infra/` ainda não foram criados.
 
 ## 2. Fontes de verdade (DEC-049)
