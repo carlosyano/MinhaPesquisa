@@ -3,6 +3,7 @@
 
 import type { ReadEngine } from '@minhapesquisa/motor-leitura';
 import type { Antimalware } from './infra/antimalware.js';
+import type { ExtratorEstrutura } from './leitura/extrator.js';
 import type { Armazenamento } from './infra/armazenamento.js';
 import type { Relogio } from './infra/relogio.js';
 
@@ -38,6 +39,11 @@ export interface Config {
    * Sem motor configurado, nenhuma leitura é feita.
    */
   motorLeitura?: (contexto: { aplicacaoId: string; pagina: number; campos: string[] }) => ReadEngine;
+  /**
+   * Extrator de estrutura da importação de formulário (DEC-141) para cada chamada; o contexto só
+   * serve para o extrator simulado dos testes. Sem extrator configurado, nenhuma página é lida.
+   */
+  extratorEstrutura?: (contexto: { importacaoId: string; pagina: number }) => ExtratorEstrutura;
   /** Destino do log operacional (sem dado pessoal, RN-028); padrão: saída de erro. */
   log?: (linha: string) => void;
 }

@@ -1,7 +1,9 @@
-// Ambiente de teste exigido por tests/support/harness.ts (IA-TEST do IMP-001, IMP-002, IMP-003 e
-// IMP-005, DEC-053). Sobe PostgreSQL 17 real (Testcontainers) com papéis, migrações e RLS, e a
+// Ambiente de teste exigido por tests/support/harness.ts (IA-TEST do IMP-001, IMP-002, IMP-003,
+// IMP-005 e IMP-006, DEC-053). Sobe PostgreSQL 17 real (Testcontainers) com papéis, migrações e RLS, e a
 // API real com relógio controlado. O worker de leitura é o real (DEC-124), com o motor simulado
-// no lugar do adaptador Claude (DEC-123), e só roda quando o teste pede. Os scripts de instalação e de redefinição de senha rodam
+// no lugar do adaptador Claude (DEC-123), e só roda quando o teste pede; nele rodam também as
+// tarefas da importação de formulário, com o extrator de estrutura simulado (DEC-141, DEC-142).
+// Os scripts de instalação e de redefinição de senha rodam
 // pelo mesmo código do script de linha de comando. Só para testes: nunca é importado pela
 // aplicação.
 //
@@ -24,6 +26,9 @@ import { criarFormularioRascunho, gravarConteudo } from './formularios/conteudo.
 import { normalizarConteudo, type PerguntaEntrada, type RegraEntrada } from './regras/formularios.js';
 import { carregarItens, competencia } from './leitura/dominio.js';
 import { WorkerLeitura } from './leitura/worker.js';
+import type { ExtratorEstrutura } from './leitura/extrator.js';
+import { chavePaginaImportacao, pastaImportacao } from './leitura/importacao.js';
+import type { PerguntaLida } from './regras/importacao.js';
 import { MINUTO } from './infra/relogio.js';
 import { criarTenantComUsuaria, instalar, redefinirSenha } from './scripts/instalacao.js';
 
@@ -124,6 +129,61 @@ class MotorSimulado {
   }
 }
 
+type PaginaExtraida = { perguntas: PerguntaLida[] } | { falha: { tipo: TipoFalha; vezes: number }; depois?: { perguntas: PerguntaLida[] } };
+
+interface ChamadaExtrator {
+  pagina: number;
+  largura: number;
+  altura: number;
+  resultado: 'ok' | TipoFalha;
+  em: Date;
+}
+
+/**
+ * Extrator de estrutura simulado (DEC-141, como o motor da DEC-123): devolve o que o teste
+ * programou para cada página e registra a chamada. Página com `falha` faz falhar as primeiras
+ * `vezes` chamadas dela; página não programada não tem nenhuma pergunta.
+ */
+class ExtratorSimulado {
+  private readonly roteiros = new Map<string, Record<number, PaginaExtraida>>();
+  private readonly tentativas = new Map<string, number>();
+  private readonly registro = new Map<string, ChamadaExtrator[]>();
+  private custo = { estimadoUsd: 0, realUsd: 0 };
+
+  constructor(private readonly agora: () => Date) {}
+
+  programar(importacaoId: string, roteiro: Record<number, PaginaExtraida>): void {
+    this.roteiros.set(importacaoId, roteiro);
+  }
+
+  definirCusto(c: { estimadoUsd: number; realUsd: number }): void {
+    this.custo = { ...c };
+  }
+
+  chamadas(importacaoId: string): ChamadaExtrator[] {
+    return [...(this.registro.get(importacaoId) ?? [])];
+  }
+
+  para(contexto: { importacaoId: string; pagina: number }): ExtratorEstrutura {
+    return {
+      estimarCustoUsd: () => this.custo.estimadoUsd,
+      extrairPagina: async (img: Buffer) => {
+        const p = this.roteiros.get(contexto.importacaoId)?.[contexto.pagina];
+        const chave = `${contexto.importacaoId}|${contexto.pagina}`;
+        const n = (this.tentativas.get(chave) ?? 0) + 1;
+        this.tentativas.set(chave, n);
+        const falha = p && 'falha' in p && n <= p.falha.vezes ? p.falha.tipo : undefined;
+        const { largura, altura } = dimensoes(img);
+        const chamada: ChamadaExtrator = { pagina: contexto.pagina, largura, altura, resultado: falha ?? 'ok', em: this.agora() };
+        this.registro.set(contexto.importacaoId, [...(this.registro.get(contexto.importacaoId) ?? []), chamada]);
+        if (falha) throw new ErroLeitura(falha);
+        const perguntas = !p ? [] : 'falha' in p ? (p.depois?.perguntas ?? []) : p.perguntas;
+        return { perguntas: structuredClone(perguntas), custoUsd: this.custo.realUsd };
+      },
+    };
+  }
+}
+
 function urlComo(superUrl: string, usuario: string, senha: string): string {
   const u = new URL(superUrl);
   u.username = usuario;
@@ -148,6 +208,7 @@ export async function criarHarness() {
   const armazenamento = new ArmazenamentoEmMemoria(relogio.agora);
   await armazenamento.iniciar();
   const motor = new MotorSimulado(relogio.agora);
+  const extrator = new ExtratorSimulado(relogio.agora);
   const logs: string[] = [];
   const config: Config = {
     urlBancoApp: urlComo(banco.superUrl, 'mp_app', senhaApp),
@@ -164,6 +225,7 @@ export async function criarHarness() {
     antimalware: new AntimalwareEicar(),
     gerarId: randomUUID,
     motorLeitura: (contexto) => motor.para(contexto),
+    extratorEstrutura: (contexto) => extrator.para(contexto),
     log: (l) => void logs.push(l),
   };
   const api = await criarApi(config);
@@ -244,6 +306,13 @@ export async function criarHarness() {
         });
       },
 
+      /** Arquivo de onde sai a página da importação trocado por bytes que não são imagem (FL-004). */
+      async corromperPaginaImportacao(importacaoId: string, numeroPagina: number) {
+        const i = await n.banco.manutencao((tx) => linha<{ tenant_id: string }>(tx, sql`SELECT tenant_id FROM importacao_formulario WHERE id = ${importacaoId}`));
+        if (!i) throw new Error(`importação ${importacaoId} não existe`);
+        await armazenamento.gravar(chavePaginaImportacao(i.tenant_id, importacaoId, numeroPagina), Buffer.from('arquivo corrompido'), 'image/jpeg');
+      },
+
       /** Arquivo da página trocado por bytes que não são imagem (DEC-130). */
       async corromperPagina(aplicacaoId: string, numeroPagina: number) {
         const chaves = await n.banco.manutencao((tx) =>
@@ -255,6 +324,12 @@ export async function criarHarness() {
         );
         for (const { chave_storage } of chaves) await armazenamento.gravar(chave_storage, Buffer.from('arquivo corrompido'), 'image/jpeg');
       },
+    },
+
+    extrator: {
+      programar: (importacaoId: string, roteiro: Record<number, PaginaExtraida>) => extrator.programar(importacaoId, roteiro),
+      custo: (c: { estimadoUsd: number; realUsd: number }) => extrator.definirCusto(c),
+      chamadas: async (importacaoId: string) => extrator.chamadas(importacaoId),
     },
 
     motor: {
@@ -409,6 +484,33 @@ export async function criarHarness() {
 
       async logs() {
         return logs.join('\n');
+      },
+
+      /** ImportacaoFormulario, as tarefas que restam e os arquivos que restam na pasta (DEC-142). */
+      async importacao(importacaoId: string) {
+        return n.banco.manutencao(async (tx) => {
+          const i = await linha<{ tenant_id: string; estado: string; chave_storage: string | null }>(
+            tx,
+            sql`SELECT tenant_id, estado, chave_storage FROM importacao_formulario WHERE id = ${importacaoId}`,
+          );
+          if (!i) throw new Error(`importação ${importacaoId} não existe`);
+          const tarefas = await linhas<{ pagina: number; estado: string; tentativas: number }>(
+            tx,
+            sql`SELECT pagina, situacao AS estado, tentativas FROM tarefa_importacao WHERE importacao_id = ${importacaoId} ORDER BY pagina`,
+          );
+          return { estado: i.estado, chave_storage: i.chave_storage, objetos: await armazenamento.contar(pastaImportacao(i.tenant_id, importacaoId)), tarefas };
+        });
+      },
+
+      async contagemImportacao(tenantId: string) {
+        const r = await n.banco.manutencao((tx) =>
+          linha<{ importacoes: number; formularios: number }>(
+            tx,
+            sql`SELECT (SELECT count(*)::int FROM importacao_formulario WHERE tenant_id = ${tenantId}) AS importacoes,
+                       (SELECT count(*)::int FROM formulario WHERE tenant_id = ${tenantId}) AS formularios`,
+          ),
+        );
+        return { importacoes: r!.importacoes, formularios: r!.formularios, objetos: await armazenamento.contar(`tenant/${tenantId}/importacao/`) };
       },
 
       /** Valores como estão no banco, sem decifrar (DEC-131). */

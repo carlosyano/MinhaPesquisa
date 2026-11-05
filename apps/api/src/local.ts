@@ -14,6 +14,7 @@ import { AntimalwareDefender } from './infra/antimalware.js';
 import { ArmazenamentoEmDisco } from './infra/armazenamento-disco.js';
 import { carregarChave, derivarChaves, type ProtetorChave } from './infra/chaves.js';
 import { relogioDoSistema } from './infra/relogio.js';
+import { ExtratorClaude } from './leitura/extrator.js';
 
 /** Raiz do repositório instalado (contrato e catálogo de erros), a partir de apps/api/dist. */
 export const RAIZ = fileURLToPath(new URL('../../../', import.meta.url));
@@ -107,6 +108,8 @@ export async function montarConfig(
   if (s.chaveApiAnthropic) {
     const motor = new AdaptadorClaude({ apiKey: s.chaveApiAnthropic, ...(local.ia ?? IA_PADRAO) });
     config.motorLeitura = () => motor;
+    const extrator = new ExtratorClaude({ apiKey: s.chaveApiAnthropic, ...(local.ia ?? IA_PADRAO) });
+    config.extratorEstrutura = () => extrator;
   }
   return { config, armazenamento };
 }

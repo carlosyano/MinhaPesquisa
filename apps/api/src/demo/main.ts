@@ -32,6 +32,7 @@ import { AntimalwareDefender, AntimalwareEicar, type Antimalware } from '../infr
 import { ArmazenamentoEmMemoria } from '../infra/armazenamento.js';
 import { relogioDoSistema } from '../infra/relogio.js';
 import { competencia } from '../leitura/dominio.js';
+import { ExtratorClaude } from '../leitura/extrator.js';
 import { WorkerLeitura } from '../leitura/worker.js';
 import { IA_PADRAO } from '../local.js';
 import { criarTenantComUsuaria } from '../scripts/instalacao.js';
@@ -152,6 +153,7 @@ if (!/^\d+(\.\d{1,4})?$/.test(cotacao)) {
   process.exit(1);
 }
 const motor = chaveIa ? new AdaptadorClaude({ apiKey: chaveIa, ...ia }) : undefined;
+const extrator = chaveIa ? new ExtratorClaude({ apiKey: chaveIa, ...ia }) : undefined;
 
 const config: Config = {
   urlBancoApp: urlComo(banco.superUrl, 'mp_app', senhaApp),
@@ -168,6 +170,7 @@ const config: Config = {
   antimalware,
   gerarId: randomUUID,
   ...(motor ? { motorLeitura: () => motor } : {}),
+  ...(extrator ? { extratorEstrutura: () => extrator } : {}),
 };
 const api = await criarApi(config, 0, HOST);
 const n = api.nucleo;
