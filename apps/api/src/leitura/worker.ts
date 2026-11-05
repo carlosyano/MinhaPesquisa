@@ -11,6 +11,9 @@
 // - Cota: teto atingido ou mês sem cotação do dólar → aguardando_cota, preservando o que já foi
 //   lido; a retomada roda a cada `processar` e lê só o que falta (FL-001).
 //
+// - Importação de formulário: as tarefas da `tarefa_importacao` rodam no mesmo ciclo e relógio
+//   (DEC-142, importacao.ts).
+//
 // Nada do conteúdo lido entra no log (RN-028): só IDs, página, grupo e resultado.
 
 import { ErroLeitura, type CampoSchema, type ReadEngine } from '@minhapesquisa/motor-leitura';
@@ -33,6 +36,7 @@ import {
   type Item,
   type Regiao,
 } from './dominio.js';
+import { WorkerImportacao } from './importacao.js';
 
 /** Esperas antes da 2ª e da 3ª chamada (REQ §6.6, DEC-129); depois da 3ª falha, erro_leitura. */
 export const ESPERAS_MS = [1 * SEGUNDO, 2 * SEGUNDO];
@@ -63,17 +67,26 @@ interface Preparada {
 const sistema = (tenantId: string) => ({ tenantId, usuarioId: null, ip: null });
 
 export class WorkerLeitura {
-  constructor(private readonly n: Nucleo) {}
+  private readonly importacao: WorkerImportacao;
+
+  constructor(private readonly n: Nucleo) {
+    this.importacao = new WorkerImportacao(n);
+  }
 
   /** Roda o que já venceu: despacho do outbox, retomada da cota e tarefas, até não sobrar nada. */
   async processar(): Promise<void> {
     await this.despachar();
     await this.retomarCota();
+    await this.importacao.retomarCota();
     while ((await this.executarVencidas()) > 0) await this.despachar();
   }
 
   /** Só as tarefas já criadas que venceram no relógio (retentativas), sem despachar nada novo. */
   async executarVencidas(): Promise<number> {
+    return (await this.executarLeituras()) + (await this.importacao.executarVencidas());
+  }
+
+  private async executarLeituras(): Promise<number> {
     const agora = this.n.agora();
     const vencidas = await this.n.banco.manutencao((tx) =>
       linhas<Tarefa>(

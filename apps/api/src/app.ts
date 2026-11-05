@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { AuthController, NUCLEO } from './auth/auth.controller.js';
 import type { Config } from './config.js';
 import { FormulariosController } from './formularios/formularios.controller.js';
+import { ImportacaoController } from './formularios/importacao.controller.js';
 import { FiltroErros, type Req } from './http.js';
 import { Nucleo } from './nucleo.js';
 import { ProjetosController } from './projetos/projetos.controller.js';
@@ -27,7 +28,10 @@ export interface Api {
 export async function criarApi(config: Config, porta = 0, host = '127.0.0.1'): Promise<Api> {
   const nucleo = new Nucleo(config);
 
-  @Module({ controllers: [AuthController, ProjetosController, FormulariosController, UploadController, RevisaoController], providers: [{ provide: NUCLEO, useValue: nucleo }] })
+  @Module({
+    controllers: [AuthController, ProjetosController, FormulariosController, ImportacaoController, UploadController, RevisaoController],
+    providers: [{ provide: NUCLEO, useValue: nucleo }],
+  })
   class ModuloApi {}
 
   const adaptador = new FastifyAdapter({
@@ -38,10 +42,11 @@ export async function criarApi(config: Config, porta = 0, host = '127.0.0.1'): P
   const app = await NestFactory.create<NestFastifyApplication>(ModuloApi, adaptador, { logger: false });
   const fastify = app.getHttpAdapter().getInstance();
   await fastify.register(fastifyCookie as never);
-  // Upload (RF-006, DEC-029): até 50 arquivos de 20 MB por envio; um só campo de texto, a
-  // confirmação da assinatura de attachSignaturePage (RN-044).
+  // Upload (RF-006, DEC-029) e importação (RF-011, DEC-136): até 50 arquivos de 20 MB por envio e
+  // no máximo 2 campos de texto (a confirmação da assinatura de attachSignaturePage, RN-044; o nome
+  // do formulário e a declaração da importação). Cada operação recusa o campo que não é seu.
   await fastify.register(fastifyMultipart as never, {
-    limits: { fileSize: LIMITE_BYTES, files: 50, fields: 1, parts: 51, fieldSize: 1024 },
+    limits: { fileSize: LIMITE_BYTES, files: 50, fields: 2, parts: 52, fieldSize: 1024 },
     throwFileSizeLimit: true,
   });
   fastify.addHook('onRequest', async (req, reply) => {

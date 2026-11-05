@@ -12,6 +12,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.4.0",
     "@fastify/cookie": "11.1.5",
     "@fastify/multipart": "10.1.7",
     "@minhapesquisa/db": "0.1.0",
