@@ -242,6 +242,23 @@ export interface Harness {
     listaEliminacoes(tenantId: string): Promise<EliminacaoGravada[]>;
     /** Tudo o que a API, o worker e o motor escreveram no log desde o início do harness (RN-028). */
     logs(): Promise<string>;
+    /**
+     * Valores dos itens exatamente como estão gravados no banco, sem decifrar, para provar o que
+     * fica cifrado (RN-025, DEC-131). Acrescentado na CHG-013.
+     */
+    itensGravados(aplicacaoId: string): Promise<{ pergunta_codigo: string; valor_ia: string | null; valor_final: string | null }[]>;
+  };
+
+  /** Gravação direta no banco, como um caminho futuro que não passe pela API (DEC-131). */
+  banco: {
+    /**
+     * Tenta mudar colunas da aplicação direto no banco; devolve se o banco aceitou e, se recusou,
+     * o nome da constraint violada. Acrescentado na CHG-013.
+     */
+    tentarAtualizarAplicacao(
+      aplicacaoId: string,
+      mudanca: { estado?: string; data_aplicacao?: string | null; local_aplicacao?: string | null; versao_id?: string | null },
+    ): Promise<{ aceita: boolean; constraint?: string }>;
   };
 
   close(): Promise<void>;
