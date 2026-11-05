@@ -1,12 +1,12 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     API da aplicação local MinhaPesquisa (DEC-107) — digitalização de pesquisas em papel com
     leitura por IA, revisão humana e dashboards, em conformidade com a LGPD. Uma única usuária,
     com todas as permissões (DEC-109); servida só em 127.0.0.1 (DEC-113).
-    Fonte normativa: REQ v2.3 e PLANO.md v3.9. Contract-first — este arquivo valida
+    Fonte normativa: REQ v2.4 e PLANO.md v3.10. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: a única rota pública (`login`) declara `security: []`; sem MFA (DEC-108);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -23,7 +23,7 @@ tags:
   - name: projects
     description: Ciclo de vida e parâmetros de projetos (RF-003)
   - name: forms
-    description: Formulários, versões, publicação e PDF (RF-004)
+    description: Formulários, versões, publicação, PDF e importação de formulário (RF-004, RF-011)
   - name: upload
     description: Upload de imagens, identificação e cota (RF-006, RF-007)
   - name: review
@@ -129,8 +129,11 @@ paths:
       operationId: createProject
       tags: [projects]
       summary: Cria projeto
-      description: Projeto inicia `ativo`; criação registrada no histórico e na auditoria (CA-027).
-      x-trace: [RF-003, CA-027]
+      description: |
+        Projeto inicia `ativo`; criação registrada no histórico e na auditoria (CA-027). Objetivo,
+        coordenador e período de coleta são opcionais; `coleta_fim` antes de `coleta_inicio` → ERR-001
+        (DEC-137, CA-049).
+      x-trace: [RF-003, CA-027, CA-049, DEC-137]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -180,9 +183,11 @@ paths:
     patch:
       operationId: updateProject
       tags: [projects]
-      summary: Atualiza nome ou descrição
-      description: Alteração auditada (RN-027).
-      x-trace: [RF-003, RN-008]
+      summary: Atualiza nome, descrição, objetivo, coordenador ou período de coleta
+      description: |
+        Alteração auditada sem os valores (RN-027); `coleta_fim` antes de `coleta_inicio`, depois de
+        aplicada a alteração → ERR-001 (DEC-137, CA-049).
+      x-trace: [RF-003, RN-008, CA-049, DEC-137]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -293,9 +298,11 @@ paths:
     post:
       operationId: createForm
       tags: [forms]
-      summary: Cria formulário com a versão 1 em rascunho (vazia)
-      description: Cria formulário com a versão 1 em rascunho (vazia).
-      x-trace: [RF-004]
+      summary: Cria formulário com a versão 1 em rascunho
+      description: |
+        Cria formulário com a versão 1 em rascunho, já com os 5 campos obrigatórios da RN-050
+        (DEC-135, CA-048).
+      x-trace: [RF-004, RN-050, CA-048, DEC-135]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -326,8 +333,11 @@ paths:
       operationId: createVersion
       tags: [forms]
       summary: Cria nova versão em rascunho (opcionalmente copiando outra)
-      description: Alterações em versão publicada sempre criam nova versão (RN-042, CA-001).
-      x-trace: [RF-004, CA-001, RN-042]
+      description: |
+        Alterações em versão publicada sempre criam nova versão (RN-042, CA-001). Sem
+        `copiar_de_versao_id`, a versão nasce com os 5 campos da RN-050; com ele, mantém as perguntas
+        da origem (DEC-135, CA-048).
+      x-trace: [RF-004, CA-001, RN-042, RN-050, CA-048]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -384,8 +394,9 @@ paths:
       summary: Substitui o conteúdo de uma versão em rascunho
       description: |
         Versão publicada é imutável → ERR-009 (CA-001, TS-006). Regra de salto inválida
-        (DEC-095) ou sensibilidade `identificacao` fora das perguntas da RN-047 (DEC-097) → ERR-001.
-      x-trace: [RF-004, CA-001, CA-015, RN-042, TS-006, RN-021, DEC-095, DEC-097]
+        (DEC-095), sensibilidade `identificacao` fora das perguntas da RN-047 (DEC-097), ou campo
+        da RN-050 removido ou com código, tipo, marcação ou obrigatoriedade alterados (DEC-135) → ERR-001.
+      x-trace: [RF-004, CA-001, CA-015, RN-042, TS-006, RN-021, DEC-095, DEC-097, RN-050, CA-048]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -477,6 +488,67 @@ paths:
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   # ───────────────────────────── upload (RF-006, RF-007) ─────────────────────────────
+  /projects/{projectId}/form-imports:
+    post:
+      operationId: importForm
+      tags: [forms]
+      summary: Importa um formulário existente (job assíncrono)
+      description: |
+        Recebe um formulário em branco ou com dados fictícios (DEC-133) e enfileira a leitura da
+        estrutura pela IA (RN-049, FL-004). Projeto arquivado ou sem `sem_dados_reais` = true →
+        400 ERR-001; arquivo fora dos limites → 400 ERR-029 com o motivo (DEC-136). O resultado,
+        um formulário novo com a versão 1 em rascunho, é consultado em `getFormImport`.
+      x-trace: [RF-011, CA-045, CA-046, CA-047, RN-049, RN-050, DEC-132, DEC-133, DEC-136]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/FormImportRequest' }
+      responses:
+        '202':
+          description: Importação enfileirada
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FormImport' }
+        '400': { $ref: '#/components/responses/FileRejected' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /form-imports/{importId}:
+    get:
+      operationId: getFormImport
+      tags: [forms]
+      summary: Situação da importação e formulário criado
+      description: |
+        Estado da FL-004; em `concluida`, o formulário e a versão criados e os avisos; em
+        `aguardando_cota`, o aviso ERR-003; em `falhou`, ERR-044 (CA-047).
+      x-trace: [RF-011, CA-045, CA-047, RN-049]
+      parameters:
+        - $ref: '#/components/parameters/ImportId'
+      responses:
+        '200':
+          description: Situação da importação
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FormImport' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
   /projects/{projectId}/applications/upload:
     post:
       operationId: uploadImages
@@ -1356,6 +1428,7 @@ components:
     GroupId: { name: groupId, in: path, required: true, schema: { type: string, format: uuid } }
     RespondentId: { name: respondentId, in: path, required: true, schema: { type: string, format: uuid } }
     ExportId: { name: exportId, in: path, required: true, schema: { type: string, format: uuid } }
+    ImportId: { name: importId, in: path, required: true, schema: { type: string, format: uuid } }
     RequestId: { name: requestId, in: path, required: true, schema: { type: string, format: uuid } }
     PageId: { name: pageId, in: path, required: true, schema: { type: string, format: uuid } }
     Pagina: { name: pagina, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
@@ -1504,7 +1577,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-036', title: Campos obrigatórios ausentes, status: 400, detail: 'Publicação recusada: faltam [lista dos campos].', errorCode: ERR-036, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, campos: [data_aplicacao] }
     FileRejected:
-      description: Arquivo recusado (ERR-029, com motivo) ou projeto arquivado (ERR-001)
+      description: Arquivo recusado (ERR-029, com motivo), projeto arquivado ou, na importação, falta da declaração `sem_dados_reais` (ERR-001)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -1565,7 +1638,7 @@ components:
     ErrorCode:
       type: string
       description: Catálogo fechado de erros ativos (REQ §8.2)
-      enum: [ERR-001, ERR-002, ERR-003, ERR-004, ERR-006, ERR-009, ERR-010, ERR-013, ERR-014, ERR-015, ERR-016, ERR-017, ERR-018, ERR-019, ERR-020, ERR-021, ERR-022, ERR-029, ERR-036, ERR-039, ERR-041]
+      enum: [ERR-001, ERR-002, ERR-003, ERR-004, ERR-006, ERR-009, ERR-010, ERR-013, ERR-014, ERR-015, ERR-016, ERR-017, ERR-018, ERR-019, ERR-020, ERR-021, ERR-022, ERR-029, ERR-036, ERR-039, ERR-041, ERR-044]
 
     ApplicationState:
       type: string
@@ -1610,6 +1683,10 @@ components:
       properties:
         nome: { type: string, minLength: 1, maxLength: 200 }
         descricao: { type: string, maxLength: 5000 }
+        objetivo: { type: string, maxLength: 5000 }
+        coordenador: { type: string, maxLength: 200, description: 'Dado pessoal; não vai à IA nem a log (DEC-137)' }
+        coleta_inicio: { type: string, format: date }
+        coleta_fim: { type: string, format: date, description: 'Não pode ser anterior a coleta_inicio (ERR-001)' }
 
     ProjectUpdate:
       type: object
@@ -1619,6 +1696,10 @@ components:
       properties:
         nome: { type: string, minLength: 1, maxLength: 200 }
         descricao: { type: string, maxLength: 5000 }
+        objetivo: { type: string, maxLength: 5000 }
+        coordenador: { type: string, maxLength: 200, description: 'Dado pessoal; não vai à IA nem a log (DEC-137)' }
+        coleta_inicio: { type: string, format: date }
+        coleta_fim: { type: string, format: date, description: 'Não pode ser anterior a coleta_inicio (ERR-001)' }
 
     Project:
       type: object
@@ -1628,6 +1709,10 @@ components:
         id: { type: string, format: uuid }
         nome: { type: string }
         descricao: { type: string, nullable: true }
+        objetivo: { type: string, nullable: true }
+        coordenador: { type: string, nullable: true }
+        coleta_inicio: { type: string, format: date, nullable: true }
+        coleta_fim: { type: string, format: date, nullable: true }
         status: { type: string, enum: [ativo, arquivado] }
         criado_em: { type: string, format: date-time }
 
@@ -1727,7 +1812,7 @@ components:
       additionalProperties: false
       x-todos-opcionais: true
       properties:
-        copiar_de_versao_id: { type: string, format: uuid, description: Ausente = versão vazia }
+        copiar_de_versao_id: { type: string, format: uuid, description: 'Ausente = versão só com os 5 campos da RN-050' }
 
     VersionSummary:
       type: object
@@ -1748,6 +1833,52 @@ components:
       properties:
         resumo: { $ref: '#/components/schemas/VersionSummary' }
         conteudo: { $ref: '#/components/schemas/VersionContent' }
+
+    FormImportRequest:
+      type: object
+      additionalProperties: false
+      required: [arquivos, nome_formulario, sem_dados_reais]
+      properties:
+        arquivos:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { type: string, format: binary }
+          description: JPEG/PNG/PDF, até 20 MB e 50 páginas por arquivo e 50 páginas no envio, lidos na ordem enviada (DEC-136)
+        nome_formulario: { type: string, minLength: 1, maxLength: 200 }
+        sem_dados_reais:
+          type: boolean
+          description: Declaração de que o formulário está em branco ou só com dados fictícios; precisa ser true (DEC-133)
+
+    FormImportWarning:
+      type: object
+      additionalProperties: false
+      required: [pagina, posicao, motivo]
+      properties:
+        pagina: { type: integer, minimum: 1 }
+        posicao: { type: integer, minimum: 1, description: Ordem da pergunta na página do original }
+        motivo: { type: string, enum: [descartada, tipo_incerto] }
+
+    FormImport:
+      type: object
+      additionalProperties: false
+      required: [id, projeto_id, nome_formulario, estado, total_paginas, criada_em]
+      properties:
+        id: { type: string, format: uuid }
+        projeto_id: { type: string, format: uuid }
+        nome_formulario: { type: string }
+        estado: { type: string, enum: [enfileirada, aguardando_cota, em_andamento, concluida, falhou], description: FL-004 / ENT-031.estado }
+        total_paginas: { type: integer, minimum: 1, maximum: 50 }
+        formulario_id: { type: string, format: uuid, nullable: true, description: Só em concluida }
+        versao_id: { type: string, format: uuid, nullable: true, description: 'Versão 1 em rascunho, só em concluida' }
+        avisos: { type: array, items: { $ref: '#/components/schemas/FormImportWarning' } }
+        aviso:
+          allOf:
+            - $ref: '#/components/schemas/ErrorCode'
+          nullable: true
+          description: ERR-003 em aguardando_cota; ERR-044 em falhou
+        criada_em: { type: string, format: date-time }
+        concluida_em: { type: string, format: date-time, nullable: true }
 
     UploadRequest:
       type: object

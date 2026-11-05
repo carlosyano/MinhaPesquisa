@@ -3,11 +3,11 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v2.3 (CHG-011 propagada no IMP-005; CHG-012 aceita em 04/11/2026; CHG-013 aceita em 05/11/2026) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v2.4 (CHG-011 propagada no IMP-005; CHG-012 aceita em 04/11/2026; CHG-013 e CHG-014 aceitas em 05/11/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
-**Versão do plano:** 3.9
-**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104); v2.17 incorpora a CHG-010 (CPF com uma caixa por dígito, DEC-105 e DEC-106); v3.0 incorpora a CHG-011 (aplicação local num notebook, DEC-107 a DEC-112 e DEC-117 na REQ e DEC-113 a DEC-116) e cria o IMP-005; v3.1 propaga a CHG-011 às seções 3 a 11 e ao contrato (OpenAPI 0.3.0); v3.2 registra os adaptadores locais do IMP-005 (DEC-118) e encerra a propagação da CHG-011; v3.3 incorpora a CHG-012 (DEC-119 da REQ e DEC-120 a DEC-122); v3.4 registra o aceite do IMP-005 (Gate 2, 04/11/2026); v3.5 registra a decisão de testes do IA-TEST do IMP-003 (DEC-123); v3.6 registra as decisões do IA-DEV do IMP-003 (DEC-124); v3.7 amplia o modo de demonstração com a leitura por IA e a revisão (DEC-125); v3.8 incorpora a CHG-013 (revisão focada do IMP-003: DEC-126 a DEC-129 e a Q-036, aberta, na REQ; DEC-130 e DEC-131); v3.9 registra o aceite do IMP-003 (Gate 2, 05/11/2026)
+**Versão do plano:** 3.10
+**Status:** REV-PLANO-010 aprovada pelo critério da DEC-073 (0 bloqueantes, 0 altos); CHG-006 e CHG-007 aceitas em 29/10/2026; IMP-001 aceito pelo responsável em 29/10/2026 (Gate 2), com o E2E com navegador pendente (§11); v2.13 alinha o processo ao kit v3 (DEC-092); v2.14 incorpora a CHG-009 (DEC-093 a DEC-100) para o IMP-002; v2.15 registra as decisões do IA-DEV do IMP-002 (DEC-101 a DEC-103) e o aceite do IMP-002 (Gate 2, 03/11/2026); v2.16 registra o modo de demonstração local (DEC-104); v2.17 incorpora a CHG-010 (CPF com uma caixa por dígito, DEC-105 e DEC-106); v3.0 incorpora a CHG-011 (aplicação local num notebook, DEC-107 a DEC-112 e DEC-117 na REQ e DEC-113 a DEC-116) e cria o IMP-005; v3.1 propaga a CHG-011 às seções 3 a 11 e ao contrato (OpenAPI 0.3.0); v3.2 registra os adaptadores locais do IMP-005 (DEC-118) e encerra a propagação da CHG-011; v3.3 incorpora a CHG-012 (DEC-119 da REQ e DEC-120 a DEC-122); v3.4 registra o aceite do IMP-005 (Gate 2, 04/11/2026); v3.5 registra a decisão de testes do IA-TEST do IMP-003 (DEC-123); v3.6 registra as decisões do IA-DEV do IMP-003 (DEC-124); v3.7 amplia o modo de demonstração com a leitura por IA e a revisão (DEC-125); v3.8 incorpora a CHG-013 (revisão focada do IMP-003: DEC-126 a DEC-129 e a Q-036, aberta, na REQ; DEC-130 e DEC-131); v3.9 registra o aceite do IMP-003 (Gate 2, 05/11/2026); v3.10 incorpora a CHG-014 (importação de formulário: DEC-132 a DEC-139 na REQ; DEC-140 a DEC-142) e cria o IMP-006, feito antes do IMP-004
 **Precedência:** decisões de negócio aprovadas → REQ aprovada → decisões técnicas e este plano → Bloco P → recomendações da IA.
 **Este plano não altera regra de negócio.** Lacunas de negócio são registradas como Q na REQ e só entram no plano depois de respondidas.
 
@@ -63,6 +63,10 @@ A estrutura de pastas e a fonte de verdade de cada artefato estão em `ARCHITECT
 O registro da imagem e o recorte (DEC-048) ficam no worker, não no motor: o motor
 recebe o recorte já normalizado.
 
+A leitura da estrutura de um formulário importado (RN-049) conhece o que é um formulário de
+pesquisa e por isso não entra no motor: fica no extrator de estrutura do worker, atrás da
+própria interface (DEC-141).
+
 ---
 
 ## 3. Componentes (CMP) e responsabilidades
@@ -71,7 +75,7 @@ recebe o recorte já normalizado.
 | --- | --- | --- | --- |
 | CMP-Auth | senha local, sessão, instalação e redefinição de senha por script (DEC-108) | RF-001, RF-002 | login, logout, getCurrentSession, installLocalAccount (script), resetLocalPassword (script) |
 | CMP-Projects | projetos, parâmetros, ciclo de vida | RF-003 | listProjects, getProject, createProject, updateProject, archiveProject, unarchiveProject |
-| CMP-Forms | versões imutáveis, perguntas, regras de salto, PDF e mapa de layout | RF-004 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf |
+| CMP-Forms | versões imutáveis, perguntas, regras de salto, PDF e mapa de layout; campos obrigatórios padronizados (RN-050) e importação de formulário (RN-049, DEC-141) | RF-004, RF-011 | listForms, createForm, getVersion, createVersion, updateVersion, publishVersion, generatePdf, importForm, getFormImport, extractFormStructure (worker) |
 | CMP-Upload | validação, antimalware, metadados, QR, registro da imagem, storage | RF-006 | uploadImages, identifyApplication, addApplicationPages, getPageImage |
 | CMP-MotorIA | recorte, chamada ao provedor, confiança, cota | RF-007 | processAIReading (worker), getQuotaStatus |
 | CMP-Respondents | unicidade por CPF, vínculo, criação, reversão | RF-005 | linkRespondent (interno) |
@@ -111,6 +115,7 @@ Timeout e retentativas conforme tabela abaixo. Após 3 falhas consecutivas em ch
 | Operação | Timeout | Retentativa | Estado final de falha | Referência |
 | --- | --- | --- | --- | --- |
 | Chamada ao provedor de IA (leitura de recorte) | 30 s | 1, 2 s (só idempotente; 3 chamadas no total, DEC-129) | `erro_leitura` após 3 falhas (ERR-041) | RF-007, CA-041, P.7 |
+| Chamada ao provedor de IA (estrutura de uma página na importação, DEC-141) | 60 s | 1, 2 s (3 chamadas por página no total) | importação em `falhou` (ERR-044) | RF-011, CA-047 |
 | Gravação e leitura na pasta local de imagens (DEC-113) | 30 s | 1, 2, 4 s | ERR-020; nada é gravado | RF-006, CA-029 |
 | Job de exportação (CSV/XLSX) e PedidoTitular | 60 s | sem retentativa automática (job enfileirado) | PedidoTitular em `falhou` (FL-003), com auditoria e alerta; exportação em `falhou` | RF-010, CA-022, CA-024 |
 | Geração de PDF imprimível | 30 s | 1, 2, 4 s | ERR-020; versão permanece como está | RF-004, CA-028 |
@@ -173,6 +178,16 @@ policies não devolvem nada (falha fechada). Tabelas da fila (`tarefa_leitura`, 
 guardam dado pessoal; o payload carrega apenas IDs.
 
 ---
+
+### 4.8 Importação de formulário (RF-011, DEC-142)
+
+- `importForm` valida, na ordem, o projeto ativo, a declaração `sem_dados_reais` (ERR-001) e cada arquivo como no §4.1 (tamanho, antimalware, tipo por assinatura, páginas), mais o total de 50 páginas no envio (ERR-029). Metadados removidos (DEC-042). Os arquivos vão para a pasta privada em `tenant/<tenant>/importacao/<importação>/`, fora das pastas de aplicação.
+- A ImportacaoFormulario nasce `enfileirada` e o outbox registra `importacao.solicitada` na mesma transação. O worker processa uma tarefa por página, na mesma fila em tabela da DEC-124, com as retentativas e a reserva de custo da leitura (DEC-051; teto atingido → `aguardando_cota`, FL-004).
+- Cada página vai inteira ao extrator (DEC-141), reduzida para no máximo 2000 px no lado maior. A saída é validada contra o schema da estrutura (RN-037): pergunta inválida vira aviso; nenhuma pergunta em todas as páginas → `falhou` (ERR-044).
+- Com todas as páginas lidas, uma só transação cria Formulario, Versao 1 em `rascunho`, Pergunta, Opcao e LinhaMatriz pela RN-049 e pela RN-050, grava os avisos, marca `concluida` e audita (`IMPORTACAO_FORMULARIO`, só com IDs e contagens). O resultado de cada página fica na tarefa até essa transação; não há formulário parcial.
+- Páginas: o worker usa a mesma medida de altura dos blocos do PDF (`apps/api/src/formularios/pdf.ts`) para encher cada página do sistema na ordem do original, começando pela página 1 depois dos campos da RN-050.
+- Os arquivos da importação são apagados ao fim, em `concluida` ou `falhou`, e `chave_storage` vira NULL; um job diário apaga os que sobrarem de importações terminadas.
+- Logs e auditoria nunca trazem enunciados nem texto lido (RN-028).
 
 ## 5. Modelo de dados físico
 
@@ -268,7 +283,7 @@ Ordem de verificação:
 | Operações | usuária |
 | --- | --- |
 | RF-002 (auth) | sim |
-| RF-003, RF-004, RF-006, RF-007, RF-008, RF-009, RF-010 | sim |
+| RF-003, RF-004, RF-006, RF-007, RF-008, RF-009, RF-010, RF-011 | sim |
 
 As tabelas de perfis ficam no banco sem uso (DEC-116); o código de autorização por perfil sai no IA-DEV do IMP-005.
 
@@ -394,7 +409,8 @@ validada a cada merge.
 | IMP-002 | Projetos, formulários/versões, PDF/QR com mapa de layout, pipeline de upload, regras de salto | CA-001, CA-003, CA-004, CA-013, CA-027, CA-028, CA-029, CA-036, CA-039, CA-040 | IMP-001 aceito | TS-002 e TS-006; PDF imprimível; metadados removidos; regra de salto avaliada | aceito (Gate 2, 03/11/2026; E2E com navegador pendente) |
 | IMP-005 | Simplificação para a aplicação local (CHG-011): propagar a DEC-107 a DEC-116 à REQ, à matriz, ao contrato e aos testes; retirar MFA, convite, e-mail, perfis, vínculos e concessões; armazenamento em disco local (DEC-113), chaves locais (DEC-114), Microsoft Defender (DEC-115), um tenant fixo criado na instalação (DEC-116); scripts de instalação, de recuperação de senha e de backup diário cifrado (DEC-117) | CA-012, CA-026, CA-035, CA-037 | IMP-002 aceito | CI verde; instalação do zero num notebook Windows limpo; backup e restauração testados; regressão do IMP-001 e do IMP-002 sem MFA | aceito (Gate 2, 04/11/2026) |
 | IMP-003 | Motor IA isolado, registro da imagem, leitura, cota, revisão, vínculo por CPF, reabertura | CA-002, CA-005, CA-006, CA-007, CA-008, CA-014, CA-014b, CA-015, CA-018, CA-019, CA-020, CA-021, CA-030, CA-032, CA-033, CA-041, CA-042, CA-044 | IMP-002 e IMP-005 aceitos | TS-003 e TS-007; FL-001/FL-002 cobertas; vínculo novo/existente; reversão na reabertura; fronteira 0,90 em `a_revisar` | aceito (Gate 2, 05/11/2026; E2E com navegador e conjunto-ouro pendentes) |
-| IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031 | IMP-003 aceito | TS-004/TS-005/TS-008; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações | planejado |
+| IMP-006 | Importação de formulário (CHG-014): extrator de estrutura com adaptador Claude e simulado (DEC-141), job por página com cota e retentativas, códigos e páginas pela RN-049, campos obrigatórios em todo rascunho novo (RN-050), dados do ciclo de coleta no projeto (DEC-137), contrato `importForm` e `getFormImport` | CA-045, CA-046, CA-047, CA-048, CA-049 | IMP-003 aceito | CI verde; importação de um formulário sintético de 2 páginas no modo de demonstração; regressão do IMP-002 e do IMP-003 com os campos injetados | planejado |
+| IMP-004 | Dashboards, grupos, exportação, direitos do titular, auditoria | CA-009, CA-011, CA-017, CA-021, CA-022, CA-023, CA-024, CA-031 | IMP-003 e IMP-006 aceitos | TS-004/TS-005/TS-008; expurgo reaplicável após restore; gráfico cruzado; exclusão de aplicação sem assinatura de relatórios/exportações | planejado |
 
 Cada IMP: IA-TEST escreve testes vermelhos → IA-DEV implementa → verificações
 completas → ciclo de revisão por PR → merge pelo responsável → ciclo sobre o
@@ -427,13 +443,21 @@ reset de MFA, que entra quando as telas TL-001 e TL-002 tiverem desenho. A revis
 independente do incremento inteiro não foi feita antes do aceite (escolha do responsável
 para economizar custo); fica recomendada antes do piloto.
 
+**Ordem a partir da CHG-014 (DEC-140):** o IMP-006 é feito antes do IMP-004, como o IMP-005 foi
+feito antes do IMP-003. O IMP-004 continua com o escopo e os CAs de antes; a exportação em formato
+longo do Change Request de 05/11/2026 entra nele por uma CHG própria.
+
 Conjunto-ouro (§10.1) roda em paralelo ao IMP-003 e é pré-requisito do piloto, não do aceite do IMP-003 (o IMP-003 usa o mock).
 
-### 11.1 Cobertura dos 39 CAs da REQ v2.3
+### 11.1 Cobertura dos 44 CAs da REQ v2.4
 
-A soma dos CAs listados nos IMP-001 a IMP-005 cobre integralmente os 39 critérios
-de aceite da REQ v2.2 (CA-001 a CA-044 e CA-014b, sem os oito retirados pela CHG-011). O validador
+A soma dos CAs listados nos IMP-001 a IMP-006 cobre integralmente os 44 critérios
+de aceite da REQ v2.4 (CA-001 a CA-049 e CA-014b, sem os oito retirados pela CHG-011). O validador
 confere que cada CA está no incremento do seu RF.
+
+**CA-045 a CA-049** pertencem ao RF-011 (IMP-006), mesmo quando exercitam operações do RF-003
+(`createProject`, `updateProject`) ou do RF-004 (`createForm`, `createVersion`, `updateVersion`):
+o IMP-002, já aceito, não é reaberto.
 
 **CA-021** aparece em mais de um incremento porque a REQ o associa a mais de um RF:
 marcado na revisão (RF-008/IMP-003) e excluído de relatórios/exportações (RF-009 e RF-010/IMP-004).
@@ -476,6 +500,8 @@ validado pelo CI a cada merge.
 | CHG-011 — aplicação local num notebook, de uma única usuária (DEC-107 a DEC-116) | mudança normativa | aceita em 03/11/2026 (REQ v2.1); propagada no IMP-005 (PLANO v3.2, DEC-118) |
 | CHG-012 — uso só de teste com dados sintéticos, Claude como provedor de IA, eliminações e RTO no notebook (DEC-119 a DEC-122) | mudança normativa | aceita em 04/11/2026 (REQ v2.2, PLANO v3.3) |
 | CHG-010 — CPF com uma caixa por dígito no PDF (DEC-105, DEC-106) | mudança normativa | aceita em 03/11/2026 (REQ v2.1); propagada no IA-TEST e no IA-DEV |
+| CHG-013 — revisão focada do IMP-003 (DEC-126 a DEC-131) | mudança normativa | aceita em 05/11/2026 (REQ v2.3, PLANO v3.8) |
+| CHG-014 — importação de formulário, campos obrigatórios padronizados e ciclo de coleta (DEC-132 a DEC-142) | mudança normativa | aceita em 05/11/2026 (REQ v2.4, PLANO v3.10); implementada no IMP-006 |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
@@ -541,6 +567,9 @@ tabela e da tabela de decisões da REQ por `tools/gerar_registros.py`.
 | DEC-125 | 04/11/2026 | técnica | Modo de demonstração com leitura por IA e revisão (amplia a DEC-104) | Esperar as telas TL-xxx; comandos `chave-ia` e `cotacao` no notebook | `npm run demo` passa a ler e revisar: (1) a chave da API da Anthropic vem de `MP_DEMO_CHAVE_IA` na execução, fica só na memória do processo, sai do ambiente logo ao ser lida e nunca é gravada; sem ela o envio funciona e a leitura fica parada (DEC-124); (2) o modelo é o padrão da instalação (DEC-122), trocável por `MP_DEMO_MODELO`; (3) a cotação do dólar do mês corrente e do seguinte é gravada como parâmetro da plataforma, fictícia (padrão 5.00, `MP_DEMO_COTACAO`); (4) o worker de leitura roda no mesmo processo a cada 1 s, como no notebook; (5) a página ganha a cota do mês, o acompanhamento da leitura, a revisão (abrir, recorte do campo, confirmar ou corrigir, divergência do cadastro), a conclusão e a nova tentativa, só com operações do contrato | Escolha do responsável em 04/11/2026: testar a leitura real com foto antes das telas. Cada página lida gera custo real na conta da Anthropic, avisado no terminal. Só dados sintéticos enquanto a GX-001 estiver pendente; o modelo é provisório até o conjunto-ouro (DEC-122) | definitivo | | Baixo | DEC-104, DEC-122, DEC-124, DEC-058, GX-001 |
 | DEC-130 | 05/11/2026 | técnica | Correções da revisão focada do IMP-003 (CHG-013) | Tratar caso a caso no código; registrar a regra | (1) Página da tarefa que não se lê do disco ou não se recorta (arquivo sumido, JPEG corrompido) conta como falha da tarefa, com as mesmas retentativas da chamada (§4.2.1); nenhum erro de uma tarefa interrompe as demais. (2) Reserva recusada por não caber no teto (CA-030, exemplo 2): `consumo_ia.reserva_recusada_reais` guarda a menor reserva recusada no mês, e a cota conta como atingida enquanto consumido + essa reserva passar do teto; a retomada espera o teto subir ou o mês virar, sem oscilar entre `em_leitura` e `aguardando_cota`. (3) Descarte de aplicação reaberta: o respondente da conclusão anterior é anonimizado como na nova conclusão (DEC-078), se não lhe restar aplicação concluída | Achados F-02, F-03 e F-04 da revisão focada do IMP-003 (revisão focada do IMP-003) | definitivo | | Alto | DEC-051, DEC-078, DEC-124, CA-030, CA-033, CA-042 |
 | DEC-131 | 05/11/2026 | técnica | Médios da revisão focada do IMP-003 tratados antes do aceite | Tratar no IMP-004; tratar agora | (1) Item de pergunta do tipo `cpf` fica cifrado em `item_resposta`, como os campos do respondente (RN-025). (2) Vínculo do respondente com uma trava transacional pelo hash do CPF (`pg_advisory_xact_lock`): duas conclusões do mesmo CPF se sucedem. (3) Reversão (§4.4): alteração posterior já revertida não impede a reversão; quando o valor anterior foi gravado por uma aplicação também revertida, a reversão desce até o valor de antes dela; atributo mantido por alteração posterior é auditado (`REVERTER_CADASTRO`, resultado `mantido`). (4) Checks de aplicação do §5.3 em migração, com `descartada` admitida sem versão. (5) O motor recebe chaves opacas (`c1`, `c2`…), nunca o código da pergunta; cada campo indica o seu recorte (`recorte`, de cima para baixo) e os recortes vão separados por uma faixa preta, com a regra nas instruções (RN-045) | Achados F-07, F-08, F-12, F-14, F-15 e F-16 da revisão focada do IMP-003; F-09 e F-10 ficam para antes do piloto (§12.3) e o F-13 é a Q-036 | definitivo | | Médio | RN-025, RN-045, DEC-063, DEC-124, CA-042, ENT-010 |
+| DEC-140 | 05/11/2026 | técnica | Lugar da importação de formulário no plano (CHG-014) | Renumerar o IMP-004; criar o IMP-006 e fazê-lo antes | IMP-006 novo, feito antes do IMP-004, que passa a ter o IMP-006 aceito como entrada; nada do IMP-004 é renumerado. Os CA-045 a CA-049 ficam no RF-011 e no IMP-006, sem reabrir o IMP-002 | Mesmo precedente do IMP-005, feito antes do IMP-003; evita renumerar referências ao IMP-004 na REQ, no §12.3 e na matriz | definitivo | | Baixo | RF-011, IMP-004, IMP-006 |
+| DEC-141 | 05/11/2026 | técnica | Onde fica a leitura da estrutura do formulário (RN-049) | Novo método no ReadEngine; extrator próprio no worker | Interface `ExtratorEstrutura` no worker, com `extrairPagina(imagem, opcoes)` que devolve as perguntas da página (enunciado, tipo, opções, linhas, faixa) e o custo estimado antes da chamada (DEC-051). Primeiro adaptador: Claude, com o mesmo SDK, chave, modelo e cotação da leitura (DEC-122, DEC-125); nos testes, um extrator simulado programado por página (como a DEC-123). O `packages/motor-leitura` não muda | O motor é agnóstico de domínio e recebe só recortes (RN-045, §2.1); a página inteira de um formulário de pesquisa é assunto do produto | definitivo | | Médio | RN-045, RN-049, DEC-043, DEC-122, DEC-123 |
+| DEC-142 | 05/11/2026 | técnica | Execução da importação (RN-049, FL-004) | Síncrona na requisição; job por página | Job por página na fila em tabela da DEC-124, com timeout de 60 s por chamada e 3 chamadas no total por página; reserva de custo por página; criação de todas as entidades numa só transação no fim; arquivos em `tenant/<tenant>/importacao/<importação>/`, apagados ao fim e por job diário; páginas distribuídas pela medida de altura do PDF (§4.8) | Uma importação de 50 páginas passa do tempo de uma requisição; reaproveita a cota, as retentativas e o relógio dos testes da leitura | definitivo | | Médio | RF-011, FL-004, DEC-051, DEC-124, DEC-129 |
 
 ---
 
@@ -619,12 +648,13 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | F-17 | revisão focada do IMP-003 (05/11/2026) | baixo | Trigger de imutabilidade impede expurgar entradas vencidas da ListaEliminacoes (§5.6) | IA-DEV (CMP-LGPD) | IMP-004 |
 | F-18 | revisão focada do IMP-003 (05/11/2026) | baixo | Índice item_resposta (tenant_id, pergunta_id) do §5.4 ausente | IA-DEV (CMP-Dashboard) | IMP-004 |
 | F-19 | revisão focada do IMP-003 (05/11/2026) | baixo | Texto lido do papel é gravado como veio; a exportação precisa neutralizar fórmulas (RN-037) | IA-DEV (CMP-Exportacao) | IMP-004 |
+| F-20 | análise da CHG-014 (05/11/2026) | médio | O PDF não confere se as perguntas cabem na página: as que passam do rodapé saem fora da folha, sem erro (`posicionar` em `pdf.ts`). A importação distribui pela altura (DEC-142), mas a edição manual pode estourar a página | Carlos Yano (Q-044) + IA-DEV (CMP-Forms) | IMP-006 |
 
 ## 13. Critério de prontidão e ciclo de verificação
 
 - [x] Todo RF tem tratamento técnico identificado
 - [x] Modelo físico e contrato definidos (OpenAPI é artefato irmão deste plano)
-- [x] Estratégia de testes cobre todos os 39 CAs da REQ v2.3
+- [x] Estratégia de testes cobre todos os 44 CAs da REQ v2.4
 - [x] Dependências e GX explícitas; nenhuma suposição crítica oculta (lacunas de negócio Q-005 a Q-011 respondidas e incorporadas como DEC-054 a DEC-060)
 - [x] Validador de consistência sem achados (`tools/validar_consistencia.py`)
 - [x] Q-005 a Q-011 respondidas
@@ -656,6 +686,7 @@ REQ §8.1; o CI falha se divergirem.
 | RF-008 | RN-016, RN-043, RN-044 | ENT-009, ENT-010, ENT-011, ENT-023 | FL-001, FL-002 | US-002, US-003, US-007 | CA-007, CA-008, CA-020, CA-021, CA-033, CA-042, CA-044 | — | listReviewQueue, getApplication, openReview, getItemImage, saveReview, confirmApplication, attachSignaturePage, retryReading, discardApplication, reopenApplication | CMP-Revisao | IMP-003 |
 | RF-009 | RN-026 | ENT-012 | FL-001 | US-004, US-007, US-008 | CA-009, CA-011, CA-017, CA-021, CA-031 | — | getDashboardAggregated, listGroups, createGroup, deleteGroup, findRespondent, getIndividualRecord | CMP-Dashboard | IMP-004 |
 | RF-010 | RN-027, RN-030, RN-031 | ENT-009, ENT-013, ENT-018, ENT-019, ENT-023, ENT-026 | FL-001, FL-003 | US-005, US-009 | CA-021, CA-022, CA-023, CA-024 | TS-005, TS-008 | exportData, getExport, createDataSubjectRequest, listDataSubjectRequests, getDataSubjectRequest, executeDataSubjectRequest, cancelDataSubjectRequest, listAuditEvents | CMP-LGPD | IMP-004 |
+| RF-011 | RN-017, RN-036, RN-037, RN-038, RN-049, RN-050 | ENT-004, ENT-005, ENT-006, ENT-007, ENT-008, ENT-024, ENT-031 | FL-004 | US-011 | CA-045, CA-046, CA-047, CA-048, CA-049 | — | importForm, getFormImport | CMP-Forms | IMP-006 |
 
 ---
 
