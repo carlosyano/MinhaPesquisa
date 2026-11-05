@@ -34,6 +34,15 @@ export async function prepararCotacao(h: Harness, competencias = ['2026-11-01', 
 }
 
 /**
+ * Limite de confiança já calibrado (0,90, DEC-028), gravado como o administrador faria depois do
+ * conjunto-ouro. Sem ele vale o padrão 1,00 e nada é confirmado automaticamente (DEC-127); os
+ * cenários que dependem da confirmação automática (regra 8 da FL-002) chamam isto.
+ */
+export async function calibrarConfianca(h: Harness, tenantId: string | null = null): Promise<void> {
+  await h.seed.parametro({ tenantId, chave: 'limite_confianca', valor: '0.90' });
+}
+
+/**
  * Versão de referência do IMP-002 com o que a leitura precisa a mais: escala de 1 a 5 (CA-006),
  * matriz com duas linhas (RN-009) e uma segunda regra de salto encadeada: USA_MEDICAMENTO só se
  * PRESSAO_ALTA = sim, e QUAIS_MEDICAMENTOS só se USA_MEDICAMENTO = sim (FL-002 regra 4).
@@ -148,7 +157,10 @@ export async function revisar(dig: Cliente, id: string, itens: AcaoRevisao[], et
   return dig.patch(`/applications/${id}/review`, { corpo: { itens }, headers: { 'if-match': tag! } });
 }
 
-/** Abre a revisão e confirma o valor lido de todo item `a_revisar`, até não sobrar nenhum. */
+/**
+ * Abre a revisão e confirma o valor lido de todo item `a_revisar`, até não sobrar nenhum. O lido
+ * em branco não se confirma (DEC-128): é marcado como em branco.
+ */
 export async function confirmarPendentes(dig: Cliente, id: string): Promise<Resposta> {
   const aberta = await abrir(dig, id);
   expect(aberta.status, aberta.texto).toBe(200);
@@ -156,7 +168,7 @@ export async function confirmarPendentes(dig: Cliente, id: string): Promise<Resp
   for (let rodada = 0; rodada < 4; rodada++) {
     const pendentes = (atual.corpo.itens as ItemRevisao[]).filter((i) => i.estado === 'a_revisar');
     if (pendentes.length === 0) return atual;
-    atual = await revisar(dig, id, pendentes.map((i) => ({ item_id: i.id, acao: 'confirmar' })), atual.headers.get('etag') ?? undefined);
+    atual = await revisar(dig, id, pendentes.map((i) => ({ item_id: i.id, acao: i.valor_ia === null ? 'em_branco' : 'confirmar' })), atual.headers.get('etag') ?? undefined);
     expect(atual.status, atual.texto).toBe(200);
   }
   throw new Error('itens a revisar não se resolveram');

@@ -29,7 +29,7 @@
 // Acrescentado no IA-TEST do IMP-003 (DEC-123):
 // - o worker de leitura real (pg-boss), com o motor simulado no lugar do adaptador Claude
 //   (DEC-043, DEC-122). O worker nunca roda sozinho: só em `worker.processar()` e nos jobs que
-//   `clock.advance` fizer vencer (retentativas em 1, 2 e 4 s; retomada da cota na virada do mês).
+//   `clock.advance` fizer vencer (retentativas em 1 e 2 s, DEC-129; retomada da cota na virada do mês).
 //   Assim os testes do IMP-002, que não chamam nenhum dos dois, continuam sem leitura;
 // - o motor simulado devolve o que o teste programou para cada pergunta e registra cada chamada
 //   como o motor real a receberia (recorte e schema), para provar a minimização (RN-038, RN-039);
@@ -200,6 +200,11 @@ export interface Harness {
      * sido feitas (CA-030).
      */
     consumoIa(dados: { tenantId: string; valorReais: string }): Promise<void>;
+    /**
+     * Troca, na pasta de imagens, o arquivo da página do formulário por bytes que não são imagem,
+     * como um arquivo corrompido no disco (DEC-130). Acrescentado na CHG-013.
+     */
+    corromperPagina(aplicacaoId: string, numeroPagina: number): Promise<void>;
   };
 
   /** Motor de leitura simulado (DEC-123), no lugar do adaptador Claude. */

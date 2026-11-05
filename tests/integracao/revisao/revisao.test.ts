@@ -19,7 +19,7 @@ import {
   item,
   leiturasCompletas,
   paginasJpeg,
-  prepararCotacao,
+  calibrarConfianca, prepararCotacao,
   revisar,
   semIdentificadores,
   type ItemRevisao,
@@ -34,6 +34,7 @@ let f: FormularioPublicado;
 beforeAll(async () => {
   h = await criarHarness();
   await prepararCotacao(h);
+  await calibrarConfianca(h);
   A = await tenantComUsuaria(h, 'Tenant A');
   const admin = await entrar(h, A.usuaria);
   projeto = await projetoCriado(admin, 'Saúde Idoso');

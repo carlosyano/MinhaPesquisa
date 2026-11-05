@@ -9,7 +9,7 @@ import { chaveIdempotencia, type Cliente } from '../../support/cliente.js';
 import { entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import { arquivo, enviar, formularioPublicado, projetoCriado, type FormularioPublicado } from '../../support/formularios.js';
 import { criarHarness, type Harness } from '../../support/harness.js';
-import { consultar, conteudoLeitura, enviarELer, leiturasCompletas, paginasJpeg, prepararCotacao, type ItemRevisao } from '../../support/leitura.js';
+import { consultar, conteudoLeitura, enviarELer, leiturasCompletas, paginasJpeg, calibrarConfianca, prepararCotacao, type ItemRevisao } from '../../support/leitura.js';
 
 let h: Harness;
 
@@ -46,6 +46,7 @@ async function enviarSemLer(c: Cenario): Promise<{ id: string; corpo: any }> {
 beforeAll(async () => {
   h = await criarHarness();
   await prepararCotacao(h);
+  await calibrarConfianca(h);
 });
 afterAll(async () => {
   await h?.close();
