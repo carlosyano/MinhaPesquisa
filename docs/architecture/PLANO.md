@@ -661,6 +661,7 @@ Achados médios e baixos de revisões independentes aceitos para tratamento post
 | F-19 | revisão focada do IMP-003 (05/11/2026) | baixo | Texto lido do papel é gravado como veio; a exportação precisa neutralizar fórmulas (RN-037) | IA-DEV (CMP-Exportacao) | IMP-004 |
 | F-20 | análise da CHG-014 (05/11/2026) | médio | O PDF não confere se as perguntas cabem na página: as que passam do rodapé saem fora da folha, sem erro (`posicionar` em `pdf.ts`). A importação distribui pela altura (DEC-142), mas a edição manual pode estourar a página | — (decidido: DEC-143, incorporado na CHG-014) | IMP-006 |
 | S-12 | revisão focada da CHG-014 (REV-REQ-010) | baixo | CA-047 ex. 8 e CA-048 ex. 7 sem dados concretos de altura; a área útil da página 1 depende do `termo_consentimento` | IA-TEST (CMP-Forms): fixar no teste o termo padrão e o número de perguntas que estoura a página | IMP-006 |
+| F-21 | IA-DEV do IMP-006 (05/11/2026) | baixo | O job diário que apaga os arquivos que sobrarem de importações terminadas (§4.8, DEC-142) ainda não existe; o worker já apaga os arquivos ao fim, e só uma exclusão que falhe deixa resto. Adiado pelo responsável (Carlos Yano, 05/11/2026) para o job diário de expurgo da RN-030 | IA-DEV (CMP-LGPD), junto com o expurgo | IMP-004 |
 
 ## 13. Critério de prontidão e ciclo de verificação
 
