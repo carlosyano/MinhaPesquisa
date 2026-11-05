@@ -11,6 +11,7 @@ import {
   cadastroPorCpf,
   carregarItens,
   cpfDaAplicacao,
+  travarCpf,
   type Atributo,
   type Item,
   type LinhaAplicacao,
@@ -30,6 +31,7 @@ const VALIDADE_LISTA = 180 * DIA;
 export async function vincular(n: Nucleo, tx: Executor, ator: Ator, aplicacaoId: string, itens: Item[], manter: ManterCadastro): Promise<string> {
   const cpf = cpfDaAplicacao(itens);
   if (!cpf) throw new Error('vínculo sem CPF válido');
+  await travarCpf(n, tx, cpf); // DEC-131; reentrante na mesma transação da conclusão
   const lidos = atributosLidos(itens);
   const existente = await cadastroPorCpf(n, tx, cpf);
   let id: string;
@@ -118,8 +120,9 @@ export async function anexarAssinatura(n: Nucleo, tx: Executor, ator: Ator, a: L
 
 /**
  * Reabertura (CA-042, PLANO §4.4): volta ao valor anterior cada atributo que a aplicação alterou,
- * desde que nenhuma outra aplicação o tenha alterado depois e que o valor atual ainda seja o
- * gravado por ela.
+ * desde que nenhuma outra aplicação o tenha alterado depois (sem contar as já revertidas) e que o
+ * valor atual ainda seja o gravado por ela. Se o valor anterior foi gravado por uma aplicação já
+ * revertida, desce até o valor de antes dela. Atributo mantido é auditado (DEC-131).
  */
 export async function reverterCadastro(n: Nucleo, tx: Executor, ator: Ator, aplicacaoId: string): Promise<void> {
   const alteracoes = await linhas<{ id: string; respondente_id: string; atributo: Atributo; valor_anterior_cifrado: string | null; valor_gravado_hash: Buffer; seq: string }>(
@@ -135,12 +138,26 @@ export async function reverterCadastro(n: Nucleo, tx: Executor, ator: Ator, apli
       sql`SELECT ${h.atributo === 'data_nascimento' ? sql`to_char(data_nascimento, 'YYYY-MM-DD')` : col} AS atual,
                  EXISTS (SELECT 1 FROM historico_atributo_respondente x
                           WHERE x.respondente_id = ${h.respondente_id} AND x.atributo = ${h.atributo}
-                            AND x.seq > ${h.seq}::bigint AND x.aplicacao_id <> ${aplicacaoId}) AS depois
+                            AND x.seq > ${h.seq}::bigint AND x.aplicacao_id <> ${aplicacaoId} AND x.revertido_em IS NULL) AS depois
             FROM respondente WHERE id = ${h.respondente_id} AND NOT anonimizado`,
     );
     if (r && !r.depois && r.atual !== null && n.hmac(r.atual).equals(h.valor_gravado_hash)) {
-      await tx.execute(sql`UPDATE respondente SET ${col} = ${n.decifrar(h.valor_anterior_cifrado)}, versao = versao + 1 WHERE id = ${h.respondente_id}`);
+      let alvo = n.decifrar(h.valor_anterior_cifrado);
+      const antes = await linhas<{ valor_anterior_cifrado: string | null; valor_gravado_hash: Buffer; revertido: boolean }>(
+        tx,
+        sql`SELECT valor_anterior_cifrado, valor_gravado_hash, revertido_em IS NOT NULL AS revertido
+              FROM historico_atributo_respondente
+             WHERE respondente_id = ${h.respondente_id} AND atributo = ${h.atributo} AND seq < ${h.seq}::bigint
+             ORDER BY seq DESC`,
+      );
+      for (const p of antes) {
+        if (!p.revertido || alvo === null || !n.hmac(alvo).equals(p.valor_gravado_hash)) break;
+        alvo = n.decifrar(p.valor_anterior_cifrado);
+      }
+      await tx.execute(sql`UPDATE respondente SET ${col} = ${alvo}, versao = versao + 1 WHERE id = ${h.respondente_id}`);
       await n.auditar(tx, ator, 'REVERTER_CADASTRO', 'Respondente', h.respondente_id, { aplicacao_id: aplicacaoId }, h.atributo);
+    } else if (r) {
+      await n.auditar(tx, ator, 'REVERTER_CADASTRO', 'Respondente', h.respondente_id, { aplicacao_id: aplicacaoId, resultado: 'mantido' }, h.atributo);
     }
     await tx.execute(sql`UPDATE historico_atributo_respondente SET revertido_em = ${n.agora()} WHERE id = ${h.id}`);
   }

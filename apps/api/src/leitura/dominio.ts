@@ -120,7 +120,7 @@ export interface Item {
   opcoes: string[];
   valor_min: number | null;
   valor_max: number | null;
-  /** Decifrados (DEC-041) quando a pergunta tem campo_respondente. */
+  /** Decifrados (DEC-041) quando a pergunta tem campo_respondente ou é do tipo CPF (DEC-131). */
   valor_ia: string | null;
   confianca: number | null;
   valor_final: string | null;
@@ -136,8 +136,8 @@ export interface Regra {
 
 export const chaveItem = (i: Pick<Item, 'codigo' | 'linha_codigo'>) => (i.linha_codigo ? `${i.codigo}.${i.linha_codigo}` : i.codigo);
 
-/** O valor fica cifrado quando a pergunta é campo do respondente (ENT-011). */
-const cifrado = (i: Pick<Item, 'campo_respondente'>) => i.campo_respondente !== null;
+/** O valor fica cifrado quando a pergunta é campo do respondente (ENT-011) ou do tipo CPF (RN-025, DEC-131). */
+const cifrado = (i: Pick<Item, 'campo_respondente' | 'tipo'>) => i.campo_respondente !== null || i.tipo === 'cpf';
 
 export async function carregarItens(n: Nucleo, tx: Executor, aplicacaoId: string): Promise<Item[]> {
   const r = await linhas<Omit<Item, 'confianca' | 'valor_min' | 'valor_max' | 'regiao'> & {
@@ -336,6 +336,15 @@ export function cpfDaAplicacao(itens: Item[]): string | null {
   const i = itens.find((x) => x.campo_respondente === 'cpf');
   const v = i ? valorEfetivo(i) : null;
   return v && cpfValido(v) ? v : null;
+}
+
+/**
+ * Trava transacional pelo hash do CPF (DEC-131): duas conclusões do mesmo CPF se sucedem, em vez
+ * de disputar a criação do respondente ou gravar o mesmo valor anterior no histórico.
+ */
+export async function travarCpf(n: Nucleo, tx: Executor, cpf: string): Promise<void> {
+  const chave = n.hmac(cpf).readBigInt64BE(0);
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(${String(chave)}::bigint)`);
 }
 
 export async function cadastroPorCpf(n: Nucleo, tx: Executor, cpf: string): Promise<Cadastro | undefined> {
