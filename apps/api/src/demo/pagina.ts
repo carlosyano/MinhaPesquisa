@@ -1,6 +1,6 @@
-// Página do modo de demonstração (DEC-104, DEC-125). Não é uma tela TL-xxx: só o mínimo para
-// entrar, baixar o PDF, enviar fotos, acompanhar a leitura, revisar e concluir, usando apenas
-// operações do contrato. Texto do servidor entra por textContent, nunca por innerHTML.
+// Página do modo de demonstração (DEC-104, DEC-125, DEC-151). Não é uma tela TL-xxx: só o mínimo
+// para entrar, importar um formulário de um modelo (RF-011), baixar o PDF, enviar fotos,
+// acompanhar a leitura, revisar e concluir, usando apenas operações do contrato. Texto do servidor entra por textContent, nunca por innerHTML.
 
 export const PAGINA_DEMO = `<!doctype html>
 <html lang="pt-BR">
@@ -21,6 +21,8 @@ export const PAGINA_DEMO = `<!doctype html>
   #itens input[type=text] { width: 140px; } #itens select { font-size: .9rem; }
   img.recorte { display: block; max-width: 260px; max-height: 160px; margin-top: 6px; border: 1px solid #999; }
   .baixa { background: #fff4d6; } .cota { font-size: .9rem; color: #444; }
+  details.importar { margin-top: 20px; border: 1px solid #ccc; border-radius: 6px; padding: 8px 12px; }
+  details.importar summary { font-weight: 600; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -37,8 +39,29 @@ export const PAGINA_DEMO = `<!doctype html>
 </section>
 
 <section id="painel" hidden>
+  <details class="importar" id="importar">
+    <summary>Opcional: criar o formulário a partir de um modelo (importação por IA)</summary>
+    <p class="aviso">Envie só o modelo em branco ou preenchido com dados fictícios: a página inteira vai à IA (DEC-133).</p>
+    <form id="f-importar">
+      <label for="nome-importacao">Nome do formulário novo</label><input id="nome-importacao" type="text" maxlength="200" required>
+      <label for="modelo">Modelo (JPEG, PNG ou PDF, até 50 páginas)</label>
+      <input id="modelo" type="file" multiple accept="image/jpeg,image/png,application/pdf" required>
+      <label><input id="sem-dados" type="checkbox" required> O modelo não tem dados de pessoas reais</label>
+      <button type="submit">Importar</button>
+    </form>
+    <div id="importacao" hidden>
+      <p>Importação: <strong id="estado-importacao"></strong> <span id="aviso-importacao"></span></p>
+      <div id="avisos-importacao"></div>
+      <div id="rascunho" hidden>
+        <p>Rascunho criado. Confira as perguntas; para ajustar enunciados ou tipos, edite a versão pela API antes de publicar.</p>
+        <table><thead><tr><th>Pág.</th><th>Código</th><th>Enunciado</th><th>Tipo</th><th>Obrig.</th></tr></thead><tbody id="perguntas-importadas"></tbody></table>
+        <button type="button" id="publicar">Publicar e usar este formulário</button>
+      </div>
+    </div>
+  </details>
+
   <h2>2. Imprimir o formulário</h2>
-  <p>Baixe o PDF, imprima, preencha com dados sintéticos e fotografe cada página (a foto da página 1 precisa mostrar o QR).</p>
+  <p>Formulário atual: <strong id="form-atual"></strong>. Baixe o PDF, imprima, preencha com dados sintéticos e fotografe cada página (a foto da página 1 precisa mostrar o QR).</p>
   <a id="pdf" class="botao" download="formulario-demo.pdf">Baixar PDF</a>
   <p class="cota" id="cota"></p>
 
@@ -79,7 +102,13 @@ export const PAGINA_DEMO = `<!doctype html>
 const DADOS = __DADOS__;
 const $ = (id) => document.getElementById(id);
 $('email').value = DADOS.email;
-$('pdf').href = '/forms/' + DADOS.formId + '/versions/' + DADOS.versaoId + '/pdf';
+/** Formulário impresso e usado na identificação manual; troca quando um importado é publicado. */
+function usarFormulario(formId, versaoId, nome) {
+  DADOS.formId = formId; DADOS.versaoId = versaoId;
+  $('pdf').href = '/forms/' + formId + '/versions/' + versaoId + '/pdf';
+  $('form-atual').textContent = nome;
+}
+usarFormulario(DADOS.formId, DADOS.versaoId, DADOS.nomeFormulario);
 
 function csrf() {
   const m = document.cookie.match(/(?:^|; )mp_csrf=([^;]+)/);
@@ -281,6 +310,68 @@ $('f-upload').addEventListener('submit', async (e) => {
   for (const f of $('arquivos').files) fd.append('arquivos', f, f.name);
   try { mostrar(await chamar('POST', '/projects/' + DADOS.projetoId + '/applications/upload', fd, true)); }
   catch (err) { mensagem(err.message); }
+});
+
+// Importação de formulário (RF-011): acompanha a cada 2 s até concluir ou falhar.
+const MOTIVOS = { descartada: 'pergunta descartada', tipo_incerto: 'tipo incerto (virou texto livre)', texto_cortado: 'texto cortado no limite',
+  campo_repetido: 'campo padrão repetido (virou pergunta comum)', nao_cabe: 'não cabe numa página (descartada)' };
+let importacao = null;
+let esperaImportacao = null;
+
+async function mostrarImportacao(i) {
+  importacao = i;
+  clearTimeout(esperaImportacao);
+  if (['enfileirada', 'em_andamento', 'aguardando_cota'].includes(i.estado)) {
+    esperaImportacao = setTimeout(async () => {
+      try { await mostrarImportacao(await chamar('GET', '/form-imports/' + i.id)); } catch (err) { mensagem(err.message); }
+    }, 2000);
+  } else cota();
+  $('importacao').hidden = false;
+  $('estado-importacao').textContent = i.estado + ' (' + i.total_paginas + ' página(s))';
+  $('aviso-importacao').textContent = i.aviso ? '(aviso ' + i.aviso + ')' : '';
+  const avisos = $('avisos-importacao'); avisos.replaceChildren();
+  if ((i.avisos || []).length) {
+    const t = document.createElement('table');
+    const cab = document.createElement('tr');
+    for (const h of ['Página', 'Posição no original', 'Ajuste']) { const th = document.createElement('th'); th.textContent = h; cab.appendChild(th); }
+    t.appendChild(cab);
+    for (const a of i.avisos) {
+      const tr = document.createElement('tr');
+      tr.append(celula(String(a.pagina)), celula(String(a.posicao)), celula(MOTIVOS[a.motivo] || a.motivo));
+      t.appendChild(tr);
+    }
+    avisos.appendChild(t);
+  }
+  $('rascunho').hidden = i.estado !== 'concluida';
+  if (i.estado !== 'concluida') return;
+  const v = await chamar('GET', '/forms/' + i.formulario_id + '/versions/' + i.versao_id);
+  const corpo = $('perguntas-importadas'); corpo.replaceChildren();
+  for (const p of [...v.perguntas].sort((a, b) => a.ordem - b.ordem)) {
+    const tr = document.createElement('tr');
+    tr.append(celula(String(p.pagina)), celula(p.codigo), celula(p.enunciado), celula(p.tipo), celula(p.obrigatorio ? 'sim' : 'não'));
+    corpo.appendChild(tr);
+  }
+  $('publicar').disabled = v.status !== 'rascunho';
+}
+
+$('f-importar').addEventListener('submit', async (e) => {
+  e.preventDefault(); mensagem();
+  const fd = new FormData();
+  fd.append('nome_formulario', $('nome-importacao').value);
+  fd.append('sem_dados_reais', $('sem-dados').checked ? 'true' : 'false');
+  for (const f of $('modelo').files) fd.append('arquivos', f, f.name);
+  try { await mostrarImportacao(await chamar('POST', '/projects/' + DADOS.projetoId + '/form-imports', fd, true)); }
+  catch (err) { mensagem(err.message); }
+});
+
+$('publicar').addEventListener('click', async () => {
+  mensagem();
+  try {
+    await chamar('POST', '/forms/' + importacao.formulario_id + '/versions/' + importacao.versao_id + '/publish');
+    usarFormulario(importacao.formulario_id, importacao.versao_id, importacao.nome_formulario + ' (importado)');
+    $('publicar').disabled = true;
+    $('importar').open = false;
+  } catch (err) { mensagem(err.message); }
 });
 
 $('f-identificar').addEventListener('submit', async (e) => {
