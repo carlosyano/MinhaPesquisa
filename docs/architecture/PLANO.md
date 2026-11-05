@@ -95,7 +95,7 @@ recebe o recorte já normalizado.
 - Worker lê páginas em paralelo, em recortes; identificação e saúde em chamadas separadas, sem identificador do respondente (DEC-022, RN-038, RN-039).
 - Antes de cada chamada, reserva atômica de orçamento (DEC-051); sem reserva → `aguardando_cota`.
 - Saída validada contra schema; estado de cada item pela ordem de avaliação da FL-002 (REQ §6.4). Pontos de atenção:
-  - Confiança comparada no valor bruto; **estritamente maior** que o limite confirma (0,90 exato vai para `a_revisar` — CA-005, CA-006, TS-003).
+  - Confiança comparada no valor bruto; **estritamente maior** que o limite confirma (0,90 exato vai para `a_revisar` — CA-005, CA-006, TS-003). Até a calibração no conjunto-ouro o limite padrão é 1,00 e nada é confirmado automaticamente (DEC-127).
   - CPF sempre revisável (RN-012); valor fora do schema sempre revisável (CA-006); `texto_livre` sempre revisável (DEC-057).
   - Regra de salto com origem em `pendente_leitura`, `aguardando_condicao` ou `a_revisar` → `aguardando_condicao` (FL-002 regra 1, CA-018); origem em `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica` segue as regras 4 e 4a.
 - Revisão humana sem reserva (DEC-112) e com ETag/If-Match obrigatório (RN-043).
