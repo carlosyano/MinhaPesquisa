@@ -1,9 +1,9 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005)
-Versão: 2.2
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005) · CHG-013 aceita na v2.3
+Versão: 2.3
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011) · 05/11/2026 (v2.3, CHG-013)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado), aplicado no que couber à aplicação local da DEC-107
 Responsável: Carlos Yano
@@ -98,7 +98,7 @@ O antigo Risco 2 (grupo mínimo reduzido até 1) deixa de existir: o k-anonimato
 
 | Chave | Escopo | Padrão | Faixa | Quem altera | Origem |
 |---|---|---|---|---|---|
-| limite_confianca | plataforma | 0,90 (provisório, DEC-028) | 0..1, calibrado no conjunto-ouro | Administrador da plataforma, por script, com auditoria | DEC-028, DEC-059 |
+| limite_confianca | plataforma | 1,00 até a calibração no conjunto-ouro, sem confirmação automática (DEC-127); depois, 0,90 (provisório, DEC-028) | 0..1, calibrado no conjunto-ouro | Administrador da plataforma, por script, com auditoria | DEC-028, DEC-059, DEC-127 |
 | custo_ia_teto | tenant | R$ 500,00/mês | ≥ 0 | Administrador da plataforma, por script, com auditoria | DEC-035, DEC-058, DEC-059 |
 | retencao_dias | tenant | NULL (sem expurgo por tempo até GX-001) | 1..3650 | Administrador da plataforma, por script, com auditoria | RN-030, Q-002, DEC-059 |
 | cotacao_usd_brl | plataforma, por mês civil | — (obrigatória para o mês corrente; sem ela, nenhuma leitura é feita) | > 0 | Administrador da plataforma, por script, com auditoria | DEC-058 |
@@ -195,6 +195,10 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-112 | 03/11/2026 | negócio | Operação com uma única usuária | Manter DEC-034; simplificar | Avisos só na tela (sem e-mail); link de imagem de 5 minutos mantido, servido só no notebook; sem reserva de aplicação para revisão (a proteção contra gravação concorrente fica no If-Match) | Não há disputa entre revisores (CHG-011) | provisório | Médio | RF-008, RNF-007, DEC-034, CA-043 |
 | DEC-117 | 03/11/2026 | negócio | Backup do notebook (Q-031) | Diário em disco externo; semanal em disco externo; diário em nuvem cifrada | Backup diário, cifrado, em disco externo guardado longe do notebook; retenção de 90 dias (DEC-033); teste de restauração a cada mês | Com tudo num só notebook, o backup é a única proteção contra perda; diário limita a perda a um dia de digitação (CHG-011) | definitivo | Alto | DEC-107, DEC-033, DEC-114, RNF-008, Q-031 |
 | DEC-119 | 04/11/2026 | negócio | Uso do sistema enquanto o GX-001 estiver pendente | Esperar o parecer para usar; usar só para teste | O MinhaPesquisa é usado só para teste, com dados sintéticos (Q-001), sem uso real com dados pessoais; o GX-001 não é exigido enquanto isso valer. Qualquer uso com dados reais exige o GX-001 e uma nova decisão | Escolha do responsável (CHG-012): recortes sintéticos enviados à IA não são dado pessoal, então não há transferência internacional a liberar | definitivo | Alto | GX-001, Q-001, DEC-111, DEC-122, RNF-011 |
+| DEC-126 | 05/11/2026 | negócio | Até quando o CPF completo aparece (Q-032) | Enquanto a marca de exibição existir; só durante a revisão | O CPF completo aparece só enquanto a aplicação está em revisão (`em_revisao`, `aguardando_cpf` ou `sem_assinatura`) e depois de `openReview`, que audita cada abertura (EXIBICAO_CPF). Conclusão, descarte e reabertura apagam a marca: na aplicação concluída o CPF volta a aparecer mascarado e uma nova revisão exige novo `openReview`. O recorte do campo de CPF consultado sem a revisão aberta também audita EXIBICAO_CPF | Sem isso, uma abertura liberava o CPF completo para sempre, sem auditoria (revisão focada do IMP-003, F-01) | definitivo | Alto | RN-013, DEC-072, DEC-112, CA-008 |
+| DEC-127 | 05/11/2026 | negócio | Confirmação automática antes da calibração (Q-033) | Confirmar acima de 0,90 já; tudo à revisão até a calibração | Até o conjunto-ouro calibrar a confiança (DEC-047), nenhum item é confirmado automaticamente: o padrão de `limite_confianca` é 1,00, e a regra 8 da FL-002 nunca se aplica (confiança > 1,00 não existe). Depois da calibração, o administrador da plataforma grava o limite calibrado por script (DEC-059) | A confiança declarada pelo modelo não é calibrada; um erro com confiança alta passaria sem revisão para dashboards e exportações (revisão focada do IMP-003, F-05) | provisório | Alto | DEC-028, DEC-047, DEC-004, FL-002, CA-005 |
+| DEC-128 | 05/11/2026 | negócio | Confirmar valor fora do schema (Q-034) | Aceitar o valor lido; exigir a correção | A ação `confirmar` só vale para valor lido preenchido e dentro do schema da pergunta (as mesmas checagens da regra 7 da FL-002 e, no CPF, o dígito verificador). Valor em branco ou fora do schema é recusado com ERR-001 (`campos: acao`): a usuária corrige o valor ou marca em branco, ilegível, rasurado ou não se aplica | Um valor inválido confirmado entraria nos agregados e no cadastro (revisão focada do IMP-003, F-06) | definitivo | Alto | FL-002, CA-006, CA-007, RN-020 |
+| DEC-129 | 05/11/2026 | negócio | Número de chamadas da leitura com falha (Q-035) | 3 chamadas no total; 1 chamada e 3 retentativas | No máximo 3 chamadas por página e grupo de envio: a primeira e duas retentativas, em 1 e 2 s; na 3ª falha, a aplicação vai para `erro_leitura` (ERR-041) | Alinha o código ao CA-041 ("falhou em 3 tentativas") e evita uma chamada paga a mais (revisão focada do IMP-003, F-11) | definitivo | Médio | CA-041, ERR-041, RF-007 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -265,7 +269,7 @@ RN-012 — CPF validado
 O CPF DEVE ser validado na leitura (dígitos verificadores). CPF inválido, ilegível ou ausente vai para revisão, e a aplicação NÃO é concluída sem CPF válido.
 
 RN-013 — CPF cifrado e hash
-Para permitir busca com o CPF cifrado, o banco DEVE guardar também um hash com chave (HMAC). O CPF aparece mascarado, exceto na revisão (depois de `openReview`, também em `getApplication` e `getItemImage`; DEC-112), no pedido de acesso e na portabilidade do titular e na exportação linha a linha (DEC-072), e cada exibição completa DEVE ser auditada (acao=EXIBICAO_CPF). Na ficha individual o CPF é sempre mascarado.
+Para permitir busca com o CPF cifrado, o banco DEVE guardar também um hash com chave (HMAC). O CPF aparece mascarado, exceto na revisão (depois de `openReview`, também em `getApplication` e `getItemImage`, enquanto a aplicação continuar em revisão; DEC-112, DEC-126), no pedido de acesso e na portabilidade do titular e na exportação linha a linha (DEC-072), e cada exibição completa DEVE ser auditada (acao=EXIBICAO_CPF). Na ficha individual o CPF é sempre mascarado.
 
 RN-014 — Correção de CPF
 Se o revisor corrigir um CPF já vinculado, o vínculo DEVE ser refeito: a aplicação passa ao respondente do CPF corrigido (ou a um novo), com auditoria.
@@ -922,7 +926,7 @@ Quando pode: Quando todas as páginas estão identificadas e o tenant tem cota (
 Quando não pode: Quando o teto de custo de IA foi atingido (aplicações ficam em `aguardando_cota`).
 Entradas: recortes dos campos (identificação e saúde em chamadas separadas, sem metadados).
 Sucesso: itens com valor_ia, confianca e estado (confirmado_automaticamente ou a_revisar).
-Erro e timeout: timeout de 30 s por chamada, retentativas em 1, 2 e 4 s; após 3 falhas, aplicação vai para `erro_leitura` (ERR-041); teto atingido → `aguardando_cota` (ERR-003).
+Erro e timeout: timeout de 30 s por chamada, retentativas em 1 e 2 s (3 chamadas no total, DEC-129); após 3 falhas, aplicação vai para `erro_leitura` (ERR-041); teto atingido → `aguardando_cota` (ERR-003).
 Registros alterados: ItemResposta, Aplicacao (estado), Auditoria.
 Mensagens: "Leitura concluída" ou a mensagem do ERR-041.
 Estado final: aplicação em `em_revisao`, `aguardando_cota` ou `erro_leitura`.
@@ -1078,7 +1082,7 @@ Situação do item de CPF na conclusão: `em_branco` → ausente; `ilegivel` ou 
 Quando não há cotação do dólar do mês corrente (DEC-058), novas leituras não são feitas: a aplicação fica em `aguardando_cota` com aviso ERR-003 e a usuária é avisada na tela.
 
 Timeout e retentativa:
-- Leitura por IA: timeout de 30 s por chamada, retentativas em 1, 2 e 4 s; após 3 falhas, estado final `erro_leitura`.
+- Leitura por IA: timeout de 30 s por chamada, retentativas em 1 e 2 s (DEC-129); após 3 falhas, estado final `erro_leitura`.
 
 **FL-002 — Estado do item de resposta**
 
@@ -1095,7 +1099,7 @@ Ordem de avaliação ao fim da leitura de um item (a primeira regra que se aplic
 | 6 | Pergunta do tipo `texto_livre` (DEC-057) ou `texto_curto` (DEC-066) | a_revisar |
 | 6a | Valor lido em branco (DEC-074) | a_revisar |
 | 7 | Valor fora do schema: tipo, faixa, opção inexistente, mais de uma marcação em escolha única, ou `nenhuma_das_anteriores` marcada junto com outra opção (CA-006) | a_revisar |
-| 8 | Confiança > limite_confianca (DEC-028) | confirmado_automaticamente |
+| 8 | Confiança > limite_confianca (DEC-028; até a calibração o limite é 1,00 e esta regra não se aplica, DEC-127) | confirmado_automaticamente |
 | 9 | Demais casos (confiança ≤ limite) | a_revisar |
 
 "Origem resolvida" (regras 2 e 3) significa origem em `confirmado_automaticamente`, `confirmado` ou `corrigido`. A regra 1 vale só para os três estados que listam; origem em `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica` segue para as regras 4 e 4a. Assim, todo estado da origem cai em exatamente uma das regras 1, 2/3, 4 ou 4a (ou, se a regra de salto não mandar pular, segue para as regras 5 a 9).
@@ -1112,7 +1116,7 @@ Ordem de avaliação ao fim da leitura de um item (a primeira regra que se aplic
 | pendente_leitura | leitura concluída | regra 2 ou 4 (destino em branco) | — | nao_se_aplica | worker |
 | aguardando_condicao | condição de salto resolvida | regra 2 | — | nao_se_aplica | worker |
 | aguardando_condicao | condição de salto resolvida | demais regras | avalia pelas regras 3 a 9 | confirmado_automaticamente, nao_se_aplica ou a_revisar | worker ou API (reavaliação em saveReview) |
-| a_revisar | revisor confirma | — | valor_final = valor_ia | confirmado | digitalizador |
+| a_revisar | revisor confirma | valor_ia preenchido e no schema (DEC-128); senão ERR-001 | valor_final = valor_ia | confirmado | digitalizador |
 | a_revisar | revisor corrige | — | valor_final = novo valor | corrigido | digitalizador |
 | a_revisar | revisor marca em branco | — | — | em_branco | digitalizador |
 | a_revisar | revisor marca ilegível | — | — | ilegivel | digitalizador |
@@ -1157,7 +1161,7 @@ Execução por tipo: `acesso` e `portabilidade` geram CSV ou JSON (CA-024); `cor
 
 | Chamada | Timeout | Retentativa | Estado final de falha |
 |---|---|---|---|
-| Provedor de IA (leitura) | 30 s | 1, 2 e 4 s (só idempotente) | erro_leitura após 3 falhas (CA-041) |
+| Provedor de IA (leitura) | 30 s | 1 e 2 s (só idempotente; DEC-129) | erro_leitura após 3 falhas (CA-041) |
 | Armazenamento de objetos (upload/download) | 30 s | 1, 2 e 4 s | ERR-020 (nada é gravado) |
 | Geração do PDF imprimível | 30 s | 1, 2 e 4 s | ERR-020; versão permanece como está |
 | Job de exportação e de pedido do titular | 60 s | sem retentativa automática (job enfileirado) | PedidoTitular em `falhou` (FL-003), com auditoria e alerta; exportação em `falhou` |
@@ -1634,6 +1638,10 @@ Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, f
 | Q-029 | 29/10/2026 | Novo cadastro de MFA após reset | Após o reset pelo administrador, quem tiver só a senha cadastra o próprio MFA antes do titular (risco residual da correção A-01) | A: após o reset, o novo cadastro exige link de uso único enviado por e-mail, como no convite | B: manter o cadastro no próximo login e aceitar o risco | — | A | Após o reset de MFA, o novo cadastro só começa por link de uso único enviado ao e-mail do usuário, válido por 24 horas. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, RF-002, CA-037b, CA-026b |
 | Q-030 | 29/10/2026 | Perfil exigido para a concessão individual | A DEC-060 exige o perfil `analista_individual` para o acesso individual, mas a DEC-080, o RF-001 e o CA-025 recusam a concessão só a quem não tem o perfil `analista`; com `analista`, a concessão ficaria sem efeito | A: exigir `analista_individual` (coerente com a DEC-060) | B: exigir `analista` | — | A | A concessão individual só é aceita para usuário com o perfil `analista_individual`; caso contrário, ERR-018. | Aceito a recomendação (Carlos Yano, 29/10/2026). | respondida | RF-001, CA-025, DEC-060, DEC-080 |
 | Q-031 | 03/11/2026 | Frequência, mídia e guarda do backup do notebook | Com tudo num só notebook (DEC-107), o backup é a única proteção contra perda; a frequência define quantos dias de digitação se perdem | A: diário, em disco externo cifrado guardado longe do notebook | B: semanal, em disco externo cifrado | C: diário, em nuvem cifrada pela própria usuária | A | Backup diário, cifrado, em disco externo guardado longe do notebook; retenção de 90 dias (DEC-033); teste de restauração a cada mês | Aceito a recomendação, backup diário (Carlos Yano, 03/11/2026). Incorporada como DEC-117. | respondida | DEC-107, DEC-033, DEC-117, RNF-008 |
+| Q-032 | 05/11/2026 | Até quando o CPF completo aparece depois de `openReview` | A marca da abertura nunca era apagada: a aplicação, mesmo concluída, mostrava o CPF completo sem nova auditoria (revisão focada do IMP-003, F-01) | A: só enquanto a aplicação está em revisão; conclusão, descarte e reabertura apagam a marca | B: até o fim da sessão | — | A | O CPF completo aparece só na revisão aberta, com cada abertura auditada, e some ao concluir | Concordo com a recomendação (Carlos Yano, 05/11/2026). Incorporada como DEC-126. | respondida | RN-013, DEC-112, DEC-126 |
+| Q-033 | 05/11/2026 | Confirmação automática antes da calibração da confiança | A confiança é a declarada pelo modelo, sem calibração (DEC-047); erro com confiança alta passaria sem revisão (revisão focada do IMP-003, F-05) | A: tudo à revisão humana até o conjunto-ouro calibrar | B: confirmar acima de 0,90 já | — | A | Nenhum item é confirmado automaticamente até a calibração | Concordo com a recomendação (Carlos Yano, 05/11/2026). Incorporada como DEC-127. | respondida | DEC-028, DEC-047, DEC-127 |
+| Q-034 | 05/11/2026 | `confirmar` com valor em branco ou fora do schema | A FL-002 não dizia se `confirmar` valida o valor lido; um valor inválido confirmado entraria nos dados (revisão focada do IMP-003, F-06) | A: recusar e exigir a correção ou outra marcação | B: aceitar o valor lido | — | A | `confirmar` só aceita valor preenchido e no schema | Concordo com a recomendação (Carlos Yano, 05/11/2026). Incorporada como DEC-128. | respondida | FL-002, CA-006, DEC-128 |
+| Q-035 | 05/11/2026 | Número de chamadas antes de `erro_leitura` | A REQ diz "falhou em 3 tentativas" e "retentativas em 1, 2 e 4 s", que somam 4 chamadas (revisão focada do IMP-003, F-11) | A: 3 chamadas no total | B: 1 chamada e 3 retentativas | — | A | 3 chamadas no total, com retentativas em 1 e 2 s | Concordo com a recomendação (Carlos Yano, 05/11/2026). Incorporada como DEC-129. | respondida | CA-041, ERR-041, DEC-129 |
 
 10. Gates externos (GX)
 
@@ -1673,7 +1681,7 @@ Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tool
 - [x] 9. Testes sentinela cobrindo riscos: TS-001 a TS-008.
 - [x] 10. Gates externos registrados: GX-001 (bloqueia piloto e produção).
 - [x] 11. Nenhum trecho exige "bom senso": lacunas resolvidas pelas DEC-054 a DEC-060 e DEC-064 a DEC-072.
-- [x] 12. Toda Q respondida: Q-001 a Q-031 (Q-031 respondida em 03/11/2026 como DEC-117).
+- [x] 12. Toda Q respondida: Q-001 a Q-035 (Q-031 respondida em 03/11/2026 como DEC-117; Q-032 a Q-035 em 05/11/2026 como DEC-126 a DEC-129).
 - [ ] 13. Consenso DEV/TEST sem divergência bloqueante: depende da próxima rodada de revisão independente.
 - [x] 14. REQ autocontida: referências externas (MeuRemedio, Kit v3) são informativas; o Bloco P está em `docs/spec/BLOCO_P.md`.
 - [ ] 15. Última revisão independente sem achado bloqueante ou alto, com médios e baixos registrados (DEC-061, DEC-073): pendente (REV-REQ-007).
