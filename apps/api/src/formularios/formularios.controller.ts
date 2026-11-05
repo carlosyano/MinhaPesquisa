@@ -1,5 +1,7 @@
 // RF-004: formulários, versões, publicação e PDF (CA-001, CA-028, CA-036, TS-006; RN-017,
-// RN-021, RN-042, RN-047; DEC-048, DEC-094 a DEC-097).
+// RN-021, RN-042, RN-047; DEC-048, DEC-094 a DEC-097). Desde o IMP-006, os 5 campos da RN-050 em
+// todo rascunho (CA-048, DEC-135, DEC-145, DEC-147), a altura das perguntas (DEC-143) e a recusa
+// de formulário novo em projeto arquivado (DEC-146).
 
 import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
@@ -10,6 +12,7 @@ import { linha, linhas, sql, type Executor } from '../infra/banco.js';
 import { ErroApi, naoEncontrado } from '../infra/erros.js';
 import { ehUuid, Nucleo, type SessaoAtiva } from '../nucleo.js';
 import { paginacao } from '../regras/autorizacao.js';
+import { cincoCampos, padronizarCopia, reaplicarCampos } from '../regras/campos-padrao.js';
 import {
   normalizarConteudo,
   pendenciasPublicacao,
@@ -18,6 +21,8 @@ import {
   type PerguntaEntrada,
   type RegraEntrada,
 } from '../regras/formularios.js';
+import { criarFormularioRascunho, gravarConteudo, lerConteudo } from './conteudo.js';
+import { fonteDeMedida, naoCabem } from './layout.js';
 import { gerarPdf, mapaLayout } from './pdf.js';
 
 interface LinhaFormulario {
@@ -62,6 +67,9 @@ export function novoCodigoQr(): string {
   if (bits > 0) s += ALFABETO_BASE32[(valor << (5 - bits)) & 31];
   return s;
 }
+
+/** Pergunta gravada como entrada das regras de conteúdo (sem os nulos do formato de leitura). */
+const entrada = (p: Pergunta): PerguntaEntrada => ({ ...p, linhas: p.linhas ?? undefined, opcoes: p.opcoes ?? undefined });
 
 const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
 
@@ -113,50 +121,8 @@ export class FormulariosController {
   }
 
   /** Conteúdo gravado da versão, no formato do contrato (VersionContent). */
-  async conteudo(tx: Executor, versaoId: string): Promise<{ perguntas: Pergunta[]; regras_salto: RegraEntrada[] }> {
-    const ps = await linhas<Omit<Pergunta, 'opcoes' | 'linhas'> & { id: string; valor_min: string | null; valor_max: string | null }>(
-      tx,
-      sql`SELECT id, codigo, tipo, enunciado, ordem, pagina, obrigatorio, campo_respondente, campo_aplicacao, sensibilidade,
-                 valor_min, valor_max, unidade
-            FROM pergunta WHERE versao_id = ${versaoId} ORDER BY ordem, codigo`,
-    );
-    const ops = await linhas<{ pergunta_id: string; codigo: string; rotulo: string; ordem: number }>(
-      tx,
-      sql`SELECT o.pergunta_id, o.codigo, o.rotulo, o.ordem FROM opcao o JOIN pergunta p ON p.id = o.pergunta_id
-           WHERE p.versao_id = ${versaoId} ORDER BY o.ordem, o.codigo`,
-    );
-    const lms = await linhas<{ pergunta_id: string; codigo: string; rotulo: string; ordem: number }>(
-      tx,
-      sql`SELECT l.pergunta_id, l.codigo, l.rotulo, l.ordem FROM linha_matriz l JOIN pergunta p ON p.id = l.pergunta_id
-           WHERE p.versao_id = ${versaoId} ORDER BY l.ordem, l.codigo`,
-    );
-    const regras = await linhas<RegraEntrada>(
-      tx,
-      sql`SELECT o.codigo AS pergunta_origem_codigo, d.codigo AS pergunta_destino_codigo, r.opcao_codigo
-            FROM regra_salto r JOIN pergunta o ON o.id = r.pergunta_origem_id JOIN pergunta d ON d.id = r.pergunta_destino_id
-           WHERE r.versao_id = ${versaoId} ORDER BY r.posicao`,
-    );
-    const perguntas = ps.map((p): Pergunta => {
-      const opcoes = ops.filter((o) => o.pergunta_id === p.id).map(({ codigo, rotulo, ordem }) => ({ codigo, rotulo, ordem }));
-      const linhasM = lms.filter((l) => l.pergunta_id === p.id).map(({ codigo, rotulo, ordem }) => ({ codigo, rotulo, ordem }));
-      return {
-        codigo: p.codigo,
-        tipo: p.tipo,
-        enunciado: p.enunciado,
-        ordem: p.ordem,
-        pagina: p.pagina,
-        obrigatorio: p.obrigatorio,
-        campo_respondente: p.campo_respondente,
-        campo_aplicacao: p.campo_aplicacao,
-        sensibilidade: p.sensibilidade,
-        linhas: p.tipo === 'matriz' ? linhasM : null,
-        valor_min: p.valor_min === null ? null : Number(p.valor_min),
-        valor_max: p.valor_max === null ? null : Number(p.valor_max),
-        unidade: p.unidade,
-        opcoes: opcoes.length || ['escolha_unica', 'multipla_escolha', 'escala', 'matriz', 'sim_nao'].includes(p.tipo) ? opcoes : null,
-      };
-    });
-    return { perguntas, regras_salto: regras };
+  conteudo(tx: Executor, versaoId: string): Promise<{ perguntas: Pergunta[]; regras_salto: RegraEntrada[] }> {
+    return lerConteudo(tx, versaoId);
   }
 
   /** Serialização do contrato: sem chaves nulas onde o schema não aceita nulo. */
@@ -175,35 +141,7 @@ export class FormulariosController {
   }
 
   private async gravarConteudo(tx: Executor, s: SessaoAtiva, versaoId: string, perguntas: Pergunta[], regras: RegraEntrada[]) {
-    await tx.execute(sql`DELETE FROM regra_salto WHERE versao_id = ${versaoId}`);
-    await tx.execute(sql`DELETE FROM pergunta WHERE versao_id = ${versaoId}`);
-    const ids = new Map<string, string>();
-    for (const p of perguntas) {
-      const id = this.n.id();
-      ids.set(p.codigo, id);
-      await tx.execute(sql`
-        INSERT INTO pergunta (id, tenant_id, versao_id, codigo, tipo, enunciado, ordem, pagina, obrigatorio,
-                              campo_respondente, campo_aplicacao, sensibilidade, valor_min, valor_max, unidade)
-        VALUES (${id}, ${s.tenantId}, ${versaoId}, ${p.codigo}, ${p.tipo}, ${p.enunciado}, ${p.ordem}, ${p.pagina},
-                ${p.obrigatorio}, ${p.campo_respondente}, ${p.campo_aplicacao}, ${p.sensibilidade},
-                ${p.valor_min}, ${p.valor_max}, ${p.unidade})`);
-      for (const o of p.opcoes ?? []) {
-        await tx.execute(sql`
-          INSERT INTO opcao (id, tenant_id, pergunta_id, codigo, rotulo, ordem)
-          VALUES (${this.n.id()}, ${s.tenantId}, ${id}, ${o.codigo}, ${o.rotulo}, ${o.ordem})`);
-      }
-      for (const l of p.linhas ?? []) {
-        await tx.execute(sql`
-          INSERT INTO linha_matriz (id, tenant_id, pergunta_id, codigo, rotulo, ordem)
-          VALUES (${this.n.id()}, ${s.tenantId}, ${id}, ${l.codigo}, ${l.rotulo}, ${l.ordem})`);
-      }
-    }
-    for (const [posicao, r] of regras.entries()) {
-      await tx.execute(sql`
-        INSERT INTO regra_salto (id, tenant_id, versao_id, pergunta_origem_id, pergunta_destino_id, opcao_codigo, posicao, criado_em)
-        VALUES (${this.n.id()}, ${s.tenantId}, ${versaoId}, ${ids.get(r.pergunta_origem_codigo)}, ${ids.get(r.pergunta_destino_codigo)},
-                ${r.opcao_codigo}, ${posicao + 1}, ${this.n.agora()})`);
-    }
+    await gravarConteudo(this.n, tx, s.tenantId, versaoId, perguntas, regras);
   }
 
   private async resumoFormulario(tx: Executor, f: LinhaFormulario) {
@@ -227,7 +165,7 @@ export class FormulariosController {
       const fs = await linhas<LinhaFormulario>(
         tx,
         sql`SELECT id, projeto_id, nome, criado_em FROM formulario WHERE projeto_id = ${projetoId}
-             ORDER BY criado_em, id LIMIT ${limite} OFFSET ${(pagina - 1) * limite}`,
+             ORDER BY criado_em DESC, id DESC LIMIT ${limite} OFFSET ${(pagina - 1) * limite}`, // mais recente primeiro (DEC-150)
       );
       const itens = [];
       for (const f of fs) itens.push(await this.resumoFormulario(tx, f));
@@ -246,16 +184,11 @@ export class FormulariosController {
     exigirCsrf(this.n, req);
     this.validar('createForm', corpo);
     return this.n.comAtor(s, async (tx) => {
-      await projetoNoEscopo(tx, corpo.projeto_id);
+      const p = await projetoNoEscopo(tx, corpo.projeto_id, true);
+      if (p.status !== 'ativo') throw new ErroApi('ERR-001', { campos: ['projeto'] }); // DEC-146
       const feito = await this.n.idempotente(tx, s, 'createForm', chave, corpo, async () => {
-        const id = this.n.id();
-        await tx.execute(sql`
-          INSERT INTO formulario (id, tenant_id, projeto_id, nome, criado_em)
-          VALUES (${id}, ${s.tenantId}, ${corpo.projeto_id}, ${corpo.nome}, ${this.n.agora()})`);
-        const versaoId = this.n.id();
-        await tx.execute(sql`
-          INSERT INTO versao (id, tenant_id, formulario_id, numero, status, criada_em)
-          VALUES (${versaoId}, ${s.tenantId}, ${id}, 1, 'rascunho', ${this.n.agora()})`);
+        const { formId: id, versaoId } = await criarFormularioRascunho(this.n, tx, { tenantId: s.tenantId, projetoId: corpo.projeto_id, nome: corpo.nome });
+        await this.gravarConteudo(tx, s, versaoId, normalizarConteudo(cincoCampos(), []), []); // DEC-135
         await this.n.auditar(tx, s, 'CRIAR_FORMULARIO', 'Formulario', id);
         return { status: 201, recursoId: id };
       });
@@ -287,7 +220,9 @@ export class FormulariosController {
         await tx.execute(sql`
           INSERT INTO versao (id, tenant_id, formulario_id, numero, status, criada_em)
           VALUES (${id}, ${s.tenantId}, ${formId}, ${numero}, 'rascunho', ${this.n.agora()})`);
-        if (origem) await this.gravarConteudo(tx, s, id, origem.perguntas, origem.regras_salto);
+        // Sem origem, só os 5 campos (DEC-135); com origem, a cópia padronizada (DEC-145, DEC-147).
+        const copia = origem ? padronizarCopia(origem.perguntas.map(entrada), origem.regras_salto) : { perguntas: cincoCampos(), regras: [] };
+        await this.gravarConteudo(tx, s, id, normalizarConteudo(copia.perguntas, copia.regras), copia.regras);
         await this.n.auditar(tx, s, 'CRIAR_VERSAO', 'Versao', id, { numero });
         return { status: 201, recursoId: id };
       });
@@ -326,7 +261,10 @@ export class FormulariosController {
       if (!ifMatch) throw new ErroApi('ERR-001', { campos: ['If-Match'] });
       if (ifMatch !== etag(v.versao)) throw new ErroApi('ERR-017');
       this.validar('updateVersion', corpo);
-      const perguntas = normalizarConteudo(corpo.perguntas, corpo.regras_salto);
+      // RN-050: a reaplicação vem antes das demais validações, inclusive a das regras de salto.
+      const perguntas = normalizarConteudo(reaplicarCampos(corpo.perguntas), corpo.regras_salto);
+      const fora = naoCabem(await fonteDeMedida(), perguntas, corpo.regras_salto);
+      if (fora.length) throw new ErroApi('ERR-001', { campos: fora }); // DEC-143
       await this.gravarConteudo(tx, s, versaoId, perguntas, corpo.regras_salto);
       await tx.execute(sql`UPDATE versao SET versao = versao + 1 WHERE id = ${versaoId}`);
       await this.n.auditar(tx, s, 'ALTERAR_VERSAO', 'Versao', versaoId);
@@ -347,6 +285,7 @@ export class FormulariosController {
       if (v.status === 'publicada') throw new ErroApi('ERR-009');
       const c = await this.conteudo(tx, versaoId);
       const faltam = pendenciasPublicacao(c.perguntas);
+      for (const codigo of naoCabem(await fonteDeMedida(), c.perguntas, c.regras_salto)) if (!faltam.includes(codigo)) faltam.push(codigo); // DEC-143
       if (faltam.length) throw new ErroApi('ERR-036', { campos: faltam, substituir: faltam.join(', ') });
       const mapa = await mapaLayout({ totalPaginas: totalPaginas(c.perguntas), perguntas: c.perguntas, regras: c.regras_salto });
       await tx.execute(sql`

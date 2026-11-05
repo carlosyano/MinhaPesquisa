@@ -10,6 +10,10 @@ export interface LinhaProjeto {
   id: string;
   nome: string;
   descricao: string | null;
+  objetivo: string | null;
+  coordenador: string | null;
+  coleta_inicio: string | null;
+  coleta_fim: string | null;
   status: 'ativo' | 'arquivado';
   criado_em: Date;
   versao: number;
@@ -17,14 +21,20 @@ export interface LinhaProjeto {
 
 export const etag = (versao: number) => `"${versao}"`;
 
+/** Colunas de LinhaProjeto, com as datas do ciclo de coleta como YYYY-MM-DD (DEC-137). */
+export const COLUNAS_PROJETO = sql.raw(
+  `id, nome, descricao, objetivo, coordenador, to_char(coleta_inicio, 'YYYY-MM-DD') AS coleta_inicio,
+   to_char(coleta_fim, 'YYYY-MM-DD') AS coleta_fim, status, criado_em, versao`,
+);
+
 /** Projeto do tenant da sessão (a RLS limita ao tenant, RN-004); senão 404 auditado. */
 export async function projetoNoEscopo(tx: Executor, id: string, bloquear = false): Promise<LinhaProjeto> {
   if (!ehUuid(id)) throw naoEncontrado('Projeto', null);
   const p = await linha<LinhaProjeto>(
     tx,
     bloquear
-      ? sql`SELECT id, nome, descricao, status, criado_em, versao FROM projeto WHERE id = ${id} FOR UPDATE`
-      : sql`SELECT id, nome, descricao, status, criado_em, versao FROM projeto WHERE id = ${id}`,
+      ? sql`SELECT ${COLUNAS_PROJETO} FROM projeto WHERE id = ${id} FOR UPDATE`
+      : sql`SELECT ${COLUNAS_PROJETO} FROM projeto WHERE id = ${id}`,
   );
   if (!p) throw naoEncontrado('Projeto', id);
   return p;

@@ -20,6 +20,8 @@ import type { Config } from './config.js';
 import { linha, linhas, sql } from './infra/banco.js';
 import { AntimalwareEicar } from './infra/antimalware.js';
 import { ArmazenamentoEmMemoria } from './infra/armazenamento.js';
+import { criarFormularioRascunho, gravarConteudo } from './formularios/conteudo.js';
+import { normalizarConteudo, type PerguntaEntrada, type RegraEntrada } from './regras/formularios.js';
 import { carregarItens, competencia } from './leitura/dominio.js';
 import { WorkerLeitura } from './leitura/worker.js';
 import { MINUTO } from './infra/relogio.js';
@@ -227,6 +229,19 @@ export async function criarHarness() {
             INSERT INTO consumo_ia (tenant_id, competencia, valor_reais) VALUES (${d.tenantId}, ${inicio}::date, ${d.valorReais}::numeric)
             ON CONFLICT (tenant_id, competencia) DO UPDATE SET valor_reais = consumo_ia.valor_reais + EXCLUDED.valor_reais`),
         );
+      },
+
+      /**
+       * Rascunho anterior à REQ v2.4 (PLANO §11): versão 1 gravada direto, com as regras do IMP-002
+       * (códigos únicos, sensibilidade da RN-047), sem a injeção nem as recusas da RN-050.
+       */
+      async rascunhoAntigo(d: { tenantId: string; projetoId: string; nome: string; conteudo: unknown }) {
+        const c = d.conteudo as { perguntas: PerguntaEntrada[]; regras_salto: RegraEntrada[] };
+        return n.banco.noTenant(d.tenantId, async (tx) => {
+          const criado = await criarFormularioRascunho(n, tx, d);
+          await gravarConteudo(n, tx, d.tenantId, criado.versaoId, normalizarConteudo(c.perguntas, c.regras_salto), c.regras_salto);
+          return criado;
+        });
       },
 
       /** Arquivo da página trocado por bytes que não são imagem (DEC-130). */
