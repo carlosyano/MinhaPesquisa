@@ -1,6 +1,8 @@
 // Formulários e versões (RF-004, CA-001, CA-036, TS-006, RN-017, RN-042, RN-047, REQ §6.5).
 // O vínculo das respostas já lidas à versão 1 (último passo do CA-001) só é observável com a
 // leitura, no IMP-003.
+// Ajustados no IA-TEST do IMP-006 (CHG-014, PLANO §11): o rascunho novo já tem os 5 campos da
+// RN-050, e a versão incompleta do CA-036 é um rascunho anterior à REQ v2.4 gravado direto no banco.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { esperarErro } from '../../support/catalogo.js';
@@ -17,6 +19,7 @@ import {
   type Conteudo,
 } from '../../support/formularios.js';
 import { criarHarness, type Harness } from '../../support/harness.js';
+import { CODIGOS_RN050 } from '../../support/importacao.js';
 
 let h: Harness;
 let T: TenantPronto;
@@ -43,13 +46,14 @@ function sem(conteudo: Conteudo, codigo: string): Conteudo {
 }
 
 describe('RF-004 — rascunho e publicação', () => {
-  // @trace RF-004, RN-018, RN-019
-  it('createForm cria a versão 1 vazia em rascunho; o conteúdo salvo volta igual na leitura', async () => {
+  // @trace RF-004, RN-018, RN-019, RN-050
+  it('createForm cria a versão 1 em rascunho só com os 5 campos; o conteúdo salvo volta igual na leitura', async () => {
     const { formId, versaoId } = await criarFormulario(admin, projeto, 'Demografia');
     const v = await admin.get(caminhoVersao(formId, versaoId));
     expect(v.status, v.texto).toBe(200);
     expect(v.corpo.resumo).toMatchObject({ id: versaoId, formulario_id: formId, numero: 1, status: 'rascunho' });
-    expect(v.corpo.conteudo).toEqual({ perguntas: [], regras_salto: [] });
+    expect(v.corpo.conteudo.perguntas.map((p: { codigo: string }) => p.codigo)).toEqual(CODIGOS_RN050);
+    expect(v.corpo.conteudo.regras_salto).toEqual([]);
 
     const s = await salvarConteudo(admin, formId, versaoId, conteudoValido());
     expect(s.status, s.texto).toBe(200);
@@ -168,6 +172,12 @@ describe('DEC-096 — estrutura da RN-047 na publicação', () => {
     return { formId, versaoId, r: await publicar(admin, formId, versaoId) };
   }
 
+  /** Rascunho anterior à REQ v2.4, que ainda pode estar sem um dos 5 campos (RN-050). */
+  async function publicarAntigo(c: Conteudo, nome: string): Promise<{ formId: string; versaoId: string; r: Awaited<ReturnType<typeof publicar>> }> {
+    const { formId, versaoId } = await h.seed.rascunhoAntigo({ tenantId: T.tenantId, projetoId: projeto, nome, conteudo: c });
+    return { formId, versaoId, r: await publicar(admin, formId, versaoId) };
+  }
+
   // @trace DEC-096, RN-047, ERR-036
   it('matriz sem linhas → ERR-036 com o código da pergunta em campos', async () => {
     const c = conteudoValido();
@@ -185,9 +195,9 @@ describe('DEC-096 — estrutura da RN-047 na publicação', () => {
     expect(r.corpo).toMatchObject({ errorCode: 'ERR-036', campos: ['ALIMENTOS'] });
   });
 
-  // @trace DEC-096, RN-017, RN-047
-  it('falta de campo da RN-017 e estrutura inválida vêm juntas em campos', async () => {
-    const { r } = await publicarCom(multiplaSemNenhuma(sem(conteudoValido(), 'LOCAL_APLICACAO')));
+  // @trace DEC-096, RN-017, RN-047, RN-050
+  it('falta de campo da RN-017 e estrutura inválida vêm juntas em campos (rascunho anterior à v2.4)', async () => {
+    const { r } = await publicarAntigo(multiplaSemNenhuma(sem(conteudoValido(), 'LOCAL_APLICACAO')), 'Estrutura antiga');
     expect(r.status, r.texto).toBe(400);
     expect(r.corpo.errorCode).toBe('ERR-036');
     expect([...r.corpo.campos].sort()).toEqual(['ALIMENTOS', 'local_aplicacao']);
@@ -195,10 +205,14 @@ describe('DEC-096 — estrutura da RN-047 na publicação', () => {
 });
 
 describe('CA-036 — publicação exige os campos obrigatórios (RN-017)', () => {
+  // A API não grava mais rascunho sem os 5 campos (RN-050): a versão incompleta é anterior à v2.4.
+  async function rascunhoAntigo(c: Conteudo, nome: string): Promise<{ formId: string; versaoId: string }> {
+    return h.seed.rascunhoAntigo({ tenantId: T.tenantId, projetoId: projeto, nome, conteudo: c });
+  }
+
   // @trace CA-036, RN-017, ERR-036
   it('sem pergunta data_aplicacao → ERR-036 com campos = [data_aplicacao]; versão continua em rascunho', async () => {
-    const { formId, versaoId } = await criarFormulario(admin, projeto, 'Sem data');
-    expect((await salvarConteudo(admin, formId, versaoId, sem(conteudoValido(), 'DATA_APLICACAO'))).status).toBe(200);
+    const { formId, versaoId } = await rascunhoAntigo(sem(conteudoValido(), 'DATA_APLICACAO'), 'Sem data');
     const r = await publicar(admin, formId, versaoId);
     expect(r.status, r.texto).toBe(400);
     expect(r.corpo).toMatchObject({ errorCode: 'ERR-036', campos: ['data_aplicacao'] });
@@ -209,7 +223,7 @@ describe('CA-036 — publicação exige os campos obrigatórios (RN-017)', () =>
 
   // @trace CA-036, RN-017
   it('versão vazia → ERR-036 lista os 5 campos', async () => {
-    const { formId, versaoId } = await criarFormulario(admin, projeto, 'Vazio');
+    const { formId, versaoId } = await rascunhoAntigo({ perguntas: [], regras_salto: [] }, 'Vazio');
     const r = await publicar(admin, formId, versaoId);
     expect(r.status, r.texto).toBe(400);
     expect(r.corpo.errorCode).toBe('ERR-036');
@@ -217,20 +231,26 @@ describe('CA-036 — publicação exige os campos obrigatórios (RN-017)', () =>
   });
 
   // @trace CA-036, RN-017
-  it('pergunta marcada como CPF com tipo diferente de cpf não conta: ERR-036 com campos = [cpf]', async () => {
+  it('pergunta marcada como CPF com tipo diferente de cpf num rascunho antigo não conta: ERR-036 com campos = [cpf]', async () => {
+    const c = conteudoValido();
+    c.perguntas = c.perguntas.map((p) => (p.codigo === 'CPF' ? { ...p, tipo: 'texto_curto' } : p));
+    const { formId, versaoId } = await rascunhoAntigo(c, 'CPF errado antigo');
+    const r = await publicar(admin, formId, versaoId);
+    expect(r.status, r.texto).toBe(400);
+    expect(r.corpo).toMatchObject({ errorCode: 'ERR-036', campos: ['cpf'] });
+    expect((await admin.get(caminhoVersao(formId, versaoId))).corpo.resumo.status).toBe('rascunho');
+  });
+
+  // @trace CA-036, RN-050, DEC-145
+  it('gravada pela API, a pergunta marcada como CPF recebe o tipo cpf (reaplicação) e a versão se publica', async () => {
     const { formId, versaoId } = await criarFormulario(admin, projeto, 'CPF errado');
     const c = conteudoValido();
     c.perguntas = c.perguntas.map((p) => (p.codigo === 'CPF' ? { ...p, tipo: 'texto_curto' } : p));
     const s = await salvarConteudo(admin, formId, versaoId, c);
-    if (s.status === 200) {
-      const r = await publicar(admin, formId, versaoId);
-      expect(r.status, r.texto).toBe(400);
-      expect(r.corpo).toMatchObject({ errorCode: 'ERR-036', campos: ['cpf'] });
-    } else {
-      // Recusar já no rascunho também cumpre a RN-017: a versão nunca chega a ser publicada.
-      esperarErro(s, 'ERR-001');
-    }
-    expect((await admin.get(caminhoVersao(formId, versaoId))).corpo.resumo.status).toBe('rascunho');
+    expect(s.status, s.texto).toBe(200);
+    expect(s.corpo.conteudo.perguntas.find((p: { codigo: string }) => p.codigo === 'CPF').tipo).toBe('cpf');
+    const r = await publicar(admin, formId, versaoId);
+    expect(r.status, r.texto).toBe(200);
   });
 
   // @trace CA-036, RF-004

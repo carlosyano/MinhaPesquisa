@@ -1,6 +1,6 @@
 # Testes do MinhaPesquisa
 
-IA-TEST do IMP-001, do IMP-002, do IMP-005 e do IMP-003 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
+IA-TEST do IMP-001, do IMP-002, do IMP-005, do IMP-003 e do IMP-006 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
 implementação (IA-DEV), que não pode alterá-los: o job `testes-congelados` do CI marca de
 vermelho qualquer mudança em teste sem o rótulo `ia-test`, e o responsável só autoriza a
 junção depois de revisar o diff, com as verificações verdes.
@@ -57,6 +57,15 @@ escrever: `apps/api/src/regras/leitura.ts` (`estadoAposLeitura`, FL-002),
 (`AdaptadorClaude`, `ErroLeitura` e os tipos da ReadEngine, DEC-043), este com o SDK oficial
 `@anthropic-ai/sdk` e o `fetch` injetado, sem rede. Propriedades usam `fast-check`.
 
+No IMP-006 (importação de formulário, CHG-014, DEC-141 e DEC-142) a interface ganha `extrator`
+(o extrator de estrutura simulado no lugar do adaptador Claude: roteiro por página com
+`campo_padrao`, falhas, custo e as chamadas que recebeu), `seed.rascunhoAntigo` (rascunho gravado
+direto no banco como antes da REQ v2.4, sem os 5 campos da RN-050), `seed.corromperPaginaImportacao`,
+`inspect.importacao` e `inspect.contagemImportacao`. As tarefas da importação rodam no mesmo worker
+e relógio da leitura. Os testes do IMP-002 alcançados pela CHG-014 foram ajustados em
+`versoes.test.ts` (PLANO §11), sem reabrir o aceite do IMP-002. Altura das perguntas (S-12): termo
+de consentimento padrão e uma escolha única de 60 opções, que não cabe em nenhuma página.
+
 ## Cobertura
 
 | Arquivo | Rastreio |
@@ -66,7 +75,7 @@ escrever: `apps/api/src/regras/leitura.ts` (`estadoAposLeitura`, FL-002),
 | `integracao/auth/redefinicao-senha.test.ts` | CA-037, RF-001, RN-007 |
 | `integracao/projetos/projetos.test.ts` | RF-003, CA-027 (recusa de upload, reativação, histórico), RN-004, DEC-110 (sem `grupo_minimo`) |
 | `integracao/projetos/isolamento.test.ts` | CA-012 (exemplos 1 a 4), TS-001 (operações do IMP-002) |
-| `integracao/formularios/versoes.test.ts` | RF-004, CA-001, TS-006, CA-036, RN-017, RN-047 (sim/não e sensibilidade), REQ §6.5 |
+| `integracao/formularios/versoes.test.ts` | RF-004, CA-001, TS-006, CA-036, RN-017, RN-047 (sim/não e sensibilidade), REQ §6.5; ajustado no IMP-006 (RN-050) |
 | `integracao/formularios/pdf.test.ts` | CA-028 (QR opaco por página, termo e assinatura na página 1) |
 | `integracao/upload/upload.test.ts` | CA-003, CA-004, CA-029 (exemplos 1 a 5), TS-002, RN-040, RF-006, ERR-019 |
 | `integracao/upload/montagem.test.ts` | CA-013, CA-039, CA-040, FL-001 (ordem da criação e saída de `identificacao_pendente`) |
@@ -83,6 +92,9 @@ escrever: `apps/api/src/regras/leitura.ts` (`estadoAposLeitura`, FL-002),
 | `unit/estado-item.test.ts` | FL-002 (regras 1 a 9), DEC-028, DEC-047, CA-006 |
 | `unit/cpf.test.ts` | RN-012, CA-002, REQ §5.4 |
 | `unit/motor-leitura.test.ts` | DEC-007, DEC-043, DEC-122, DEC-123, RN-045 (fronteira do motor e adaptador Claude) |
+| `integracao/formularios/importacao.test.ts` | RF-011, CA-045, CA-046, CA-047 (exemplos 1 a 8), RN-049, FL-004, DEC-136, DEC-143, DEC-144, DEC-149, T-02 |
+| `integracao/formularios/campos-padrao.test.ts` | CA-048 (exemplos 1 a 9), RN-050, DEC-143, DEC-145, DEC-146, DEC-147 |
+| `integracao/projetos/ciclo-coleta.test.ts` | CA-049, DEC-137, RN-027, RN-028 |
 | `support/arquivos.test.ts` | autoteste dos geradores de PDF, QR, EXIF e arquivos de limite |
 | `support/apoio.test.ts` | autoteste do apoio (catálogo de erros, sem os erros descontinuados na REQ v2.1) |
 
