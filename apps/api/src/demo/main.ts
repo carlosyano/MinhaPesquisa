@@ -1,5 +1,6 @@
 // Modo de demonstração local (DEC-104): sobe PostgreSQL 17 descartável, a API real e uma página
-// simples para baixar o PDF e enviar fotos reais do formulário preenchido. Só para a máquina
+// simples para importar um formulário de um modelo, baixar o PDF e enviar fotos reais do
+// formulário preenchido. Só para a máquina
 // do desenvolvedor: tudo escuta em 127.0.0.1, os segredos são gerados a cada execução e nada
 // sobrevive ao encerramento (banco no contêiner, imagens em memória).
 //
@@ -224,7 +225,7 @@ const ciclo = setInterval(() => {
     .finally(() => (rodando = false));
 }, 1000);
 
-const dadosPagina = JSON.stringify({ projetoId: projeto.corpo.id, formId, versaoId, email: EMAIL });
+const dadosPagina = JSON.stringify({ projetoId: projeto.corpo.id, formId, versaoId, nomeFormulario: 'Questionário de demonstração', email: EMAIL });
 const pagina = createServer((req, res) => {
   const caminho = (req.url ?? '/').split('?')[0];
   if (req.method === 'GET' && caminho === '/') {
@@ -245,7 +246,7 @@ console.log(`MinhaPesquisa — modo de demonstração (DEC-104). Só dados sint�
   e-mail:  ${EMAIL}
   senha:   ${senha}
   antimalware: ${defender ? 'Microsoft Defender' : 'equivalente EICAR'}
-  leitura por IA: ${motor ? `${ia.modelo} (cada página lida gera custo real na sua conta da Anthropic)` : 'desligada (defina MP_DEMO_CHAVE_IA para ligar)'}
+  leitura e importação por IA: ${motor ? `${ia.modelo} (cada página lida gera custo real na sua conta da Anthropic)` : 'desligadas (defina MP_DEMO_CHAVE_IA para ligar)'}
   cotação do dólar (fictícia): R$ ${cotacao}
 Tudo some ao encerrar (Ctrl+C).`);
 
