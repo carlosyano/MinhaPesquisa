@@ -94,16 +94,33 @@ export interface Analise {
   registroOk: boolean;
 }
 
-/** Lê o QR e confere os marcadores dos cantos na imagem já normalizada. */
-export async function analisarPagina(jpeg: Buffer): Promise<Analise> {
+/**
+ * Outros lados tentados quando o QR não é lido em LADO_ANALISE: num scan de 1 bit, o serrilhado
+ * depende da escala, e o mesmo QR que falha a 1800 px é lido a 1200 ou 2100.
+ */
+const LADOS_QR_EXTRA = [1200, 2100];
+
+async function rgbaNoLado(jpeg: Buffer, lado: number) {
   const { data, info } = await sharp(jpeg, { limitInputPixels: MAX_PIXELS })
-    .resize({ width: LADO_ANALISE, height: LADO_ANALISE, fit: 'inside', withoutEnlargement: true })
+    .resize({ width: lado, height: lado, fit: 'inside', withoutEnlargement: true })
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
-  const rgba = new Uint8ClampedArray(data.buffer, data.byteOffset, data.length);
-  const qr = jsQR(rgba, info.width, info.height);
-  return { qr: qr?.data ?? null, registroOk: marcadoresPresentes(rgba, info.width, info.height) };
+  return { rgba: new Uint8ClampedArray(data.buffer, data.byteOffset, data.length), largura: info.width, altura: info.height };
+}
+
+/** Lê o QR e confere os marcadores dos cantos na imagem já normalizada. */
+export async function analisarPagina(jpeg: Buffer): Promise<Analise> {
+  const { rgba, largura, altura } = await rgbaNoLado(jpeg, LADO_ANALISE);
+  const registroOk = marcadoresPresentes(rgba, largura, altura);
+  let qr = jsQR(rgba, largura, altura)?.data ?? null;
+  // Só insiste em página com os marcadores: papel que não é do formulário não paga as tentativas.
+  for (const lado of registroOk ? LADOS_QR_EXTRA : []) {
+    if (qr) break;
+    const r = await rgbaNoLado(jpeg, lado);
+    qr = jsQR(r.rgba, r.largura, r.altura)?.data ?? null;
+  }
+  return { qr, registroOk };
 }
 
 /**
@@ -122,29 +139,56 @@ export function marcadoresPresentes(rgba: Uint8ClampedArray, largura: number, al
   return cantos.every(([x0, y0]) => quadradoEscuro(rgba, largura, x0, y0, lx, ly));
 }
 
+/**
+ * O marcador é o maior bloco escuro (8-conexo) da janela do canto. Medir só esse bloco ignora
+ * o que o scanner deixa na borda (linha pontilhada, poeira), que de outro modo alarga a caixa.
+ */
 function quadradoEscuro(rgba: Uint8ClampedArray, largura: number, x0: number, y0: number, w: number, h: number): boolean {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -1;
-  let maxY = -1;
-  let escuros = 0;
-  for (let y = y0; y < y0 + h; y++) {
-    for (let x = x0; x < x0 + w; x++) {
-      const i = (y * largura + x) * 4;
-      const luz = 0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2];
-      if (luz < 90) {
-        escuros++;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
+  const escuro = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = ((y0 + y) * largura + x0 + x) * 4;
+      if (0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2] < 90) escuro[y * w + x] = 1;
     }
   }
-  if (escuros === 0) return false;
-  const bw = maxX - minX + 1;
-  const bh = maxY - minY + 1;
+  let melhor = { n: 0, bw: 0, bh: 0 };
+  const pilha: number[] = [];
+  for (let inicio = 0; inicio < escuro.length; inicio++) {
+    if (escuro[inicio] !== 1) continue;
+    escuro[inicio] = 2;
+    pilha.push(inicio);
+    let n = 0;
+    let minX = w;
+    let minY = h;
+    let maxX = -1;
+    let maxY = -1;
+    while (pilha.length) {
+      const p = pilha.pop()!;
+      const x = p % w;
+      const y = (p - x) / w;
+      n++;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const vx = x + dx;
+          const vy = y + dy;
+          if (vx < 0 || vy < 0 || vx >= w || vy >= h) continue;
+          const v = vy * w + vx;
+          if (escuro[v] === 1) {
+            escuro[v] = 2;
+            pilha.push(v);
+          }
+        }
+      }
+    }
+    if (n > melhor.n) melhor = { n, bw: maxX - minX + 1, bh: maxY - minY + 1 };
+  }
+  if (melhor.n === 0) return false;
+  const { n, bw, bh } = melhor;
   const proporcao = bw / bh;
-  const preenchimento = escuros / (bw * bh);
+  const preenchimento = n / (bw * bh);
   return bw >= w * 0.15 && bh >= h * 0.1 && proporcao > 0.6 && proporcao < 1.6 && preenchimento > 0.6;
 }

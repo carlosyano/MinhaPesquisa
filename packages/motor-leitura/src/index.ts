@@ -6,7 +6,7 @@
 // Primeiro adaptador: Claude, pela Messages API com o SDK oficial (DEC-122). Uma tentativa por
 // chamada; as retentativas da REQ §6.6 são do worker (DEC-123).
 
-import Anthropic, { APIConnectionTimeoutError, APIUserAbortError } from '@anthropic-ai/sdk';
+import Anthropic, { APIConnectionTimeoutError, APIError, APIUserAbortError } from '@anthropic-ai/sdk';
 
 export type TipoCampo =
   | 'escolha_unica'
@@ -239,7 +239,9 @@ export class AdaptadorClaude implements ReadEngine {
       });
     } catch (e) {
       if (e instanceof APIConnectionTimeoutError || e instanceof APIUserAbortError) throw new ErroLeitura('tempo_esgotado');
-      throw new ErroLeitura('erro', e instanceof Error ? e.name : 'erro');
+      // Só a classe e o status HTTP: a mensagem do provedor pode ecoar conteúdo (RN-028).
+      const status = e instanceof APIError && e.status ? ` ${e.status}` : '';
+      throw new ErroLeitura('erro', `${e instanceof Error ? e.name : 'erro'}${status}`);
     }
     if (resposta.stop_reason === 'refusal') throw new ErroLeitura('erro', 'recusa do modelo');
     if (resposta.stop_reason === 'max_tokens') throw new ErroLeitura('malformada', 'resposta cortada');
