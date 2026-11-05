@@ -124,9 +124,10 @@ describe('AdaptadorClaude — requisição (DEC-122, RN-038, RN-045)', () => {
     const t = transporte(() => mensagem(OK));
     const comRecorte = { campos: SCHEMA.campos.map((c, i) => ({ ...c, recorte: i + 1 })) };
     await adaptador(t.fetch).lerRecorte(recorte(), comRecorte);
-    const corpo = JSON.stringify(t.pedidos[0].corpo);
-    expect(corpo).toContain('"recorte":1');
-    expect(corpo).toContain('"recorte":2');
+    const blocos = t.pedidos[0].corpo.messages.flatMap((m: { content: unknown }) => (Array.isArray(m.content) ? m.content : []));
+    const texto = blocos.filter((b: { type: string }) => b.type === 'text').map((b: { text: string }) => b.text).join('\n');
+    expect(texto).toContain('"recorte":1');
+    expect(texto).toContain('"recorte":2');
     expect(JSON.stringify(t.pedidos[0].corpo.system)).toMatch(/faixa preta/);
     expect(JSON.stringify(t.pedidos[0].corpo.system)).toMatch(/de cima para baixo/);
   });
