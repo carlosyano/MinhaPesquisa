@@ -168,9 +168,10 @@ export const CAMPOS_PUBLICACAO = ['nome', 'data_nascimento', 'cpf', 'data_aplica
 
 /**
  * O que impede a publicação (ERR-036): campos da RN-017 ausentes e, depois, códigos das
- * perguntas fora da estrutura da RN-047 (DEC-096). Lista vazia = pode publicar.
+ * perguntas fora da estrutura da RN-047 (DEC-096). Lista vazia = pode publicar. No papel antigo,
+ * a múltipla escolha não precisa de `nenhuma_das_anteriores` (DEC-195).
  */
-export function pendenciasPublicacao(perguntas: readonly Pergunta[]): string[] {
+export function pendenciasPublicacao(perguntas: readonly Pergunta[], papelAntigo = false): string[] {
   const tem = (f: (p: Pergunta) => boolean) => perguntas.some(f);
   const faltam: string[] = [];
   if (!tem((p) => p.campo_respondente === 'nome')) faltam.push('nome');
@@ -180,7 +181,7 @@ export function pendenciasPublicacao(perguntas: readonly Pergunta[]): string[] {
   if (!tem((p) => p.campo_aplicacao === 'local_aplicacao')) faltam.push('local_aplicacao');
   for (const p of [...perguntas].sort((a, b) => a.ordem - b.ordem)) {
     const semLinhas = p.tipo === 'matriz' && !(p.linhas?.length && p.opcoes?.length);
-    const semNenhuma = p.tipo === 'multipla_escolha' && !(p.opcoes ?? []).some((o) => o.codigo === 'nenhuma_das_anteriores');
+    const semNenhuma = !papelAntigo && p.tipo === 'multipla_escolha' && !(p.opcoes ?? []).some((o) => o.codigo === 'nenhuma_das_anteriores');
     if (semLinhas || semNenhuma) faltam.push(p.codigo);
   }
   return faltam;

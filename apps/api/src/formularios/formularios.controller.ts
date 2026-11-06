@@ -145,7 +145,8 @@ export class FormulariosController {
   private async corpoVersao(tx: Executor, v: LinhaVersao) {
     return {
       resumo: this.resumo(v),
-      conteudo: { ...this.paraContrato(await this.conteudo(tx, v.id)), papel_antigo: v.papel_antigo, total_paginas: v.total_paginas },
+      // `total_paginas` só no papel antigo (VersionContent); na oficial é sempre a maior página.
+      conteudo: { ...this.paraContrato(await this.conteudo(tx, v.id)), papel_antigo: v.papel_antigo, total_paginas: v.papel_antigo ? v.total_paginas : null },
     };
   }
 
@@ -310,7 +311,7 @@ export class FormulariosController {
       const { v } = await this.versao(tx, s, formId, versaoId, true);
       if (v.status === 'publicada') throw new ErroApi('ERR-009');
       const c = await this.conteudo(tx, versaoId);
-      const faltam = pendenciasPublicacao(c.perguntas);
+      const faltam = pendenciasPublicacao(c.perguntas, v.papel_antigo);
       if (!v.papel_antigo) {
         for (const codigo of naoCabem(await fonteDeMedida(), c.perguntas, c.regras_salto)) if (!faltam.includes(codigo)) faltam.push(codigo); // DEC-143
       }
