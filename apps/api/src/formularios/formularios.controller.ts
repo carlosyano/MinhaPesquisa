@@ -21,6 +21,7 @@ import {
   type PerguntaEntrada,
   type RegraEntrada,
 } from '../regras/formularios.js';
+import { validarPapelAntigo } from '../regras/papel-antigo.js';
 import { criarFormularioRascunho, gravarConteudo, lerConteudo } from './conteudo.js';
 import { fonteDeMedida, naoCabem } from './layout.js';
 import { gerarPdf, mapaLayout } from './pdf.js';
@@ -41,11 +42,15 @@ interface LinhaVersao {
   criada_em: Date;
   qr_codigo: string | null;
   versao: number;
+  papel_antigo: boolean;
+  total_paginas: number | null;
 }
 
 interface Conteudo {
   perguntas: PerguntaEntrada[];
   regras_salto: RegraEntrada[];
+  papel_antigo?: boolean;
+  total_paginas?: number | null;
 }
 
 const ALFABETO_BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -100,9 +105,9 @@ export class FormulariosController {
     const v = await linha<LinhaVersao>(
       tx,
       bloquear
-        ? sql`SELECT id, formulario_id, numero, status, publicada_em, criada_em, qr_codigo, versao FROM versao
+        ? sql`SELECT id, formulario_id, numero, status, publicada_em, criada_em, qr_codigo, versao, papel_antigo, total_paginas FROM versao
                WHERE id = ${versaoId} AND formulario_id = ${formId} FOR UPDATE`
-        : sql`SELECT id, formulario_id, numero, status, publicada_em, criada_em, qr_codigo, versao FROM versao
+        : sql`SELECT id, formulario_id, numero, status, publicada_em, criada_em, qr_codigo, versao, papel_antigo, total_paginas FROM versao
                WHERE id = ${versaoId} AND formulario_id = ${formId}`,
     );
     if (!v) throw naoEncontrado('Versao', versaoId);
@@ -116,6 +121,7 @@ export class FormulariosController {
       numero: v.numero,
       status: v.status,
       publicada_em: iso(v.publicada_em),
+      papel_antigo: v.papel_antigo,
       criada_em: new Date(v.criada_em).toISOString(),
     };
   }
@@ -137,7 +143,10 @@ export class FormulariosController {
   }
 
   private async corpoVersao(tx: Executor, v: LinhaVersao) {
-    return { resumo: this.resumo(v), conteudo: this.paraContrato(await this.conteudo(tx, v.id)) };
+    return {
+      resumo: this.resumo(v),
+      conteudo: { ...this.paraContrato(await this.conteudo(tx, v.id)), papel_antigo: v.papel_antigo, total_paginas: v.total_paginas },
+    };
   }
 
   private async gravarConteudo(tx: Executor, s: SessaoAtiva, versaoId: string, perguntas: Pergunta[], regras: RegraEntrada[]) {
@@ -147,7 +156,7 @@ export class FormulariosController {
   private async resumoFormulario(tx: Executor, f: LinhaFormulario) {
     const vs = await linhas<LinhaVersao>(
       tx,
-      sql`SELECT id, formulario_id, numero, status, publicada_em, criada_em, qr_codigo, versao FROM versao
+      sql`SELECT id, formulario_id, numero, status, publicada_em, criada_em, qr_codigo, versao, papel_antigo, total_paginas FROM versao
            WHERE formulario_id = ${f.id} ORDER BY numero`,
     );
     return { id: f.id, nome: f.nome, projeto_id: f.projeto_id, criado_em: new Date(f.criado_em).toISOString(), versoes: vs.map((v) => this.resumo(v)) };
@@ -176,7 +185,7 @@ export class FormulariosController {
   @Post('forms')
   @HttpCode(201)
   async createForm(
-    @Body() corpo: { nome: string; projeto_id: string },
+    @Body() corpo: { nome: string; projeto_id: string; papel_antigo?: boolean },
     @Headers('idempotency-key') chave: string | undefined,
     @Req() req: Requisicao,
   ) {
@@ -189,7 +198,8 @@ export class FormulariosController {
       const feito = await this.n.idempotente(tx, s, 'createForm', chave, corpo, async () => {
         const { formId: id, versaoId } = await criarFormularioRascunho(this.n, tx, { tenantId: s.tenantId, projetoId: corpo.projeto_id, nome: corpo.nome });
         await this.gravarConteudo(tx, s, versaoId, normalizarConteudo(cincoCampos(), []), []); // DEC-135
-        await this.n.auditar(tx, s, 'CRIAR_FORMULARIO', 'Formulario', id);
+        if (corpo.papel_antigo) await tx.execute(sql`UPDATE versao SET papel_antigo = true WHERE id = ${versaoId}`); // DEC-175
+        await this.n.auditar(tx, s, 'CRIAR_FORMULARIO', 'Formulario', id, { papel_antigo: !!corpo.papel_antigo });
         return { status: 201, recursoId: id };
       });
       return this.resumoFormulario(tx, await this.formulario(tx, s, feito.recursoId));
@@ -200,7 +210,7 @@ export class FormulariosController {
   @HttpCode(201)
   async createVersion(
     @Param('formId') formId: string,
-    @Body() corpo: { copiar_de_versao_id?: string } | undefined,
+    @Body() corpo: { copiar_de_versao_id?: string; papel_antigo?: boolean } | undefined,
     @Headers('idempotency-key') chave: string | undefined,
     @Req() req: Requisicao,
     @Res({ passthrough: true }) res: Resposta,
@@ -213,13 +223,23 @@ export class FormulariosController {
       this.validar('createVersion', c);
       const feito = await this.n.idempotente(tx, s, 'createVersion', chave, { formId, ...c }, async () => {
         let origem: { perguntas: Pergunta[]; regras_salto: RegraEntrada[] } | null = null;
-        if (c.copiar_de_versao_id) origem = await this.conteudo(tx, (await this.versao(tx, s, formId, c.copiar_de_versao_id)).v.id);
+        let marcaOrigem: Pick<LinhaVersao, 'papel_antigo' | 'total_paginas'> | null = null;
+        if (c.copiar_de_versao_id) {
+          const { v: vo } = await this.versao(tx, s, formId, c.copiar_de_versao_id);
+          origem = await this.conteudo(tx, vo.id);
+          marcaOrigem = vo;
+        }
+        // A marca vem do pedido ou da origem; o total só se copia entre versões de papel antigo, e
+        // fora dele a marca `nao_consta` sai das perguntas copiadas (DEC-179, DEC-189).
+        const papelAntigo = c.papel_antigo ?? marcaOrigem?.papel_antigo ?? false;
+        const total = papelAntigo && marcaOrigem?.papel_antigo ? marcaOrigem.total_paginas : null;
+        if (origem && !papelAntigo) origem = { ...origem, perguntas: origem.perguntas.map((p) => ({ ...p, nao_consta: false })) };
         await tx.execute(sql`SELECT id FROM formulario WHERE id = ${formId} FOR UPDATE`);
         const numero = (await linha<{ n: number }>(tx, sql`SELECT coalesce(max(numero), 0)::int + 1 AS n FROM versao WHERE formulario_id = ${formId}`))!.n;
         const id = this.n.id();
         await tx.execute(sql`
-          INSERT INTO versao (id, tenant_id, formulario_id, numero, status, criada_em)
-          VALUES (${id}, ${s.tenantId}, ${formId}, ${numero}, 'rascunho', ${this.n.agora()})`);
+          INSERT INTO versao (id, tenant_id, formulario_id, numero, status, criada_em, papel_antigo, total_paginas)
+          VALUES (${id}, ${s.tenantId}, ${formId}, ${numero}, 'rascunho', ${this.n.agora()}, ${papelAntigo}, ${total})`);
         // Sem origem, só os 5 campos (DEC-135); com origem, a cópia padronizada (DEC-145, DEC-147).
         const copia = origem ? padronizarCopia(origem.perguntas.map(entrada), origem.regras_salto) : { perguntas: cincoCampos(), regras: [] };
         await this.gravarConteudo(tx, s, id, normalizarConteudo(copia.perguntas, copia.regras), copia.regras);
@@ -263,10 +283,16 @@ export class FormulariosController {
       this.validar('updateVersion', corpo);
       // RN-050: a reaplicação vem antes das demais validações, inclusive a das regras de salto.
       const perguntas = normalizarConteudo(reaplicarCampos(corpo.perguntas), corpo.regras_salto);
-      const fora = naoCabem(await fonteDeMedida(), perguntas, corpo.regras_salto);
-      if (fora.length) throw new ErroApi('ERR-001', { campos: fora }); // DEC-143
+      // Marca ausente = mantém; total ausente = mantém, e desmarcar o apaga (DEC-175, DEC-181).
+      const papelAntigo = corpo.papel_antigo ?? v.papel_antigo;
+      const total = corpo.total_paginas !== undefined ? corpo.total_paginas : papelAntigo ? v.total_paginas : null;
+      validarPapelAntigo(perguntas, papelAntigo, total);
+      if (!papelAntigo) {
+        const fora = naoCabem(await fonteDeMedida(), perguntas, corpo.regras_salto);
+        if (fora.length) throw new ErroApi('ERR-001', { campos: fora }); // DEC-143; não vale no papel antigo (DEC-181)
+      }
       await this.gravarConteudo(tx, s, versaoId, perguntas, corpo.regras_salto);
-      await tx.execute(sql`UPDATE versao SET versao = versao + 1 WHERE id = ${versaoId}`);
+      await tx.execute(sql`UPDATE versao SET papel_antigo = ${papelAntigo}, total_paginas = ${total}, versao = versao + 1 WHERE id = ${versaoId}`);
       await this.n.auditar(tx, s, 'ALTERAR_VERSAO', 'Versao', versaoId);
       const { v: nova } = await this.versao(tx, s, formId, versaoId);
       return { v: nova, corpo: await this.corpoVersao(tx, nova) };
@@ -285,12 +311,16 @@ export class FormulariosController {
       if (v.status === 'publicada') throw new ErroApi('ERR-009');
       const c = await this.conteudo(tx, versaoId);
       const faltam = pendenciasPublicacao(c.perguntas);
-      for (const codigo of naoCabem(await fonteDeMedida(), c.perguntas, c.regras_salto)) if (!faltam.includes(codigo)) faltam.push(codigo); // DEC-143
+      if (!v.papel_antigo) {
+        for (const codigo of naoCabem(await fonteDeMedida(), c.perguntas, c.regras_salto)) if (!faltam.includes(codigo)) faltam.push(codigo); // DEC-143
+      }
       if (faltam.length) throw new ErroApi('ERR-036', { campos: faltam, substituir: faltam.join(', ') });
-      const mapa = await mapaLayout({ totalPaginas: totalPaginas(c.perguntas), perguntas: c.perguntas, regras: c.regras_salto });
+      // Papel antigo: o total informado ou a maior página, sem mapa de layout (DEC-181, ENT-006).
+      const total = v.papel_antigo ? (v.total_paginas ?? totalPaginas(c.perguntas)) : totalPaginas(c.perguntas);
+      const mapa = v.papel_antigo ? null : await mapaLayout({ totalPaginas: total, perguntas: c.perguntas, regras: c.regras_salto });
       await tx.execute(sql`
         UPDATE versao SET status = 'publicada', publicada_em = ${this.n.agora()}, qr_codigo = ${novoCodigoQr()},
-                          mapa_layout = ${JSON.stringify(mapa)}::jsonb, versao = versao + 1
+                          mapa_layout = ${mapa === null ? null : JSON.stringify(mapa)}::jsonb, total_paginas = ${total}, versao = versao + 1
          WHERE id = ${versaoId}`);
       await this.n.auditar(tx, s, 'PUBLICAR_VERSAO', 'Versao', versaoId);
       const { v: nova } = await this.versao(tx, s, formId, versaoId);
@@ -303,7 +333,7 @@ export class FormulariosController {
     const s = await exigirSessao(this.n, req);
     const dados = await this.n.comAtor(s, async (tx) => {
       const { f, v } = await this.versao(tx, s, formId, versaoId);
-      if (v.status !== 'publicada' || !v.qr_codigo) throw new ErroApi('ERR-018');
+      if (v.status !== 'publicada' || !v.qr_codigo || v.papel_antigo) throw new ErroApi('ERR-018'); // papel antigo não tem PDF (DEC-175)
       const c = await this.conteudo(tx, versaoId);
       return {
         nomeFormulario: f.nome,

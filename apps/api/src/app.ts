@@ -44,10 +44,11 @@ export async function criarApi(config: Config, porta = 0, host = '127.0.0.1'): P
   const fastify = app.getHttpAdapter().getInstance();
   await fastify.register(fastifyCookie as never);
   // Upload (RF-006, DEC-029) e importação (RF-011, DEC-136): até 50 arquivos de 20 MB por envio e
-  // no máximo 2 campos de texto (a confirmação da assinatura de attachSignaturePage, RN-044; o nome
-  // do formulário e a declaração da importação). Cada operação recusa o campo que não é seu.
+  // no máximo 3 campos de texto (a confirmação da assinatura de attachSignaturePage, RN-044; o nome
+  // do formulário, a declaração e o papel antigo da importação; a versão, a data e o local do
+  // envio, DEC-169, DEC-179). Cada operação recusa o campo que não é seu.
   await fastify.register(fastifyMultipart as never, {
-    limits: { fileSize: LIMITE_BYTES, files: 50, fields: 2, parts: 52, fieldSize: 1024 },
+    limits: { fileSize: LIMITE_BYTES, files: 50, fields: 3, parts: 53, fieldSize: 1024 },
     throwFileSizeLimit: true,
   });
   fastify.addHook('onRequest', async (req, reply) => {

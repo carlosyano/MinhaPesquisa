@@ -16,6 +16,8 @@ import { DIA, MINUTO, somar } from '../infra/relogio.js';
 import {
   aplicacaoNoEscopo,
   cadastroPorCpf,
+  candidatosNome,
+  ehPapelAntigo,
   carregarItens,
   carregarRegras,
   corpoAplicacao,
@@ -40,7 +42,8 @@ import { ehUuid, Nucleo, type SessaoAtiva } from '../nucleo.js';
 import { paginacao } from '../regras/autorizacao.js';
 import { cpfValido } from '../regras/cpf.js';
 import { canonizar, RESOLVIDOS, valorNoSchema, type EstadoItem } from '../regras/leitura.js';
-import { anonimizarSemAplicacao, reverterCadastro, versaoDoCadastro, vincular, type ManterCadastro } from './respondentes.js';
+import { normalizarNome } from '../regras/papel-antigo.js';
+import { anonimizarSemAplicacao, reverterCadastro, versaoDoCadastro, vincular, vincularSemCpf, type ManterCadastro } from './respondentes.js';
 
 type Acao = 'confirmar' | 'corrigir' | 'em_branco' | 'ilegivel' | 'rasurado' | 'nao_se_aplica';
 
@@ -51,6 +54,7 @@ interface RevisaoPatch {
 interface Conclusao {
   assinatura: 'presente' | 'ausente';
   manter_cadastro?: ManterCadastro;
+  respondente_id?: string | null;
 }
 
 const ESTADO_DA_ACAO: Record<Exclude<Acao, 'confirmar' | 'corrigir'>, EstadoItem> = {
@@ -149,7 +153,10 @@ export class RevisaoController {
       const cpf = cpfDaAplicacao(await carregarItens(this.n, tx, id));
       const existente = cpf ? await cadastroPorCpf(this.n, tx, cpf) : undefined;
       await this.n.auditar(tx, s, 'EXIBICAO_CPF', 'Aplicacao', id, { cadastro_existente: !!existente });
-      return this.corpo(tx, id, { cadastro_existente: existente ?? null });
+      const r = await this.corpo(tx, id, { cadastro_existente: existente ?? null });
+      const candidatos = (r.corpo as { candidatos_nome?: unknown[] }).candidatos_nome;
+      if (candidatos) await this.n.auditar(tx, s, 'LISTAR_CANDIDATOS_NOME', 'Aplicacao', id, { candidatos: candidatos.length }); // DEC-176
+      return r;
     });
     res.header('ETag', etag(r.a.versao));
     return r.corpo;
@@ -186,7 +193,7 @@ export class RevisaoController {
       return {
         url: await armazenamento.urlAssinada(chave, expira),
         expira_em: expira.toISOString(),
-        ...(i.regiao ? { regiao: i.regiao } : {}),
+        regiao: i.regiao ?? null,
       };
     });
   }
@@ -298,19 +305,22 @@ export class RevisaoController {
     });
   }
 
-  /** Precedência da conclusão (FL-001). */
+  /** Precedência da conclusão (FL-001), com 1a, 3a e 4 do papel antigo (DEC-172, DEC-176). */
   private async concluir(tx: Executor, s: SessaoAtiva, a: LinhaAplicacao, corpo: Conclusao): Promise<void> {
     const itens = await carregarItens(this.n, tx, a.id);
     // 1. Item não resolvido → ERR-022.
     if (itens.some((i) => !RESOLVIDOS.has(i.estado))) throw new ErroApi('ERR-022');
-    // 2. CPF ausente, ilegível ou inválido → aguardando_cpf com aviso ERR-006.
+    const papelAntigo = await ehPapelAntigo(tx, a);
     const cpf = cpfDaAplicacao(itens);
-    if (!cpf) {
+    // 1a. respondente_id só no papel antigo sem CPF válido.
+    if (corpo.respondente_id !== undefined && (!papelAntigo || cpf)) throw new ErroApi('ERR-001', { campos: ['respondente_id'] });
+    // 2. CPF ausente, ilegível ou inválido → aguardando_cpf com aviso ERR-006 (fora do papel antigo).
+    if (!cpf && !papelAntigo) {
       await tx.execute(sql`UPDATE aplicacao SET estado = 'aguardando_cpf', aviso = 'ERR-006', versao = versao + 1 WHERE id = ${a.id}`);
       await this.n.auditar(tx, s, 'CONCLUSAO_SEM_CPF', 'Aplicacao', a.id);
       return;
     }
-    // 3. Nome, nascimento, data ou local sem valor → ERR-006 (DEC-020, DEC-079).
+    // 3. Nome, nascimento (fora do papel antigo), data ou local sem valor → ERR-006 (DEC-020, DEC-079, DEC-172).
     const valor = (f: (i: Item) => boolean) => {
       const i = itens.find(f);
       return i ? valorEfetivo(i) : null;
@@ -321,22 +331,36 @@ export class RevisaoController {
       data_aplicacao: valor((i) => i.campo_aplicacao === 'data_aplicacao'),
       local_aplicacao: valor((i) => i.campo_aplicacao === 'local_aplicacao'),
     };
-    const faltam = Object.entries(obrigatorios).filter(([, v]) => v === null).map(([k]) => k);
+    const faltam = Object.entries(obrigatorios)
+      .filter(([k, v]) => v === null && !(papelAntigo && k === 'data_nascimento'))
+      .map(([k]) => k);
     if (faltam.length) throw new ErroApi('ERR-006', { campos: faltam });
-    // Escolha para cada divergência do cadastro (CA-014), lida já com o CPF travado (DEC-131).
-    await travarCpf(this.n, tx, cpf);
-    const manter = corpo.manter_cadastro ?? {};
-    const div = divergencias(itens, await cadastroPorCpf(this.n, tx, cpf));
-    const semEscolha = div.filter((d) => manter[d] === undefined);
-    if (semEscolha.length) throw new ErroApi('ERR-001', { campos: semEscolha.map((d) => `manter_cadastro.${d}`) });
-    const escolhas: ManterCadastro = Object.fromEntries(div.map((d) => [d, manter[d]]));
+
+    let escolhas: ManterCadastro = {};
+    if (cpf) {
+      // Escolha para cada divergência do cadastro (CA-014), lida já com o CPF travado (DEC-131).
+      await travarCpf(this.n, tx, cpf);
+      const manter = corpo.manter_cadastro ?? {};
+      const div = divergencias(itens, await cadastroPorCpf(this.n, tx, cpf));
+      const semEscolha = div.filter((d) => manter[d] === undefined);
+      if (semEscolha.length) throw new ErroApi('ERR-001', { campos: semEscolha.map((d) => `manter_cadastro.${d}`) });
+      escolhas = Object.fromEntries(div.map((d) => [d, manter[d]]));
+    } else {
+      // 3a. Papel antigo sem CPF válido: escolha entre os candidatos pelo nome, calculados agora (DEC-176).
+      await travarCpf(this.n, tx, `nome:${normalizarNome(obrigatorios.nome!)}`); // a mesma trava, pelo nome
+      const candidatos = (await candidatosNome(tx, { ...a, cpf_exibido_em: this.n.agora(), estado: 'em_revisao' }, itens, true)) ?? [];
+      const id = corpo.respondente_id;
+      const valido = candidatos.length ? id === null || candidatos.some((c) => c.respondente_id === id) : id === undefined || id === null;
+      if (!valido) throw new ErroApi('ERR-001', { campos: ['respondente_id'] });
+    }
 
     await tx.execute(sql`
       UPDATE aplicacao SET data_aplicacao = ${obrigatorios.data_aplicacao}::date, local_aplicacao = ${this.n.cifrar(obrigatorios.local_aplicacao)},
-                           cpf_hash = ${this.n.hmac(cpf)}
+                           cpf_hash = ${cpf ? this.n.hmac(cpf) : null}
        WHERE id = ${a.id}`);
-    // 4. Assinatura ausente → sem_assinatura, sem vincular (DEC-064); presente → concluida.
-    if (corpo.assinatura === 'ausente') {
+    // 4. Papel antigo → concluida com a assinatura informada (DEC-172); fora dele, assinatura ausente →
+    // sem_assinatura, sem vincular (DEC-064); presente → concluida.
+    if (corpo.assinatura === 'ausente' && !papelAntigo) {
       await tx.execute(sql`
         UPDATE aplicacao SET estado = 'sem_assinatura', aviso = NULL, assinatura = 'ausente', manter_cadastro = ${JSON.stringify(escolhas)}::jsonb,
                              cadastro_versao = ${await versaoDoCadastro(this.n, tx, itens)}, cpf_exibido_em = NULL, versao = versao + 1
@@ -344,9 +368,9 @@ export class RevisaoController {
       await this.n.auditar(tx, s, 'CONCLUSAO_SEM_ASSINATURA', 'Aplicacao', a.id);
       return;
     }
-    const respondenteId = await vincular(this.n, tx, s, a.id, itens, escolhas);
+    const respondenteId = cpf ? await vincular(this.n, tx, s, a.id, itens, escolhas) : await vincularSemCpf(this.n, tx, s, a.id, itens, corpo.respondente_id ?? null);
     await tx.execute(sql`
-      UPDATE aplicacao SET estado = 'concluida', aviso = NULL, assinatura = 'presente', respondente_id = ${respondenteId},
+      UPDATE aplicacao SET estado = 'concluida', aviso = NULL, assinatura = ${corpo.assinatura}, respondente_id = ${respondenteId},
                            respondente_anterior_id = NULL, manter_cadastro = ${JSON.stringify(escolhas)}::jsonb,
                            concluida_em = ${this.n.agora()}, cpf_exibido_em = NULL, versao = versao + 1
        WHERE id = ${a.id}`);

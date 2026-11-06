@@ -24,6 +24,7 @@ export interface PerguntaEntrada {
   valor_max?: number | null;
   unidade?: string | null;
   opcoes?: OpcaoEntrada[];
+  nao_consta?: boolean;
 }
 
 export interface RegraEntrada {
@@ -47,6 +48,7 @@ export interface Pergunta {
   valor_max: number | null;
   unidade: string | null;
   opcoes: OpcaoEntrada[] | null;
+  nao_consta: boolean;
 }
 
 /** Opções fixas de sim/não (RN-047). */
@@ -116,6 +118,7 @@ export function normalizarConteudo(perguntas: readonly PerguntaEntrada[], regras
       valor_max: p.valor_max ?? null,
       unidade: p.unidade ?? null,
       opcoes,
+      nao_consta: p.nao_consta ?? false,
     };
   });
   validarRegrasSalto(saida, regras);

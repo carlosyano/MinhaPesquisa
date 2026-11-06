@@ -72,7 +72,7 @@ export class ImportacaoController {
    * como no upload: antimalware, tipo pelo conteúdo, páginas (50 no envio, DEC-136); as páginas
    * saem recodificadas, sem metadados (RN-040).
    */
-  private async receber(req: Requisicao): Promise<{ nome: string; paginas: Buffer[] }> {
+  private async receber(req: Requisicao): Promise<{ nome: string; paginas: Buffer[]; papelAntigo: boolean }> {
     const r = req as ReqMultipart;
     if (typeof r.isMultipart !== 'function' || !r.isMultipart()) throw new ErroApi('ERR-001', { campos: ['arquivos'] });
     const arquivos: Buffer[] = [];
@@ -80,7 +80,7 @@ export class ImportacaoController {
     try {
       for await (const parte of r.parts()) {
         if (parte.type === 'field') {
-          if (!['nome_formulario', 'sem_dados_reais'].includes(parte.fieldname) || typeof parte.value !== 'string') throw new ErroApi('ERR-001', { campos: [parte.fieldname] });
+          if (!['nome_formulario', 'sem_dados_reais', 'papel_antigo'].includes(parte.fieldname) || typeof parte.value !== 'string') throw new ErroApi('ERR-001', { campos: [parte.fieldname] });
           textos[parte.fieldname] = parte.value;
           continue;
         }
@@ -98,6 +98,8 @@ export class ImportacaoController {
     const nome = textos.nome_formulario?.trim();
     if (!nome || nome.length > 200) throw new ErroApi('ERR-001', { campos: ['nome_formulario'] });
     if (textos.sem_dados_reais !== 'true') throw new ErroApi('ERR-001', { campos: ['sem_dados_reais'] });
+    if (textos.papel_antigo !== undefined && !['true', 'false'].includes(textos.papel_antigo)) throw new ErroApi('ERR-001', { campos: ['papel_antigo'] });
+    const papelAntigo = textos.papel_antigo === 'true'; // DEC-181
     if (!arquivos.length) throw new ErroApi('ERR-001', { campos: ['arquivos'] });
 
     const imagens: Buffer[] = [];
@@ -126,7 +128,7 @@ export class ImportacaoController {
         }
       }
     }
-    return { nome, paginas: imagens };
+    return { nome, paginas: imagens, papelAntigo };
   }
 
   @Get('projects/:projectId/form-imports')
@@ -156,20 +158,20 @@ export class ImportacaoController {
       const p = await projetoNoEscopo(tx, projetoId);
       if (p.status !== 'ativo') throw new ErroApi('ERR-001', { campos: ['projeto'] });
     });
-    const { nome, paginas } = await this.receber(req);
+    const { nome, paginas, papelAntigo } = await this.receber(req);
 
     const gravadas: string[] = [];
     try {
       return await this.n.comAtor(s, async (tx) => {
         const p = await projetoNoEscopo(tx, projetoId, true);
         if (p.status !== 'ativo') throw new ErroApi('ERR-001', { campos: ['projeto'] });
-        const impressao = { projetoId, nome, paginas: paginas.map((x) => createHash('sha256').update(x).digest('hex')) };
+        const impressao = { projetoId, nome, papelAntigo, paginas: paginas.map((x) => createHash('sha256').update(x).digest('hex')) };
         const feito = await this.n.idempotente(tx, s, 'importForm', chave, impressao, async () => {
           const id = this.n.id();
           const agora = this.n.agora();
           await tx.execute(sql`
-            INSERT INTO importacao_formulario (id, tenant_id, projeto_id, nome_formulario, estado, total_paginas, chave_storage, criada_em, criada_por)
-            VALUES (${id}, ${s.tenantId}, ${projetoId}, ${nome}, 'enfileirada', ${paginas.length}, ${pastaImportacao(s.tenantId, id)}, ${agora}, ${s.usuarioId})`);
+            INSERT INTO importacao_formulario (id, tenant_id, projeto_id, nome_formulario, estado, total_paginas, chave_storage, criada_em, criada_por, papel_antigo)
+            VALUES (${id}, ${s.tenantId}, ${projetoId}, ${nome}, 'enfileirada', ${paginas.length}, ${pastaImportacao(s.tenantId, id)}, ${agora}, ${s.usuarioId}, ${papelAntigo})`);
           for (const [i, jpeg] of paginas.entries()) {
             const k = chavePaginaImportacao(s.tenantId, id, i + 1);
             await this.n.config.armazenamento.gravar(k, jpeg, 'image/jpeg');

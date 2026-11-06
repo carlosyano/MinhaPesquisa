@@ -47,6 +47,9 @@ export class ProjetosController {
       coleta_fim: p.coleta_fim,
       status: p.status,
       criado_em: new Date(p.criado_em).toISOString(),
+      // Padrão do próximo envio de papel antigo, só leitura (DEC-179, DEC-192).
+      padrao_data_aplicacao: p.padrao_data_aplicacao,
+      padrao_local_aplicacao: this.n.decifrar(p.padrao_local_aplicacao),
     };
   }
 
