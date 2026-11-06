@@ -444,8 +444,8 @@ paths:
       description: |
         Exige perguntas marcadas como nome, data de nascimento, CPF (tipo `cpf`), data e local
         da aplicação (RN-017); sem elas → ERR-036 (CA-036). Matriz sem linhas ou múltipla escolha
-        sem `nenhuma_das_anteriores` (RN-047) → ERR-036 com os códigos das perguntas em `campos`
-        (DEC-096). Pergunta que não cabe na sua página → ERR-036 com os códigos em `campos`
+        sem `nenhuma_das_anteriores` (RN-047; não exigida no papel antigo, DEC-195) → ERR-036 com os
+        códigos das perguntas em `campos` (DEC-096). Pergunta que não cabe na sua página → ERR-036 com os códigos em `campos`
         (DEC-143), exceto no papel antigo (DEC-181). Grava o mapa de layout (DEC-048), exceto no papel
         antigo, e `total_paginas` (ENT-006).
       x-trace: [RF-004, CA-036, RN-017, RN-047, DEC-048, DEC-096, RF-011, RF-013, DEC-143, DEC-181]

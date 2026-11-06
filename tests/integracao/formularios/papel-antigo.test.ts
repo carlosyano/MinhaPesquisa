@@ -9,6 +9,7 @@ import { entrar, MINUTO, tenantComUsuaria, type TenantPronto } from '../../suppo
 import { caminhoVersao, projetoCriado, publicar, salvarConteudo, type Conteudo, type Pergunta } from '../../support/formularios.js';
 import { criarHarness, type Harness, type RoteiroImportacao } from '../../support/harness.js';
 import { CODIGOS_RN050, emOrdem, importar, lida, modeloPdf, porCodigo, processarComRetentativas, consultarImportacao } from '../../support/importacao.js';
+import { prepararCotacao } from '../../support/leitura.js';
 import { conteudoCondicoes, conteudoMemorias, papelAntigoPublicado, rascunhoAntigo } from '../../support/papel-antigo.js';
 
 let h: Harness;
@@ -18,6 +19,7 @@ let projeto: string;
 
 beforeAll(async () => {
   h = await criarHarness();
+  await prepararCotacao(h); // a importação reserva custo de IA (DEC-051)
   T = await tenantComUsuaria(h, 'Tenant Memórias');
   c = await entrar(h, T.usuaria);
   projeto = await projetoCriado(c, 'Saúde Idoso');
@@ -57,7 +59,8 @@ interface Importada {
   perguntas: (Pergunta & Record<string, any>)[];
 }
 
-async function importarAntigo(roteiro: RoteiroImportacao, papelAntigo: boolean | undefined = true): Promise<Importada> {
+/** `papelAntigo` ausente nas opções = o campo não vai no envio. */
+async function importarAntigo(roteiro: RoteiroImportacao, { papelAntigo }: { papelAntigo?: boolean } = { papelAntigo: true }): Promise<Importada> {
   const r = await importar(c, projeto, [await modeloPdf(3, 'antigo.pdf')], { nome: 'Memórias Antigas', papelAntigo });
   expect(r.status, r.texto).toBe(202);
   h.extrator.programar(r.corpo.id, roteiro);
@@ -118,7 +121,7 @@ describe('CA-058 — importação de formulário de papel antigo (DEC-181, DEC-1
 
   // @trace CA-058, CA-045, CA-047
   it('exemplo 8: o mesmo arquivo sem papel_antigo → como no CA-045: os 5 campos no início da página 1, MEDICAMENTOS_EM_USO descartada com nao_cabe, nenhuma nao_consta', async () => {
-    const oficial = await importarAntigo(original(), undefined);
+    const oficial = await importarAntigo(original(), {});
     expect(oficial.versao.corpo.resumo.papel_antigo ?? false).toBe(false);
     expect(oficial.versao.corpo.conteudo.total_paginas ?? null).toBeNull();
     expect(codigosDaPagina(oficial.perguntas, 1).slice(0, 5)).toEqual(CODIGOS_RN050);

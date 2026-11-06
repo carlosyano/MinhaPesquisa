@@ -204,12 +204,15 @@ describe('CA-053 — ordem das folhas indicada pela localização (DEC-171, DEC-
     await pendenteSemLeitura(id);
   });
 
-  // @trace CA-053, RN-052
-  it('exemplo 9: terceira foto repetida → pendente; descartada a terceira, nada é localizado de novo e a aplicação vai a em_leitura na hora', async () => {
-    const { id, f } = await fotos(3);
-    await localizarELer(h, id, { [f[0]]: { pagina: 1 }, [f[1]]: { pagina: 2 }, [f[2]]: { pagina: 2 } });
-    await pendenteSemLeitura(id);
-    const antes = (await h.localizador.chamadas(id)).length;
+  // @trace CA-053, RN-052, FL-001, DEC-196
+  it('exemplo 9: terceira foto repetida → pendente já no envio, sem localização; descartada a terceira, as duas são localizadas só para as regiões, com a página informada', async () => {
+    const r = await enviarAntigo(dig, projeto, await folhasAntigas(3, 'foto'), { versaoId: condicoes.versaoId });
+    expect(r.status, r.texto).toBe(202);
+    expect(r.corpo).toMatchObject({ estado: 'identificacao_pendente', aviso: 'ERR-004' });
+    const id: string = r.corpo.aplicacao_id;
+    const f = imagens(r);
+    await h.worker.processar();
+    expect(await h.localizador.chamadas(id)).toHaveLength(0);
 
     const ok = await identificar(dig, id, condicoes.versaoId, [
       { imagem_id: f[0], numero_pagina: 1 },
@@ -219,7 +222,8 @@ describe('CA-053 — ordem das folhas indicada pela localização (DEC-171, DEC-
     expect(ok.status, ok.texto).toBe(200);
     expect(ok.corpo.estado).toBe('em_leitura');
     await localizarELer(h, id, {}, leiturasAntigas());
-    expect(await h.localizador.chamadas(id)).toHaveLength(antes);
+    const chamadas = (await h.localizador.chamadas(id)).map((c) => [c.imagem_id, c.pagina_informada]);
+    expect(chamadas.sort()).toEqual([[f[0], 1], [f[1], 2]].sort());
     expect(await estado(id)).toBe('em_revisao');
     expect((await h.motor.chamadas(id)).length).toBeGreaterThan(0);
   });
@@ -234,7 +238,7 @@ describe('CA-053 — ordem das folhas indicada pela localização (DEC-171, DEC-
 
     h.localizador.programar(id, {});
     const retry = await dig.post(`/applications/${id}/retry`, { headers: { 'idempotency-key': chaveIdempotencia() } });
-    expect(retry.status, retry.texto).toBe(200);
+    expect(retry.status, retry.texto).toBe(202); // retryReading responde 202 (contrato; testes falha e cota do IMP-003)
     await localizarELer(h, id, {}, leiturasAntigas());
     expect((await h.localizador.chamadas(id)).filter((c) => c.imagem_id === f[0])).toHaveLength(daFoto1);
     expect(await estado(id)).toBe('em_revisao');

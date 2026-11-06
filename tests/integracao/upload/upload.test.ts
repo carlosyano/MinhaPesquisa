@@ -26,6 +26,7 @@ import { chaveIdempotencia, type Arquivo, type Cliente } from '../../support/cli
 import { entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import { PAGINAS_VERSAO, arquivo, enviar, formularioPublicado, projetoCriado, type FormularioPublicado } from '../../support/formularios.js';
 import { criarHarness, type Harness } from '../../support/harness.js';
+import { prepararCotacao } from '../../support/leitura.js';
 
 let h: Harness;
 let T: TenantPronto;
@@ -36,6 +37,7 @@ let f: FormularioPublicado;
 
 beforeAll(async () => {
   h = await criarHarness();
+  await prepararCotacao(h); // a localização reserva custo de IA (DEC-051, DEC-174)
   T = await tenantComUsuaria(h, 'Tenant Upload');
   admin = await entrar(h, T.usuaria);
   projeto = await projetoCriado(admin, 'Saúde Idoso');
