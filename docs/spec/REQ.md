@@ -1932,6 +1932,7 @@ E o PDF imprimível da versão 2 de "Condições de Saúde" é recusado com ERR-
 | 8 | nenhuma no envio; depois, `identifyApplication` com a versão 2 de "Condições de Saúde" | 2 | íntegro, versão 1 de "Saúde Geral", nas duas, mas com uma página repetida | O `identifyApplication` é recusado com ERR-039 — QR code inválido para o contexto atual. Informe manualmente.; auditado (DEC-180) |
 | 9 | nenhuma | 2: a primeira com QR íntegro da página 1 da versão 1 de "Saúde Geral", a segunda sem QR | só na primeira | `em_leitura`, versão 1 de "Saúde Geral" nas duas folhas (DEC-180), sem precisar escolher versão |
 | 10 | nenhuma no envio; depois, `identifyApplication` com a versão 2 de "Condições de Saúde" e, em seguida, com a versão 1 de "Saúde Geral" | 2 | legível, mas de versão inexistente (CA-039) | No envio, `identificacao_pendente` com ERR-039; o `identifyApplication` com a versão 2 de "Condições de Saúde" é recusado com ERR-039 — QR code inválido para o contexto atual. Informe manualmente.; auditado, e nada muda (DEC-184); com a versão 1 de "Saúde Geral", é aceito, porque esse QR não decide a versão (DEC-180), e a aplicação vai a `em_leitura` com `origem_qr` = false |
+| 11 | versão 2 de "Condições de Saúde" | 2: a primeira com um QR de outro formato (endereço de site), a segunda sem QR | só o de outro formato | `em_leitura`, versão 2, `origem_qr` = false: o QR de outro formato conta como ausente; a presença dele é auditada sem o conteúdo (DEC-187) |
 
 CA-053 — Ordem das folhas indicada pela localização
 Dado que a usuária enviou 2 fotos JPEG com a versão 2 de "Condições de Saúde" (2 páginas) escolhida, sem QR (exemplos 1 a 3, 5 e 6) ou com QR legível da versão 2, publicada, com 2 páginas, de outro formulário do projeto "Saúde Idoso", "Condições de Saúde QR", escolhida no lugar da versão 2 de "Condições de Saúde" (exemplo 4)
@@ -2047,6 +2048,8 @@ E o resultado segue a tabela
 | 6 | CPF, DATA_NASCIMENTO e DATA_APLICACAO, que o original não tem | Injetadas no início da página 1, na ordem da RN-050 (DATA_NASCIMENTO, CPF e DATA_APLICACAO), antes de NOME e ESTADO_CIVIL, com `nao_consta` (DEC-179, DEC-190) |
 | 7 | NOME, num original sem "Nome:" | Injetada no início da página 1, antes de DATA_NASCIMENTO (ordem da RN-050), sem `nao_consta`, e procurada pela localização (DEC-181, DEC-190) |
 | 8 | Todas, importando o mesmo arquivo sem `papel_antigo` | Como no CA-045: os 5 campos no início da página 1 e as demais redistribuídas; MEDICAMENTOS_EM_USO descartada com `nao_cabe`; nenhuma `nao_consta` |
+| 9 | Cópia da versão 1 publicada (`createVersion` com `copiar_de_versao_id`) | A cópia é de papel antigo, com `total_paginas` = 3; com `papel_antigo` = false, `total_paginas` nulo e nenhuma pergunta `nao_consta` (DEC-179, DEC-189) |
+| 10 | Cópia de uma versão de papel antigo publicada sem `total_paginas` informado, com perguntas até a página 2 | A cópia leva `total_paginas` = 2, o total gravado na publicação (ENT-006, DEC-189) |
 
 8. Rastreabilidade e catálogo de erros
 

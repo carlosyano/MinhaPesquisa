@@ -20,7 +20,6 @@ import {
   enviarELer,
   item,
   leiturasCompletas,
-  paginasJpeg,
   calibrarConfianca, prepararCotacao,
   prontaParaConcluir,
   revisar,
@@ -96,8 +95,8 @@ describe('CA-033 — descarte de aplicação (DEC-077)', () => {
 
   // @trace CA-033, FL-001
   it('identificacao_pendente também pode ser descartada', async () => {
-    const imgs = await paginasJpeg(f);
-    imgs[0] = arquivo('p1.jpg', 'image/jpeg', await semQr(f.paginas[0]));
+    // Desde a CHG-017, só fica pendente sem nenhuma folha de QR legível (DEC-180, FL-001 linha 2).
+    const imgs = await Promise.all(f.paginas.map(async (p) => arquivo(`p${p.numero}.jpg`, 'image/jpeg', await semQr(p))));
     const r = await enviar(dig, projeto, imgs);
     expect(r.corpo.estado).toBe('identificacao_pendente');
     const d = await descartar(r.corpo.aplicacao_id, 'Página do formulário errado');

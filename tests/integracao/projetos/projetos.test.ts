@@ -115,7 +115,8 @@ describe('CA-027 — ciclo de vida do projeto', () => {
   it('aplicação aberta antes do arquivamento continua o fluxo (identificação manual)', async () => {
     const id = await projetoCriado(c, 'Projeto com aplicação em andamento');
     const form = await formularioPublicado(c, id, 'Demografia');
-    const imagens = [await jpeg(form.paginas[0]), await semQr(form.paginas[1]), await jpeg(form.paginas[2]), await jpeg(form.paginas[3])];
+    // Desde a CHG-017, só fica pendente sem nenhuma folha de QR legível (DEC-180, FL-001 linha 2).
+    const imagens = await Promise.all(form.paginas.map((p) => semQr(p)));
     const envio = await enviar(c, id, [arquivo('lote.pdf', 'application/pdf', await pdfDeImagens(imagens))]);
     expect(envio.status, envio.texto).toBe(202);
     expect(envio.corpo.estado).toBe('identificacao_pendente');

@@ -52,6 +52,20 @@
 // - os links assinados de `getExport` precisam ser baixáveis pelo processo de teste com `fetch`,
 //   como os das imagens (DEC-113);
 // - inspeção da exportação (estado no banco e arquivos que restam na pasta).
+//
+// Acrescentado no IA-TEST do IMP-008 (CHG-017, DEC-169 a DEC-193):
+// - o localizador simulado no lugar da operação `localizar` do adaptador Claude (DEC-174), programado
+//   por folha (pelo `imagem_id` devolvido no upload), com as falhas e o custo como no motor. A
+//   localização é uma tarefa por folha na fila da leitura (DEC-174 (3)): só roda em
+//   `worker.processar()` e nos jobs que `clock.advance` fizer vencer;
+// - folha não programada: confiança 0,99 e a página do QR legível da folha, a informada no
+//   `identifyApplication` ou, sem nenhuma das duas, a posição da folha entre as folhas de formulário
+//   da aplicação, na ordem do envio (a primeira é a página 1); regiões a partir do `mapa_layout` da
+//   versão ou, no papel antigo, uma faixa horizontal igual por pergunta, na ordem da página (DEC-174 (6));
+// - o leitor de QR é o real; QR de outro formato (DEC-187) é uma folha com um QR comum
+//   (`support/arquivos` `comQr`);
+// - inspeção das folhas (página e regiões gravadas, ENT-025) e, em `inspect.aplicacao`, a versão, a
+//   `origem_qr` e a data e o local guardados do envio, que a API não expõe na pendência (V-11).
 
 /** Resultado de um script local: código de saída e tudo o que ele escreveu no terminal. */
 export interface SaidaScript {
@@ -214,6 +228,63 @@ export interface ContagemExportacao {
   tarefas: number;
 }
 
+/** Região de uma pergunta na folha (DEC-174): `linha` é o código da linha da matriz, nulo nas outras. */
+export interface RegiaoLocalizada extends RegiaoNormalizada {
+  codigo: string;
+  linha: string | null;
+}
+
+/** Resposta do localizador simulado para uma folha (DEC-174 (1)). Ausente = o padrão da folha. */
+export interface LocalizacaoOk {
+  /** Página da versão indicada; `null` = não indicada (DEC-178). */
+  pagina?: number | null;
+  /** Padrão 0,99. */
+  confianca?: number;
+  /**
+   * Regiões por chave `CODIGO` ou `CODIGO.linha`, por cima das padrão; `null` tira a pergunta da
+   * resposta (pergunta não encontrada, DEC-177).
+   */
+  regioes?: Record<string, RegiaoNormalizada | null>;
+  /** Região da assinatura, só na página 1; `null` = não achada. */
+  regiao_assinatura?: RegiaoNormalizada | null;
+  /** Campos a mais na raiz da resposta, como um texto lido (`{ texto: 'Maria' }`), que o schema fechado recusa (DEC-174 (2)). */
+  extra?: Record<string, unknown>;
+}
+
+/**
+ * O que o localizador simulado devolve para uma folha. `falha` faz as primeiras `vezes` chamadas da
+ * folha falharem (tempo esgotado, erro do provedor ou saída malformada, DEC-129); depois devolve `depois`.
+ */
+export type LocalizacaoSimulada = LocalizacaoOk | { falha: { tipo: 'tempo_esgotado' | 'erro' | 'malformada'; vezes: number }; depois?: LocalizacaoOk };
+
+/** Folhas de uma aplicação, pelo `imagem_id`. */
+export type RoteiroLocalizacao = Record<string, LocalizacaoSimulada>;
+
+/** Uma chamada ao localizador, como ele a recebeu (DEC-174 (1), RN-045). */
+export interface ChamadaLocalizador {
+  imagem_id: string;
+  /** Página informada ao localizador, só depois do `identifyApplication` (RN-052, item 3a); senão null. */
+  pagina_informada: number | null;
+  /** Perguntas enviadas por página da versão: `CODIGO` ou, na matriz, `CODIGO.linha`. */
+  perguntas: Record<number, string[]>;
+  /** Tudo o que acompanhou a imagem, serializado em JSON, exatamente como foi passado ao localizador. */
+  entrada: string;
+  /** Dimensões da imagem enviada, em pixels. */
+  largura: number;
+  altura: number;
+  resultado: 'ok' | 'tempo_esgotado' | 'erro' | 'malformada';
+  em: Date;
+}
+
+/** PaginaAplicacao (ENT-025) como está no banco. */
+export interface FolhaGravada {
+  imagem_id: string;
+  tipo: 'formulario' | 'assinatura';
+  numero_pagina: number | null;
+  /** Regiões gravadas pela localização; null antes dela e na folha de página sem perguntas (RN-052, item 3c). */
+  regioes: RegiaoLocalizada[] | null;
+}
+
 export interface RespondenteGravado {
   id: string;
   /** Decifrados pelo harness; null quando anonimizado. */
@@ -227,6 +298,10 @@ export interface RespondenteGravado {
 export interface AplicacaoGravada {
   estado: string;
   respondente_id: string | null;
+  /** Acrescentados no IA-TEST do IMP-008. */
+  versao_id: string | null;
+  origem_qr: boolean;
+  /** Data e local da aplicação; desde o IMP-008, também os guardados do envio (DEC-182, DEC-186, V-11). */
   data_aplicacao: string | null;
   local_aplicacao: string | null;
   motivo_descarte: string | null;
@@ -330,6 +405,16 @@ export interface Harness {
     chamadas(importacaoId: string): Promise<ChamadaExtrator[]>;
   };
 
+  /** Localizador simulado (DEC-174), no lugar da operação `localizar` do adaptador Claude. Acrescentado no IA-TEST do IMP-008. */
+  localizador: {
+    /** Folhas da aplicação; vale para as chamadas feitas depois, inclusive nas retentativas e na localização que segue o `identifyApplication`. */
+    programar(aplicacaoId: string, roteiro: RoteiroLocalizacao): void;
+    /** Custo de cada chamada em dólar: o estimado antes (reserva) e o real depois (DEC-051). Padrão 0. */
+    custo(dados: { estimadoUsd: number; realUsd: number }): void;
+    /** Chamadas feitas ao localizador para a aplicação, em ordem. */
+    chamadas(aplicacaoId: string): Promise<ChamadaLocalizador[]>;
+  };
+
   worker: {
     /** Roda os jobs do worker que já venceram no relógio atual até não sobrar nenhum. */
     processar(): Promise<void>;
@@ -368,6 +453,8 @@ export interface Harness {
     exportacao(exportacaoId: string): Promise<ExportacaoGravada>;
     /** Acrescentado no IA-TEST do IMP-007. */
     contagemExportacao(tenantId: string): Promise<ContagemExportacao>;
+    /** Folhas da aplicação na ordem do envio, inclusive as do `addApplicationPages`. Acrescentado no IA-TEST do IMP-008. */
+    folhas(aplicacaoId: string): Promise<FolhaGravada[]>;
   };
 
   /** Gravação direta no banco, como um caminho futuro que não passe pela API (DEC-131). */

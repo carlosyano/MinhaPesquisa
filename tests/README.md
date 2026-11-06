@@ -1,6 +1,6 @@
 # Testes do MinhaPesquisa
 
-IA-TEST do IMP-001, do IMP-002, do IMP-005, do IMP-003, do IMP-006 e do IMP-007 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
+IA-TEST do IMP-001, do IMP-002, do IMP-005, do IMP-003, do IMP-006, do IMP-007 e do IMP-008 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
 implementação (IA-DEV), que não pode alterá-los: o job `testes-congelados` do CI marca de
 vermelho qualquer mudança em teste sem o rótulo `ia-test`, e o responsável só autoriza a
 junção depois de revisar o diff, com as verificações verdes.
@@ -75,6 +75,23 @@ em `support/planilha.test.ts`). A neutralização de fórmulas (DEC-166, que sub
 conferida no valor gravado: no CSV o apóstrofo faz parte do texto; no XLSX o texto sai como está, em
 célula do tipo texto, e nenhuma célula é fórmula.
 
+No IMP-008 (pesquisas sem QR e localização pela IA, CHG-017, DEC-169 a DEC-193) a interface ganha
+`localizador` (o localizador simulado no lugar da operação `localizar` do adaptador Claude, DEC-174:
+roteiro por folha, pelo `imagem_id`, com página, confiança, regiões, região ausente, campos a mais na
+resposta, falhas e custo, e as chamadas que recebeu, com as perguntas e tudo o que acompanhou a
+imagem) e `inspect.folhas` (página e regiões gravadas, ENT-025); `inspect.aplicacao` passa a trazer
+a versão, a `origem_qr` e a data e o local guardados do envio, que a API não expõe na pendência
+(V-11). A localização roda no mesmo worker e relógio da leitura. Folha não programada: confiança 0,99
+e a página do QR, a informada ou a posição da folha no envio. As folhas de papel antigo são imagens
+sintéticas sem QR (`support/papel-antigo.ts`); o QR de outro formato (DEC-187) é um QR comum
+desenhado na folha, lido pelo leitor real. Os testes aceitos que mudam com a CHG-017 foram ajustados
+(PLANO §11.1): CA-003 (`origem_qr` e a localização antes da leitura), CA-004 (um JPEG sem QR e sem
+versão; a folha sem QR com as outras de QR legível recebe a versão do QR, DEC-180), CA-044 (página 1
+sem QR, DEC-183) e a tabela de criação da FL-001 (QR de versão inválida na linha 1); e os testes que
+usavam uma só folha sem QR para chegar a `identificacao_pendente` passam a enviar todas sem QR. Por
+causa do V-08, a REQ ganhou o exemplo 11 do CA-052 (QR de outro formato) e os exemplos 9 e 10 do
+CA-058 (cópia do `total_paginas`, DEC-189).
+
 ## Cobertura
 
 | Arquivo | Rastreio |
@@ -105,12 +122,17 @@ célula do tipo texto, e nenhuma célula é fórmula.
 | `integracao/formularios/campos-padrao.test.ts` | CA-048 (exemplos 1 a 9), RN-050, DEC-143, DEC-145, DEC-146, DEC-147 |
 | `integracao/projetos/ciclo-coleta.test.ts` | CA-049, DEC-137, RN-027, RN-028 |
 | `integracao/exportacao/formato-longo.test.ts` | RF-012, CA-050, CA-051 (exemplos 1 a 8), CA-021, RN-051, DEC-153 a DEC-160, DEC-162 a DEC-166 |
+| `integracao/upload/papel-antigo.test.ts` | RF-013, CA-052 (exemplos 1 a 11), CA-057 (exemplos 1 a 13), FL-001 (tabela de criação), DEC-169, DEC-175, DEC-179, DEC-180, DEC-182, DEC-184 a DEC-187, DEC-192 |
+| `integracao/leitura/localizacao.test.ts` | RF-013, CA-053 (exemplos 1 a 9), CA-055 (exemplos 1 a 4), RN-052, DEC-171, DEC-174, DEC-177, DEC-178, DEC-188, RN-036, RN-037, RN-039, RN-045 |
+| `integracao/revisao/papel-antigo.test.ts` | RF-013, CA-054 (exemplos 1 a 13), CA-044 (exemplos 2 e 3), DEC-172, DEC-176, DEC-183, FL-001 (precedência 1a e 3a) |
+| `integracao/formularios/papel-antigo.test.ts` | RF-013, CA-058 (exemplos 1 a 10), ENT-006, DEC-175, DEC-179, DEC-181, DEC-189, DEC-190 |
 | `support/planilha.test.ts` | autoteste da leitura de CSV (DEC-165) e de XLSX |
 | `support/arquivos.test.ts` | autoteste dos geradores de PDF, QR, EXIF e arquivos de limite |
 | `support/apoio.test.ts` | autoteste do apoio (catálogo de erros, sem os erros descontinuados na REQ v2.1) |
 
 Ficam para depois (PLANO §11.1):
-dashboards, relatórios e auditoria de abertura de ficha do CA-011 (IMP-004);
+dashboards, relatórios e auditoria de abertura de ficha do CA-011 (IMP-004); CA-056, papel antigo nos
+relatórios e respondente sem CPF nos pedidos do titular (IMP-004);
 E2E com navegador do login (segundo PR de IA-TEST, quando a TL-001 tiver desenho); consulta à
 lista de senhas vazadas (aguarda DEC, item M-20). Do IMP-002: revisão e relatórios de projeto
 arquivado (CA-027, IMP-003 e IMP-004); vínculo das respostas lidas à versão 1 (CA-001, IMP-003).

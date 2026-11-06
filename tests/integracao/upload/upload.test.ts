@@ -1,6 +1,8 @@
 // Upload de imagens (RF-006, CA-003, CA-004, CA-029, TS-002, RN-040, DEC-029, DEC-042, REQ §6.5).
 // As páginas enviadas são o PDF gerado pela API, renderizado como scan ou foto (support/arquivos).
 // Sem teto de custo atingido (IMP-003), aplicação completa e coerente entra em `em_leitura`.
+// Ajustado no IA-TEST do IMP-008 (CHG-017): `origem_qr`, a localização que confere a página do QR
+// (DEC-171) e a versão do QR legível que vale para as folhas sem QR (DEC-180).
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -49,6 +51,11 @@ async function jpegs(): Promise<Arquivo[]> {
   return Promise.all(f.paginas.map(async (p) => arquivo(`pagina-${p.numero}.jpg`, 'image/jpeg', await jpeg(p))));
 }
 
+/** As páginas com o QR danificado, sem versão escolhida: identificacao_pendente (FL-001, linha 2). */
+async function semQrs(): Promise<Arquivo[]> {
+  return Promise.all(f.paginas.map(async (p) => arquivo(`pagina-${p.numero}.jpg`, 'image/jpeg', await semQr(p))));
+}
+
 describe('CA-003 — upload identifica formulário, versão e página', () => {
   // @trace CA-003, RF-006, FL-001
   it('páginas em JPEG (uma por arquivo) → versão e páginas identificadas pelo QR, aplicação em_leitura e leitura solicitada uma vez', async () => {
@@ -60,6 +67,20 @@ describe('CA-003 — upload identifica formulário, versão e página', () => {
     expect(r.corpo.paginas.map((p: { numero_pagina: number }) => p.numero_pagina)).toEqual([1, 2, 3, 4]);
     expect(r.corpo.paginas.every((p: { tipo: string; registro_ok: boolean }) => p.tipo === 'formulario' && p.registro_ok)).toBe(true);
     expect(await h.inspect.leiturasSolicitadas(r.corpo.aplicacao_id)).toBe(1);
+  });
+
+  // @trace CA-003, DEC-169, DEC-171, RN-052
+  it('origem_qr = true; cada página passa pela localização, que confirma a página do QR antes da leitura', async () => {
+    const r = await enviar(dig, projeto, await jpegs());
+    expect(r.status, r.texto).toBe(202);
+    const id: string = r.corpo.aplicacao_id;
+    expect((await dig.get(`/applications/${id}`)).corpo).toMatchObject({ origem_qr: true, papel_antigo: false, versao_id: f.versaoId });
+    await h.worker.processar();
+    const chamadas = await h.localizador.chamadas(id);
+    expect(chamadas.map((c) => c.imagem_id).sort()).toEqual((r.corpo.paginas as { imagem_id: string }[]).map((p) => p.imagem_id).sort());
+    const primeiraLeitura = Math.min(...(await h.motor.chamadas(id)).map((c) => c.em.getTime()));
+    expect(Math.max(...chamadas.map((c) => c.em.getTime()))).toBeLessThanOrEqual(primeiraLeitura);
+    expect((await h.inspect.folhas(id)).map((p) => p.numero_pagina)).toEqual([1, 2, 3, 4]);
   });
 
   // @trace CA-003, DEC-042
@@ -94,14 +115,31 @@ describe('CA-003 — upload identifica formulário, versão e página', () => {
 });
 
 describe('CA-004 — upload sem QR legível', () => {
-  // @trace CA-004, ERR-004, FL-001
-  it('QR danificado na página 2 → identificacao_pendente com aviso ERR-004; nada é lido', async () => {
+  // @trace CA-004, ERR-004, FL-001, DEC-169
+  it('JPEG de 2 MB com o QR danificado, sem escolher a versão → identificacao_pendente com aviso ERR-004; nada é lido', async () => {
+    const img = jpegComTamanho(await semQr(f.paginas[1]), 2 * MB);
+    const r = await enviar(dig, projeto, [arquivo('pagina-2.jpg', 'image/jpeg', img)]);
+    expect(r.status, r.texto).toBe(202);
+    expect(r.corpo).toMatchObject({ estado: 'identificacao_pendente', aviso: 'ERR-004' });
+    const id: string = r.corpo.aplicacao_id;
+    await h.worker.processar();
+    expect(await h.inspect.leiturasSolicitadas(id)).toBe(0);
+    expect(await h.localizador.chamadas(id)).toHaveLength(0);
+    expect(await h.motor.chamadas(id)).toHaveLength(0);
+  });
+
+  // @trace CA-004, DEC-180, RN-052
+  it('QR danificado só na página 2 → a versão do QR das outras folhas vale para ela; em_leitura, com a página 2 indicada pela localização', async () => {
     const imgs = await jpegs();
     imgs[1] = arquivo('pagina-2.jpg', 'image/jpeg', await semQr(f.paginas[1]));
     const r = await enviar(dig, projeto, imgs);
     expect(r.status, r.texto).toBe(202);
-    expect(r.corpo).toMatchObject({ estado: 'identificacao_pendente', aviso: 'ERR-004' });
-    expect(await h.inspect.leiturasSolicitadas(r.corpo.aplicacao_id)).toBe(0);
+    expect(r.corpo).toMatchObject({ estado: 'em_leitura' });
+    expect(r.corpo.aviso ?? null).toBeNull();
+    const id: string = r.corpo.aplicacao_id;
+    await h.worker.processar();
+    expect((await h.inspect.folhas(id)).map((p) => p.numero_pagina)).toEqual([1, 2, 3, 4]);
+    expect((await dig.get(`/applications/${id}`)).corpo).toMatchObject({ versao_id: f.versaoId, origem_qr: true });
   });
 });
 
@@ -172,9 +210,10 @@ describe('CA-029 / TS-002 — validação de segurança, tipo, tamanho e página
 describe('RN-040 — metadados removidos no upload', () => {
   // @trace RN-040, DEC-042, RN-029, T-05
   it('foto de celular com EXIF e GPS: a imagem guardada não tem metadados; link assinado de 5 min', async () => {
-    const imgs = await jpegs();
-    // Página 2 com QR danificado para a aplicação ficar em identificacao_pendente, onde a imagem
-    // é consultada pelo digitalizador (getPageImage).
+    // Folhas com QR danificado para a aplicação ficar em identificacao_pendente, onde a imagem é
+    // consultada pelo digitalizador (getPageImage). Desde a CHG-017, só fica pendente sem nenhuma
+    // folha de QR legível (DEC-180, FL-001 linha 2).
+    const imgs = await semQrs();
     imgs[1] = arquivo('celular.jpg', 'image/jpeg', comGps(await semQr(f.paginas[1])));
     expect((await metadados(imgs[1].bytes)).latitude).toBeDefined();
     const r = await enviar(dig, projeto, imgs);
@@ -194,8 +233,7 @@ describe('RN-040 — metadados removidos no upload', () => {
 
 describe('DEC-099 — quem vê a imagem da página (getPageImage)', () => {
   async function pendente(): Promise<{ id: string; imagem: string }> {
-    const imgs = await jpegs();
-    imgs[1] = arquivo('pagina-2.jpg', 'image/jpeg', await semQr(f.paginas[1]));
+    const imgs = await semQrs();
     const r = await enviar(dig, projeto, imgs);
     expect(r.corpo.estado).toBe('identificacao_pendente');
     return { id: r.corpo.aplicacao_id, imagem: r.corpo.paginas[1].imagem_id };
