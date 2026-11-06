@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     API da aplicação local MinhaPesquisa (DEC-107) — digitalização de pesquisas em papel com
     leitura por IA, revisão humana e dashboards, em conformidade com a LGPD. Uma única usuária,
@@ -471,7 +471,7 @@ paths:
         Cada página traz QR com identificador opaco da versão e número da página, e marcadores
         fiduciais (DEC-048). A página 1 traz o termo de consentimento do tenant
         (`termo_consentimento`, DEC-094) com campo de assinatura.
-        Versão em rascunho não gera PDF → ERR-018 (CA-028).
+        Versão em rascunho ou de papel antigo não gera PDF → ERR-018 (CA-028, CA-052, DEC-175).
       x-trace: [RF-004, CA-028, DEC-005, DEC-048, DEC-094]
       parameters:
         - $ref: '#/components/parameters/FormId'
@@ -587,8 +587,10 @@ paths:
         QR; sem QR legível, vale a `versao_id` escolhida (DEC-169), e a página de cada folha vem
         da localização pela IA (RN-052, DEC-171). O estado inicial segue a tabela de criação da
         FL-001; o campo `aviso` traz ERR-004, ERR-039 ou ERR-003 quando aplicável (CA-004,
-        CA-039, CA-030, CA-052).
-      x-trace: [RF-006, RF-013, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040, CA-052, RN-040, DEC-029, DEC-169]
+        CA-039, CA-030, CA-052). Com QR legível, a versão é a do QR em todas as folhas (DEC-180).
+        No papel antigo, `data_aplicacao` e `local_aplicacao` preenchem as perguntas `nao_consta`
+        e viram o padrão do projeto (DEC-179, CA-057).
+      x-trace: [RF-006, RF-013, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040, CA-052, CA-057, RN-040, DEC-029, DEC-169, DEC-179, DEC-180]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -623,10 +625,12 @@ paths:
       summary: Identificação manual de versão e páginas (aplicação em identificacao_pendente)
       description: |
         O digitalizador informa a versão e o número de cada página, ou corrige as páginas; a
-        localização é refeita com as páginas informadas (RN-052) e `origem_qr` passa a false.
+        página informada prevalece e a localização é refeita só para as regiões (RN-052, item 3a);
+        `origem_qr` passa a false. Versão diferente da do QR legível de alguma folha → 400 ERR-039,
+        auditado (DEC-180).
         Continua inválido → 400 ERR-004 ou ERR-039. Versão de outro tenant, de outro projeto ou
         inexistente → 400 ERR-039, auditado (DEC-100). Próximo estado conforme FL-001.
-      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-053, DEC-100, DEC-171]
+      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, DEC-100, DEC-171, DEC-180]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -696,7 +700,8 @@ paths:
       summary: Link assinado (5 min) da imagem de uma página, para identificação e conferência de assinatura
       description: |
         Usada para identificar páginas em `identificacao_pendente` e para conferir a assinatura
-        (RN-044). Na página 1 devolve a região da assinatura do mapa de layout (DEC-048).
+        (RN-044). Na página 1 devolve a região da assinatura indicada pela localização, nula
+        quando não achada (DEC-174).
         Permitida em `identificacao_pendente` e nos estados de revisão (FL-001); nos demais →
         ERR-018. Acesso auditado (DEC-099, DEC-112).
       x-trace: [RF-006, CA-004, CA-013, CA-044, RN-044, DEC-099, DEC-112]
@@ -822,8 +827,8 @@ paths:
       operationId: getItemImage
       tags: [review]
       summary: Link assinado (5 min) do recorte do item para revisão lado a lado
-      description: Só nos estados de revisão (CA-007, DEC-112); nos demais → 409 ERR-018.
-      x-trace: [RF-008, CA-007, DEC-112]
+      description: Só nos estados de revisão (CA-007, DEC-112); nos demais → 409 ERR-018. Item sem região (DEC-177) → a página inteira, com `regiao` nula (DEC-174).
+      x-trace: [RF-008, RF-013, CA-007, CA-055, DEC-112, DEC-177]
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
         - $ref: '#/components/parameters/ItemId'
@@ -930,7 +935,8 @@ paths:
       tags: [review]
       summary: Anexa a página 1 assinada (aplicação em sem_assinatura)
       description: |
-        Confere QR da versão e da página sem reler os outros campos; exige a confirmação humana
+        Confere QR da versão e da página (sem QR legível, pela localização na versão da aplicação,
+        RN-052; divergência → 400 ERR-004) sem reler os outros campos; exige a confirmação humana
         da assinatura (RN-044); vincula o respondente com o `manter_cadastro` gravado (CA-044).
       x-trace: [RF-008, CA-044, RN-044]
       security:
@@ -1166,11 +1172,13 @@ paths:
     post:
       operationId: findRespondent
       tags: [dashboard]
-      summary: Localiza respondente pelo CPF
+      summary: Localiza respondente pelo CPF ou pelo nome
       description: |
-        CPF no corpo, nunca na URL. Busca auditada (DEC-109). Pedidos do titular usam o CPF
-        diretamente (createDataSubjectRequest).
-      x-trace: [RF-009, CA-011, RN-013, DEC-109]
+        CPF ou nome no corpo (exatamente um), nunca na URL. Busca auditada (DEC-109). Pelo nome,
+        devolve todos os respondentes com o mesmo nome normalizado (DEC-176), com a data de
+        nascimento, para a usuária escolher; nenhum → 404. Pedidos do titular usam o CPF ou o
+        `respondente_id` escolhido (createDataSubjectRequest).
+      x-trace: [RF-009, RF-010, CA-011, CA-056, RN-013, DEC-109, DEC-176]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1186,7 +1194,7 @@ paths:
             X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/RespondentRef' }
+              schema: { $ref: '#/components/schemas/RespondentSearchResult' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1225,11 +1233,11 @@ paths:
       description: |
         Agregada, linha a linha ou linha por item (formato longo, RN-051), sem k-anonimato
         (DEC-109, DEC-110); toda exportação é auditada (CA-022). O arquivo é apagado após
-        `retencao_exportacao_dias` (RN-030). Sem assinatura fica fora (CA-021). No CSV, células de
+        `retencao_exportacao_dias` (RN-030). Sem assinatura fica fora (CA-021), exceto papel antigo (DEC-172). No CSV, células de
         texto que começam com `=`, `+`, `-`, `@`, tabulação ou retorno de carro recebem um
         apóstrofo; no XLSX saem como estão, em célula de texto, nunca como fórmula (DEC-166). Com `linha_por_item`, `filtros` → ERR-001 (DEC-163) e `rotulos` é ignorado
         (a planilha traz código e rótulo).
-      x-trace: [RF-010, RF-012, RN-051, CA-021, CA-022, CA-050, CA-051, DEC-014, DEC-109, DEC-110, DEC-153, DEC-163, DEC-166]
+      x-trace: [RF-010, RF-012, RN-051, CA-021, CA-022, CA-050, CA-051, CA-054, DEC-014, DEC-109, DEC-110, DEC-153, DEC-163, DEC-166, DEC-172]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1301,9 +1309,9 @@ paths:
     post:
       operationId: createDataSubjectRequest
       tags: [lgpd]
-      summary: Registra pedido do titular (identificado pelo CPF)
-      description: Registra pedido do titular (identificado pelo CPF).
-      x-trace: [RF-010, CA-023, CA-024, RN-031]
+      summary: Registra pedido do titular (identificado pelo CPF ou pelo respondente)
+      description: Registra pedido do titular, identificado pelo CPF ou, para respondente sem CPF, pelo `respondente_id` escolhido na busca por nome (DEC-176); nenhum ou os dois → 400 ERR-001.
+      x-trace: [RF-010, CA-023, CA-024, CA-056, RN-031, DEC-176]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1596,7 +1604,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-010', title: Muitas tentativas, status: 429, detail: Muitas tentativas. Aguarde alguns minutos antes de tentar novamente., errorCode: ERR-010, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     MissingMandatoryFields:
-      description: Item não resolvido (ERR-022) ou campos obrigatórios da DEC-020 ausentes (ERR-006)
+      description: Item não resolvido (ERR-022), campos obrigatórios da DEC-020 ausentes (ERR-006) ou, no papel antigo sem CPF, escolha do respondente ausente ou fora dos candidatos (ERR-001, DEC-176)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -1750,6 +1758,8 @@ components:
         coordenador: { type: string, nullable: true }
         coleta_inicio: { type: string, format: date, nullable: true }
         coleta_fim: { type: string, format: date, nullable: true }
+        padrao_data_aplicacao: { type: string, format: date, nullable: true, description: 'Proposta no próximo envio de papel antigo; só leitura (DEC-179)' }
+        padrao_local_aplicacao: { type: string, nullable: true, description: 'Proposto no próximo envio de papel antigo; só leitura (DEC-179)' }
         status: { type: string, enum: [ativo, arquivado] }
         criado_em: { type: string, format: date-time }
 
@@ -1768,6 +1778,7 @@ components:
       properties:
         nome: { type: string, minLength: 1, maxLength: 200 }
         projeto_id: { type: string, format: uuid }
+        papel_antigo: { type: boolean, default: false, description: 'Marca a versão 1 como de papel antigo (DEC-175)' }
 
     FormSummary:
       type: object
@@ -1801,6 +1812,7 @@ components:
         obrigatorio: { type: boolean, default: false }
         campo_respondente: { type: string, enum: [nome, data_nascimento, cpf, endereco], nullable: true }
         campo_aplicacao: { type: string, enum: [data_aplicacao, local_aplicacao, aplicador], nullable: true, description: Marca as perguntas de data e local exigidas pela RN-017 }
+        nao_consta: { type: boolean, default: false, description: 'Só em versão de papel antigo e nas perguntas de CPF, data de nascimento, data e local: o papel não tem a pergunta, que não é localizada nem lida (DEC-179); fora disso → ERR-001' }
         sensibilidade: { type: string, enum: [identificacao, saude, outro], default: saude, description: 'Grupo de envio à IA (RN-039); forçado a identificacao quando há campo_respondente ou campo_aplicacao = aplicador (RN-047); nas demais perguntas só saude ou outro (DEC-097)' }
         linhas:
           type: array
@@ -1843,6 +1855,7 @@ components:
       properties:
         perguntas: { type: array, items: { $ref: '#/components/schemas/Question' } }
         regras_salto: { type: array, items: { $ref: '#/components/schemas/SkipRule' } }
+        papel_antigo: { type: boolean, description: 'Versão de papel antigo (DEC-175); muda só no rascunho (updateVersion); ausente no updateVersion = mantém' }
 
     VersionCreate:
       type: object
@@ -1850,7 +1863,7 @@ components:
       x-todos-opcionais: true
       properties:
         copiar_de_versao_id: { type: string, format: uuid, description: 'Ausente = versão só com os 5 campos da RN-050' }
-        papel_antigo: { type: boolean, default: false, description: 'Versão de pesquisa antiga, sem QR nem marcadores; dispensa CPF, data de nascimento e assinatura na conclusão (DEC-172, DEC-175, DEC-176)' }
+        papel_antigo: { type: boolean, description: 'Versão de pesquisa antiga, sem QR nem marcadores; dispensa CPF, data de nascimento e assinatura na conclusão (DEC-172, DEC-175, DEC-176). Ausente: com `copiar_de_versao_id`, copia a marca da versão de origem; sem ela, false' }
 
     VersionSummary:
       type: object
@@ -1888,6 +1901,7 @@ components:
         sem_dados_reais:
           type: boolean
           description: Declaração de que o formulário está em branco ou só com dados fictícios; precisa ser true (DEC-133)
+        papel_antigo: { type: boolean, default: false, description: 'Marca a versão 1 como de papel antigo (DEC-175)' }
 
     FormImportWarning:
       type: object
@@ -1941,7 +1955,9 @@ components:
         versao_id:
           type: string
           format: uuid
-          description: Versão publicada do projeto, usada só nas páginas sem QR legível; com QR legível, a versão do QR prevalece (DEC-169). Inexistente, não publicada ou de outro projeto → `aviso` ERR-039
+          description: Versão publicada do projeto, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180). Inexistente, não publicada ou de outro projeto → `aviso` ERR-039. No `addApplicationPages`, substitui a escolhida no envio
+        data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação das perguntas `nao_consta`; vira o padrão do projeto (DEC-179)' }
+        local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: local da aplicação das perguntas `nao_consta`; vira o padrão do projeto (DEC-179)' }
 
     UploadResponse:
       type: object
@@ -1997,6 +2013,7 @@ components:
         projeto_id: { type: string, format: uuid }
         versao_id: { type: string, format: uuid, nullable: true }
         origem_qr: { type: boolean, description: 'true quando a versão veio do QR; false quando veio da escolha no envio ou do identifyApplication (DEC-169)' }
+        papel_antigo: { type: boolean, description: 'Herdado da versão, só leitura (DEC-173, DEC-175)' }
         estado: { $ref: '#/components/schemas/ApplicationState' }
         assinatura: { type: string, enum: [presente, ausente, nao_conferida] }
         aviso:
@@ -2097,6 +2114,8 @@ components:
         expira_em: { type: string, format: date-time }
         regiao:
           type: object
+          nullable: true
+          description: Nula quando o item não tem região e o link é da página inteira (DEC-177)
           additionalProperties: false
           required: [x, y, largura, altura]
           properties:
@@ -2247,16 +2266,29 @@ components:
     RespondentSearch:
       type: object
       additionalProperties: false
-      required: [cpf]
+      x-todos-opcionais: true
+      description: Exatamente um de `cpf` e `nome`; nenhum ou os dois → 400 ERR-001
       properties:
         cpf: { type: string, pattern: '^[0-9]{11}$' }
+        nome: { type: string, minLength: 1, maxLength: 200, description: 'Comparado sem acento, sem diferença de maiúsculas e com os espaços normalizados (DEC-176)' }
 
-    RespondentRef:
+    RespondentSearchResult:
       type: object
       additionalProperties: false
-      required: [respondente_id]
+      required: [respondentes]
       properties:
-        respondente_id: { type: string, format: uuid }
+        respondentes:
+          type: array
+          minItems: 1
+          description: Pelo CPF, um só
+          items:
+            type: object
+            additionalProperties: false
+            required: [respondente_id, nome]
+            properties:
+              respondente_id: { type: string, format: uuid }
+              nome: { type: string }
+              data_nascimento: { type: string, format: date, nullable: true }
 
     IndividualRecord:
       type: object
@@ -2302,9 +2334,11 @@ components:
     DataSubjectRequestCreate:
       type: object
       additionalProperties: false
-      required: [cpf, tipo]
+      required: [tipo]
+      description: Exatamente um de `cpf` e `respondente_id` (DEC-176)
       properties:
         cpf: { type: string, pattern: '^[0-9]{11}$' }
+        respondente_id: { type: string, format: uuid, description: 'Respondente sem CPF, escolhido na busca por nome (findRespondent)' }
         tipo: { type: string, enum: [acesso, correcao, eliminacao, portabilidade] }
         descricao: { type: string, maxLength: 2000, description: Não incluir dado pessoal; sobrescrita na eliminação }
         correcoes:
