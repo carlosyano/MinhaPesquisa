@@ -1,7 +1,7 @@
 # Arquitetura do Projeto MinhaPesquisa
 
 > Mapa do repositório para pessoas e agentes de IA. Resume o que está decidido em
-> `docs/architecture/PLANO.md` (v3.15) e aponta a fonte de verdade de cada artefato.
+> `docs/architecture/PLANO.md` (v3.16) e aponta a fonte de verdade de cada artefato.
 > Em conflito, vale a precedência do PLANO: decisões de negócio → REQ → PLANO/DEC técnicas → Bloco P.
 
 ## 1. Situação atual
@@ -95,7 +95,7 @@ Registros CSV                          não editar; rodar tools/gerar_registros.
 Regras para agentes de IA              AGENTS.md
 ```
 
-## 9. Modo de demonstração local (DEC-104, DEC-125)
+## 9. Modo de demonstração local (DEC-104, DEC-125, DEC-168)
 
 Para testar o upload com foto real antes das telas: `npm ci` e `npm run demo` (precisa de Docker,
 ou de `MP_DEMO_DATABASE_URL` apontando para um PostgreSQL 17). O terminal mostra a página
@@ -108,6 +108,10 @@ Para ver a leitura por IA e a revisão (DEC-125), defina `MP_DEMO_CHAVE_IA` com 
 da Anthropic antes de `npm run demo`. A chave fica só na memória e nunca é gravada; cada página
 lida gera custo real na conta. A cotação do dólar é fictícia (`MP_DEMO_COTACAO`, padrão 5.00) e o
 modelo é o padrão da instalação (`MP_DEMO_MODELO` para trocar). Sem a chave, o envio funciona e a
-leitura fica parada. Tudo escuta só em 127.0.0.1 e
-some com Ctrl+C. Não é ambiente de piloto: o armazenamento é em memória e o e-mail só aparece
-no terminal.
+leitura fica parada. Tudo escuta só em 127.0.0.1.
+
+Os dados ficam entre as execuções (DEC-168): o banco no contêiner `minhapesquisa-demo-pg` (volume
+`minhapesquisa-demo-dados`) e as imagens, as exportações e os segredos em
+`%LOCALAPPDATA%\MinhaPesquisaDemo`, separados da instalação do notebook. A senha é a mesma de uma
+execução para a outra. `MP_DEMO_ZERAR=true` apaga tudo e recomeça; com `MP_DEMO_DATABASE_URL` a
+demonstração volta a ser descartável. Não é ambiente de piloto: o e-mail só aparece no terminal.

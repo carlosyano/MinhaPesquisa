@@ -27,7 +27,7 @@ export const PAGINA_DEMO = `<!doctype html>
 </head>
 <body>
 <h1>MinhaPesquisa — modo de demonstração</h1>
-<p class="aviso">Ambiente local e descartável. Use só dados sintéticos no formulário (GX-001): nada de nome, CPF ou resposta de pessoa real.</p>
+<p class="aviso">Ambiente local; os dados ficam entre as execuções. Use só dados sintéticos no formulário (GX-001): nada de nome, CPF ou resposta de pessoa real.</p>
 
 <section id="entrar">
   <h2>1. Entrar</h2>
@@ -61,7 +61,9 @@ export const PAGINA_DEMO = `<!doctype html>
   </details>
 
   <h2>2. Imprimir o formulário</h2>
-  <p>Formulário atual: <strong id="form-atual"></strong>. Baixe o PDF, imprima, preencha com dados sintéticos e fotografe cada página (a foto da página 1 precisa mostrar o QR).</p>
+  <label for="form-atual">Formulário atual</label>
+  <select id="form-atual"></select>
+  <p>Baixe o PDF, imprima, preencha com dados sintéticos e fotografe cada página (a foto da página 1 precisa mostrar o QR).</p>
   <a id="pdf" class="botao" download="formulario-demo.pdf">Baixar PDF</a>
   <p class="cota" id="cota"></p>
 
@@ -111,13 +113,33 @@ export const PAGINA_DEMO = `<!doctype html>
 const DADOS = __DADOS__;
 const $ = (id) => document.getElementById(id);
 $('email').value = DADOS.email;
-/** Formulário impresso e usado na identificação manual; troca quando um importado é publicado. */
-function usarFormulario(formId, versaoId, nome) {
-  DADOS.formId = formId; DADOS.versaoId = versaoId;
-  $('pdf').href = '/forms/' + formId + '/versions/' + versaoId + '/pdf';
-  $('form-atual').textContent = nome;
+/** Formulário impresso e usado na identificação manual: a versão escolhida na lista. */
+function usarFormulario(versaoId) {
+  const o = [...$('form-atual').options].find((x) => x.value === versaoId);
+  if (!o) return;
+  o.selected = true;
+  DADOS.formId = o.dataset.form; DADOS.versaoId = versaoId;
+  $('pdf').href = '/forms/' + DADOS.formId + '/versions/' + versaoId + '/pdf';
 }
-usarFormulario(DADOS.formId, DADOS.versaoId, DADOS.nomeFormulario);
+$('form-atual').addEventListener('change', () => usarFormulario($('form-atual').value));
+
+/** Versões publicadas do projeto (listForms), a mais recente primeiro; escolhe a preferida ou a primeira. */
+async function carregarFormularios(preferida) {
+  const versoes = [];
+  for (let pagina = 1; ; pagina++) {
+    const r = await chamar('GET', '/projects/' + DADOS.projetoId + '/forms?limite=100&pagina=' + pagina);
+    for (const f of r.itens) for (const v of f.versoes) if (v.status === 'publicada') versoes.push({ f, v });
+    if (pagina * r.meta.limite >= r.meta.total) break;
+  }
+  versoes.sort((a, b) => (b.v.publicada_em || '').localeCompare(a.v.publicada_em || ''));
+  const sel = $('form-atual'); sel.replaceChildren();
+  for (const { f, v } of versoes) {
+    const o = document.createElement('option');
+    o.value = v.id; o.dataset.form = f.id; o.textContent = f.nome + ' (versão ' + v.numero + ')';
+    sel.appendChild(o);
+  }
+  usarFormulario(preferida || (versoes[0] && versoes[0].v.id));
+}
 
 function csrf() {
   const m = document.cookie.match(/(?:^|; )mp_csrf=([^;]+)/);
@@ -150,6 +172,7 @@ $('f-login').addEventListener('submit', async (e) => {
     await chamar('POST', '/auth/login', { email: $('email').value, senha: $('senha').value });
     $('entrar').hidden = true; $('painel').hidden = false;
     cota();
+    await carregarFormularios();
   } catch (err) { mensagem(err.message); }
 });
 
@@ -377,7 +400,7 @@ $('publicar').addEventListener('click', async () => {
   mensagem();
   try {
     await chamar('POST', '/forms/' + importacao.formulario_id + '/versions/' + importacao.versao_id + '/publish');
-    usarFormulario(importacao.formulario_id, importacao.versao_id, importacao.nome_formulario + ' (importado)');
+    await carregarFormularios(importacao.versao_id);
     $('publicar').disabled = true;
     $('importar').open = false;
   } catch (err) { mensagem(err.message); }
