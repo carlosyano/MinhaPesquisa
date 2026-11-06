@@ -166,6 +166,7 @@ ENT-018 PedidoTitular,executado_em,data da execução,timestamp,não,—,ISO 860
 ENT-018 PedidoTitular,executado_por,usuário que executou,uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
 ENT-018 PedidoTitular,status,status do pedido,enum,sim,—,—,pendente; em_andamento; concluido; falhou; cancelado,pendente,não,—,não
 ENT-018 PedidoTitular,resultado,resultado da execução,text,não,5000,—,—,NULL,não,—,não
+ENT-018 PedidoTitular,aplicacoes_mesmo_nome,"eliminação de respondente sem CPF: aplicações de papel antigo em andamento com o mesmo nome normalizado, gravadas na execução (DEC-191, DEC-193)",jsonb,não,—,lista de UUID,—,NULL,não,—,pessoal (indireto)
 ENT-019 ListaEliminacoes,id,identificador do registro,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-019 ListaEliminacoes,tenant_id,tenant da eliminação,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-019 ListaEliminacoes,motivo,origem do registro,enum,sim,—,—,eliminacao; anonimizacao_reabertura; descarte_aplicacao,eliminacao,não,—,não
