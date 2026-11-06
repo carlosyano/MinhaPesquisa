@@ -301,7 +301,8 @@ paths:
       summary: Cria formulário com a versão 1 em rascunho
       description: |
         Cria formulário com a versão 1 em rascunho, já com os 5 campos obrigatórios da RN-050
-        (DEC-135, CA-048). Projeto arquivado → ERR-001 (`campos`: `projeto`, DEC-146).
+        (DEC-135, CA-048). Projeto arquivado → ERR-001 (`campos`: `projeto`, DEC-146). `papel_antigo`
+        marca a versão 1 como de papel antigo (DEC-175).
       x-trace: [RF-004, RF-011, RN-050, CA-048, DEC-135, DEC-146]
       security:
         - sessionCookie: []
@@ -397,7 +398,9 @@ paths:
         Versão publicada é imutável → ERR-009 (CA-001, TS-006). Regra de salto inválida
         (DEC-095), sensibilidade `identificacao` fora das perguntas da RN-047 (DEC-097), falta ou
         repetição de uma marcação da RN-050, código da RN-050 sem a marcação, ou pergunta que não
-        cabe na página (DEC-143) → ERR-001, com os códigos em `campos`. Código, tipo,
+        cabe na página (DEC-143; não vale no papel antigo, DEC-181) → ERR-001, com os códigos em `campos`.
+        `nao_consta` fora do papel antigo ou das perguntas de CPF, data de nascimento, data e local,
+        ou desmarcar `papel_antigo` com perguntas `nao_consta` → ERR-001 (DEC-179, CA-057). Código, tipo,
         obrigatoriedade e sensibilidade das perguntas da RN-050 são reaplicados pelo sistema (DEC-145).
       x-trace: [RF-004, RF-011, CA-001, CA-015, RN-042, TS-006, RN-021, DEC-095, DEC-097, RN-050, CA-048, DEC-143, DEC-145]
       security:
@@ -439,7 +442,8 @@ paths:
         da aplicação (RN-017); sem elas → ERR-036 (CA-036). Matriz sem linhas ou múltipla escolha
         sem `nenhuma_das_anteriores` (RN-047) → ERR-036 com os códigos das perguntas em `campos`
         (DEC-096). Pergunta que não cabe na sua página → ERR-036 com os códigos em `campos`
-        (DEC-143). Grava o mapa de layout (DEC-048).
+        (DEC-143), exceto no papel antigo (DEC-181). Grava o mapa de layout (DEC-048), exceto no papel
+        antigo.
       x-trace: [RF-004, CA-036, RN-017, RN-047, DEC-048, DEC-096, RF-011, DEC-143]
       security:
         - sessionCookie: []
@@ -472,7 +476,7 @@ paths:
         fiduciais (DEC-048). A página 1 traz o termo de consentimento do tenant
         (`termo_consentimento`, DEC-094) com campo de assinatura.
         Versão em rascunho ou de papel antigo não gera PDF → ERR-018 (CA-028, CA-052, DEC-175).
-      x-trace: [RF-004, CA-028, DEC-005, DEC-048, DEC-094]
+      x-trace: [RF-004, CA-028, CA-052, DEC-005, DEC-048, DEC-094, DEC-175]
       parameters:
         - $ref: '#/components/parameters/FormId'
         - $ref: '#/components/parameters/VersionId'
@@ -520,7 +524,8 @@ paths:
       summary: Importa um formulário existente (job assíncrono)
       description: |
         Recebe um formulário em branco ou com dados fictícios (DEC-133) e enfileira a leitura da
-        estrutura pela IA (RN-049, FL-004). Projeto arquivado (`campos`: `projeto`, DEC-146) ou
+        estrutura pela IA (RN-049, FL-004); com `papel_antigo`, cada pergunta fica na página do
+        original (DEC-181). Projeto arquivado (`campos`: `projeto`, DEC-146) ou
         sem `sem_dados_reais` = true (`campos`: `sem_dados_reais`) → 400 ERR-001; arquivo fora
         dos limites → 400 ERR-029 com o motivo (DEC-136). O resultado, um formulário novo com a
         versão 1 em rascunho, é consultado em `getFormImport`.
@@ -625,9 +630,11 @@ paths:
       summary: Identificação manual de versão e páginas (aplicação em identificacao_pendente)
       description: |
         O digitalizador informa a versão e o número de cada página, ou corrige as páginas; a
-        página informada prevalece e a localização é refeita só para as regiões (RN-052, item 3a);
-        `origem_qr` passa a false. Versão diferente da do QR legível de alguma folha → 400 ERR-039,
-        auditado (DEC-180).
+        página informada prevalece e só as folhas alteradas são localizadas de novo, só para as
+        regiões (RN-052, item 3a). `origem_qr` passa a false, exceto quando a versão informada é a do
+        QR. Versão diferente da do QR legível e válido de alguma folha → 400 ERR-039, auditado; QR
+        de versão inválida (CA-039) não decide a versão (DEC-180). Data e local do envio passam a
+        valer se a versão informada for de papel antigo (DEC-182).
         Continua inválido → 400 ERR-004 ou ERR-039. Versão de outro tenant, de outro projeto ou
         inexistente → 400 ERR-039, auditado (DEC-100). Próximo estado conforme FL-001.
       x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, DEC-100, DEC-171, DEC-180]
@@ -935,10 +942,10 @@ paths:
       tags: [review]
       summary: Anexa a página 1 assinada (aplicação em sem_assinatura)
       description: |
-        Confere QR da versão e da página (sem QR legível, pela localização na versão da aplicação,
-        RN-052; divergência → 400 ERR-004) sem reler os outros campos; exige a confirmação humana
+        Confere QR da versão e da página (sem QR legível, a folha não vai à IA e a usuária confirma
+        na conferência que é a página 1, DEC-183) sem reler os outros campos; exige a confirmação humana
         da assinatura (RN-044); vincula o respondente com o `manter_cadastro` gravado (CA-044).
-      x-trace: [RF-008, CA-044, RN-044]
+      x-trace: [RF-008, RF-013, CA-044, RN-044, DEC-183]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1071,8 +1078,9 @@ paths:
         POST por causa da estrutura dos filtros; não altera dados. Todas as células trazem a
         contagem, sem k-anonimato (DEC-110). Cruzamento por uma segunda pergunta (CA-017).
         Grupos contam respondentes pela aplicação mais recente do período; padrão de 12 meses
-        (CA-031, DEC-024). Aplicações sem assinatura ficam fora (CA-021).
-      x-trace: [RF-009, CA-009, CA-017, CA-021, CA-031, DEC-024, DEC-110]
+        (CA-031, DEC-024). Aplicações sem assinatura ficam fora (CA-021), exceto as de papel antigo
+        (DEC-172, CA-056).
+      x-trace: [RF-009, CA-009, CA-017, CA-021, CA-031, CA-056, DEC-024, DEC-110, DEC-172]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1176,7 +1184,8 @@ paths:
       description: |
         CPF ou nome no corpo (exatamente um), nunca na URL. Busca auditada (DEC-109). Pelo nome,
         devolve todos os respondentes com o mesmo nome normalizado (DEC-176), com a data de
-        nascimento, para a usuária escolher; nenhum → 404. Pedidos do titular usam o CPF ou o
+        nascimento, para a usuária escolher; nenhum → 404. A auditoria registra a busca e o número de
+        resultados, nunca o CPF nem o nome buscados (RN-028). Pedidos do titular usam o CPF ou o
         `respondente_id` escolhido (createDataSubjectRequest).
       x-trace: [RF-009, RF-010, CA-011, CA-056, RN-013, DEC-109, DEC-176]
       security:
@@ -1956,7 +1965,7 @@ components:
           type: string
           format: uuid
           description: Versão publicada do projeto, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180). Inexistente, não publicada ou de outro projeto → `aviso` ERR-039. No `addApplicationPages`, substitui a escolhida no envio
-        data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação das perguntas `nao_consta`; vira o padrão do projeto (DEC-179)' }
+        data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação das perguntas `nao_consta`; vira o padrão do projeto (DEC-179). Só vale se a versão final for de papel antigo (DEC-182); futura → 400 ERR-001' }
         local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: local da aplicação das perguntas `nao_consta`; vira o padrão do projeto (DEC-179)' }
 
     UploadResponse:
@@ -2110,7 +2119,7 @@ components:
       additionalProperties: false
       required: [url, expira_em]
       properties:
-        url: { type: string, format: uri, description: Link assinado de 5 min do recorte do campo (DEC-034) }
+        url: { type: string, format: uri, description: 'Link assinado de 5 min do recorte do campo, ou da página inteira quando o item não tem região (DEC-034, DEC-177)' }
         expira_em: { type: string, format: date-time }
         regiao:
           type: object
@@ -2159,7 +2168,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: 'Só na versão de papel antigo sem CPF válido: um dos `candidatos_nome` da aplicação, ou nulo para respondente novo (DEC-176)'
+          description: 'Só na versão de papel antigo sem CPF válido: um dos `candidatos_nome` da aplicação, ou nulo para respondente novo; sem candidatos, ausente também cria respondente novo. Enviado em outro caso → ERR-001 (DEC-176)'
 
     SignatureUpload:
       type: object
@@ -2338,7 +2347,7 @@ components:
       description: Exatamente um de `cpf` e `respondente_id` (DEC-176)
       properties:
         cpf: { type: string, pattern: '^[0-9]{11}$' }
-        respondente_id: { type: string, format: uuid, description: 'Respondente sem CPF, escolhido na busca por nome (findRespondent)' }
+        respondente_id: { type: string, format: uuid, description: 'Respondente escolhido na busca por nome (findRespondent), com ou sem CPF (DEC-176)' }
         tipo: { type: string, enum: [acesso, correcao, eliminacao, portabilidade] }
         descricao: { type: string, maxLength: 2000, description: Não incluir dado pessoal; sobrescrita na eliminação }
         correcoes:
