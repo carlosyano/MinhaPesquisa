@@ -41,7 +41,7 @@ ENT-006 Versao,numero,número da versão,int,sim,—,—,≥ 1,auto,sim (por for
 ENT-006 Versao,status,status da versão,enum,sim,—,—,rascunho; publicada,rascunho,não,—,não
 ENT-006 Versao,publicada_em,data de publicação,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
 ENT-006 Versao,mapa_layout,"coordenadas normalizadas de cada campo por página, gravadas na publicação (DEC-048); desde a DEC-170 servem só ao PDF imprimível, e os recortes saem da localização",jsonb,não,—,JSON,—,NULL,não,—,não
-ENT-006 Versao,papel_antigo,"versão de pesquisa antiga, sem QR nem marcadores: dispensa CPF e assinatura na conclusão (DEC-172; provisório até a Q-063); imutável depois da publicação (RN-042)",boolean,sim,—,—,true/false,false,não,—,não
+ENT-006 Versao,papel_antigo,"versão de pesquisa antiga, sem QR nem marcadores: dispensa CPF, data de nascimento e assinatura na conclusão (DEC-172, DEC-175, DEC-176); imutável depois da publicação (RN-042)",boolean,sim,—,—,true/false,false,não,—,não
 ENT-006 Versao,criada_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-007 Pergunta,id,identificador da pergunta,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-007 Pergunta,tenant_id,tenant da pergunta,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
@@ -67,7 +67,7 @@ ENT-008 Opcao,ordem,ordem,int,sim,—,—,≥ 1,—,não,—,não
 ENT-009 Respondente,id,identificador do respondente,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-009 Respondente,tenant_id,tenant do respondente,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-009 Respondente,nome,nome completo,varchar,sim,200,—,—,—,não,—,pessoal
-ENT-009 Respondente,data_nascimento,data de nascimento,date,sim (NULL só se anonimizado),—,YYYY-MM-DD,não futura,—,não,—,pessoal
+ENT-009 Respondente,data_nascimento,data de nascimento,date,"sim (NULL só se anonimizado ou de papel antigo sem data, DEC-176)",—,YYYY-MM-DD,não futura,—,não,—,pessoal
 ENT-009 Respondente,cpf_cifrado,CPF cifrado,bytea,"sim (NULL só se anonimizado ou de papel antigo sem CPF, DEC-172)",variável,AES-256-GCM (IV + cifrado + tag + id da chave),—,—,não,—,sensível
 ENT-009 Respondente,cpf_hash,HMAC do CPF (busca),bytea,"sim (NULL só se anonimizado ou de papel antigo sem CPF, DEC-172)",32,HMAC-SHA256 com chave do tenant,—,—,"sim (por tenant, quando não nulo)",—,sensível
 ENT-009 Respondente,endereco,endereço,varchar,não,500,—,—,NULL,não,—,pessoal

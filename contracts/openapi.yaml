@@ -891,9 +891,11 @@ paths:
         o respondente (DEC-064).
         Vínculo por CPF: existente vincula, novo cria (CA-002, CA-014b); divergência de cadastro
         resolvida pelo digitalizador (CA-014).
-        Versão de papel antigo: CPF e assinatura não são exigidos e a aplicação vai a `concluida`;
-        sem CPF válido, o vínculo segue a Q-064 (DEC-172, CA-054).
-      x-trace: [RF-008, RF-013, CA-002, CA-014, CA-014b, CA-021, CA-032, CA-054, RN-016, RN-044, DEC-020, DEC-172]
+        Versão de papel antigo: CPF, data de nascimento e assinatura não são exigidos e a aplicação
+        vai a `concluida`; sem CPF válido, `respondente_id` escolhe entre os `candidatos_nome` da
+        aplicação ou, nulo, cria um respondente novo; havendo candidatos, ausente ou fora da lista
+        → 400 ERR-001 (DEC-172, DEC-176, CA-054).
+      x-trace: [RF-008, RF-013, CA-002, CA-014, CA-014b, CA-021, CA-032, CA-054, RN-016, RN-044, DEC-020, DEC-172, DEC-176]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1848,7 +1850,7 @@ components:
       x-todos-opcionais: true
       properties:
         copiar_de_versao_id: { type: string, format: uuid, description: 'Ausente = versão só com os 5 campos da RN-050' }
-        papel_antigo: { type: boolean, default: false, description: 'Versão de pesquisa antiga, sem QR nem marcadores; dispensa CPF e assinatura na conclusão (DEC-172; provisório até a Q-063)' }
+        papel_antigo: { type: boolean, default: false, description: 'Versão de pesquisa antiga, sem QR nem marcadores; dispensa CPF, data de nascimento e assinatura na conclusão (DEC-172, DEC-175, DEC-176)' }
 
     VersionSummary:
       type: object
@@ -1860,7 +1862,7 @@ components:
         numero: { type: integer, minimum: 1 }
         status: { type: string, enum: [rascunho, publicada] }
         publicada_em: { type: string, format: date-time, nullable: true }
-        papel_antigo: { type: boolean, description: 'Versão de papel antigo (DEC-172; provisório até a Q-063)' }
+        papel_antigo: { type: boolean, description: 'Versão de papel antigo (DEC-175)' }
         criada_em: { type: string, format: date-time }
 
     Version:
@@ -2015,6 +2017,17 @@ components:
             nome: { type: string, nullable: true }
             data_nascimento: { type: string, format: date, nullable: true }
             endereco: { type: string, nullable: true }
+        candidatos_nome:
+          type: array
+          description: 'Versão de papel antigo sem CPF válido: respondentes com o mesmo nome normalizado, só depois de openReview, com auditoria (DEC-176); CPF não é devolvido'
+          items:
+            type: object
+            additionalProperties: false
+            required: [respondente_id, nome]
+            properties:
+              respondente_id: { type: string, format: uuid }
+              nome: { type: string }
+              data_nascimento: { type: string, format: date, nullable: true }
         itens: { type: array, items: { $ref: '#/components/schemas/ReviewItem' } }
 
     PageRef:
@@ -2123,6 +2136,11 @@ components:
             nome: { type: string, enum: [existente, aplicacao] }
             data_nascimento: { type: string, enum: [existente, aplicacao] }
             endereco: { type: string, enum: [existente, aplicacao] }
+        respondente_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: 'Só na versão de papel antigo sem CPF válido: um dos `candidatos_nome` da aplicação, ou nulo para respondente novo (DEC-176)'
 
     SignatureUpload:
       type: object

@@ -1,7 +1,7 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005) · CHG-013 aceita na v2.3 · CHG-014 aceita na v2.4 · CHG-015 aceita na v2.5 · CHG-016 aceita na v2.6 · CHG-017 proposta na v2.7 (aguarda as Q-063 a Q-065 e o aceite)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005) · CHG-013 aceita na v2.3 · CHG-014 aceita na v2.4 · CHG-015 aceita na v2.5 · CHG-016 aceita na v2.6 · CHG-017 proposta na v2.7 (Q-063 a Q-065 respondidas; aguarda a revisão e o aceite)
 Versão: 2.7
 Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011) · 05/11/2026 (v2.3, CHG-013; v2.4, CHG-014; v2.5, CHG-015; v2.6, CHG-016)
 Nível de rigor: Completo (DEC-001)
@@ -16,7 +16,7 @@ Nota da v2.5 (CHG-015, seção 3 do mesmo Change Request): a exportação ganha 
 
 Nota da v2.6 (CHG-016, IA-TEST do IMP-007): o apóstrofo contra fórmulas fica só no CSV; no XLSX o texto sai como está, em célula de texto, nunca como fórmula (Q-062, DEC-166, que substitui a DEC-161).
 
-Nota da v2.7 (CHG-017, Change Request de 06/11/2026 em `docs/historico/`, revisto com o responsável): a usuária passa a digitalizar também pesquisas antigas, sem QR e sem os marcadores dos cantos, por scanner ou foto. Em toda página, a IA recebe a página inteira numa chamada só de localização, que devolve qual página da versão é a folha e a região de cada pergunta, sem ler nenhum valor; a leitura continua por recortes, em chamadas separadas (DEC-169 a DEC-171, exceção da RN-038). Sem QR, a usuária escolhe a versão no envio. A versão de papel antigo dispensa CPF e assinatura na conclusão (DEC-172), e a base legal desses dados é garantida fora do sistema (DEC-173). Ficam em aberto: como marcar o papel antigo (Q-063), o respondente sem CPF (Q-064) e a localização que falha (Q-065), com texto provisório.
+Nota da v2.7 (CHG-017, Change Request de 06/11/2026 em `docs/historico/`, revisto com o responsável): a usuária passa a digitalizar também pesquisas antigas, sem QR e sem os marcadores dos cantos, por scanner ou foto. Em toda página, a IA recebe a página inteira numa chamada só de localização, que devolve qual página da versão é a folha e a região de cada pergunta, sem ler nenhum valor; a leitura continua por recortes, em chamadas separadas (DEC-169 a DEC-171, exceção da RN-038). Sem QR, a usuária escolhe a versão no envio. A versão de papel antigo dispensa CPF e assinatura na conclusão (DEC-172), e a base legal desses dados é garantida fora do sistema (DEC-173). As Q-063 a Q-065 foram respondidas em 06/11/2026: o papel antigo é marcado na versão (DEC-175), o respondente sem CPF é vinculado só pelo nome, com a data de nascimento também dispensada (DEC-176), e a pergunta que a localização não encontra vai à revisão sem leitura (DEC-177).
 
 1. Resumo em linguagem simples
 
@@ -253,8 +253,11 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-169 | 06/11/2026 | negócio | Pesquisas antigas sem QR e sem marcadores (Change Request de 06/11/2026) | Só formulário impresso pelo sistema; QR opcional com a ordem do arquivo; QR opcional com a localização pela IA | O QR deixa de ser obrigatório no envio. Com QR legível, ele decide a versão (prevalece sobre a escolhida na tela); sem QR legível, vale a versão publicada que a usuária escolhe no envio (`versao_id`); sem QR e sem versão escolhida, a aplicação vai para `identificacao_pendente` (ERR-004). Vale para scanner e foto. Os marcadores dos cantos deixam de ser exigidos para ler | A instituição tem acervos de pesquisas já aplicadas em papel comum, muitas só em foto, que precisam entrar na base (CHG-017) | definitivo | Alto | RF-006, FL-001, CA-003, CA-004, CA-052, ERR-004, DEC-048 |
 | DEC-170 | 06/11/2026 | negócio | Como achar as perguntas na página sem marcadores (CHG-017) | Encaixe no notebook pelo modelo em branco; a IA localiza as perguntas | Em toda página de formulário, com ou sem QR, a IA recebe a página inteira numa chamada só de localização, que devolve o número da página e a região de cada pergunta da versão, sem ler valores. Os recortes da leitura saem dessas regiões. É a segunda exceção da RN-038; a leitura dos valores continua por recortes, com identificação e saúde em chamadas separadas (RN-039). A chamada a mais por página entra no custo de IA e no teto (RN-036) | O responsável aceitou o custo maior por página e o envio da página inteira (Risco 3) para que foto e papel antigo funcionem sem marcadores; a alternativa de encaixe local ficou como tratamento futuro (Carlos Yano, 06/11/2026) | definitivo | Alto | RN-036, RN-038, RN-039, RN-041, RN-045, RF-007, CA-055, DEC-022, DEC-048, Q-036 |
 | DEC-171 | 06/11/2026 | negócio | Ordem das folhas sem QR (CHG-017) | Ordem do arquivo, garantida por quem digitaliza; página indicada pela IA na localização | A mesma chamada de localização (DEC-170) indica qual página da versão é cada folha; a ordem das folhas no arquivo não importa. Com QR legível, a página do QR prevalece e a IA só confere; divergência, página não reconhecida, faltante ou repetida levam a aplicação a `identificacao_pendente` (ERR-004), onde a usuária informa as páginas (`identifyApplication`). Substitui a reordenação manual na revisão proposta no Change Request | Sem custo extra e sem depender da ordem do maço; reduz o Risco 1 (Carlos Yano, 06/11/2026) | definitivo | Médio | DEC-008, RF-006, FL-001, CA-013, CA-053, Risco 1 |
-| DEC-172 | 06/11/2026 | negócio | CPF e assinatura no papel antigo (CHG-017) | Dispensar no papel antigo; completar à mão; exigir como hoje | Na aplicação de versão de papel antigo (Q-063), CPF ausente, ilegível ou inválido e assinatura ausente não impedem a conclusão: a aplicação conclui sem CPF e com a assinatura registrada como está (RN-044 continua: uma pessoa confere). CPF válido lido continua vinculando pelo CPF (RN-015); sem ele, o vínculo segue a Q-064. Nome, data de nascimento, data e local continuam obrigatórios (DEC-020). A aplicação de papel antigo concluída entra nos relatórios e nas exportações mesmo sem assinatura (exceção ao CA-021 e à DEC-157); sem CPF, a coluna CPF sai vazia | Os questionários antigos não pediam CPF nem assinatura; sem a dispensa, todo o acervo ficaria em `aguardando_cpf` ou `sem_assinatura` (Carlos Yano, 06/11/2026) | definitivo | Alto | RN-011, RN-012, RN-015, RN-025, RN-044, RN-051, FL-001, CA-021, CA-054, DEC-020, DEC-157 |
-| DEC-173 | 06/11/2026 | negócio | Base legal dos dados das pesquisas antigas (CHG-017) | Declaração da usuária no envio, auditada; garantia fora do sistema | O responsável garante fora do sistema a base legal do tratamento dos dados das pesquisas antigas; o sistema não pede declaração no envio e só marca a origem (papel antigo) na versão e na aplicação. A evidência de consentimento por aplicação (RN-041) não se aplica ao papel antigo | O consentimento dessas pesquisas foi colhido antes do sistema, em outro termo (Carlos Yano, 06/11/2026) | definitivo | Médio | RN-041, GX-001, Q-063 |
+| DEC-172 | 06/11/2026 | negócio | CPF e assinatura no papel antigo (CHG-017) | Dispensar no papel antigo; completar à mão; exigir como hoje | Na aplicação de versão de papel antigo (DEC-175), CPF ausente, ilegível ou inválido e assinatura ausente não impedem a conclusão: a aplicação conclui sem CPF e com a assinatura registrada como está (RN-044 continua: uma pessoa confere). CPF válido lido continua vinculando pelo CPF (RN-015); sem ele, o vínculo é pelo nome (DEC-176). Nome, data e local continuam obrigatórios (DEC-020); a data de nascimento também é dispensada (DEC-176). A aplicação de papel antigo concluída entra nos relatórios e nas exportações mesmo sem assinatura (exceção ao CA-021 e à DEC-157); sem CPF, a coluna CPF sai vazia | Os questionários antigos não pediam CPF nem assinatura; sem a dispensa, todo o acervo ficaria em `aguardando_cpf` ou `sem_assinatura` (Carlos Yano, 06/11/2026) | definitivo | Alto | RN-011, RN-012, RN-015, RN-025, RN-044, RN-051, FL-001, CA-021, CA-054, DEC-020, DEC-157 |
+| DEC-173 | 06/11/2026 | negócio | Base legal dos dados das pesquisas antigas (CHG-017) | Declaração da usuária no envio, auditada; garantia fora do sistema | O responsável garante fora do sistema a base legal do tratamento dos dados das pesquisas antigas; o sistema não pede declaração no envio e só marca a origem (papel antigo) na versão e na aplicação. A evidência de consentimento por aplicação (RN-041) não se aplica ao papel antigo | O consentimento dessas pesquisas foi colhido antes do sistema, em outro termo (Carlos Yano, 06/11/2026) | definitivo | Médio | RN-041, GX-001, DEC-175 |
+| DEC-175 | 06/11/2026 | negócio | Como o sistema sabe que é papel antigo (Q-063) | Marca na versão; todo envio sem QR legível | A versão tem a marca `papel_antigo`, escolhida pela usuária ao criar ou importar o formulário e imutável depois da publicação (RN-042); a versão de papel antigo não gera PDF imprimível. Só a aplicação de versão de papel antigo tem a dispensa da DEC-172; um formulário oficial com o QR estragado continua exigindo CPF e assinatura | Resposta do responsável: "A" (Carlos Yano, 06/11/2026) | definitivo | Médio | DEC-169, DEC-172, DEC-173, ENT-006, RN-052 |
+| DEC-176 | 06/11/2026 | negócio | Respondente sem CPF no papel antigo (Q-064) | Nome e data de nascimento; respondente novo a cada aplicação; só o nome | Na conclusão de aplicação de papel antigo sem CPF válido, o vínculo é só pelo nome: o sistema lista os respondentes com o mesmo nome normalizado (sem acento, sem diferença de maiúsculas e de espaços), com a data de nascimento de cada um quando houver, e a usuária escolhe um deles ou um respondente novo; sem candidato, cria respondente novo, sem CPF. A data de nascimento também deixa de ser obrigatória no papel antigo. O vínculo pelo nome não altera o cadastro escolhido: data de nascimento e endereço lidos só preenchem o que estiver vazio. Respondente sem data de nascimento fica fora dos filtros por idade (RF-009). O pedido do titular de respondente sem CPF o identifica pelo respondente achado pelo nome (RF-010; contrato ajustado no IMP-004) | Resposta do responsável: "somente nome, pois nem sempre teremos CPF e data de nascimento preenchidos" (Carlos Yano, 06/11/2026) | definitivo | Alto | DEC-020, DEC-172, RN-011, RN-015, ENT-009, RF-009, RF-010, CA-054 |
+| DEC-177 | 06/11/2026 | negócio | Pergunta que a localização não encontra (Q-065) | Item à revisão sem leitura; aplicação em `identificacao_pendente` | O item da pergunta sem região vai a `a_revisar`, sem leitura, e a usuária responde olhando a página inteira na revisão (em branco, se o papel não tinha o campo) | Resposta do responsável: "A" (Carlos Yano, 06/11/2026) | definitivo | Médio | DEC-170, RN-052, FL-002, CA-055 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -274,7 +277,7 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | Tenant | Entidade contratante do SaaS (clínica, cooperativa etc.). Cada tenant é isolado. |
 | Respondente | Pessoa 60+ que responde formulários em papel. Identificada apenas pelo CPF. |
 | Aplicação | Conjunto de páginas de um formulário respondidas por um respondente em uma data e local. |
-| Papel antigo | Pesquisa aplicada em papel que não foi impresso pelo sistema, sem QR e sem marcadores, digitalizada por scanner ou foto; marcada na versão (Q-063, DEC-169). |
+| Papel antigo | Pesquisa aplicada em papel que não foi impresso pelo sistema, sem QR e sem marcadores, digitalizada por scanner ou foto; marcada na versão (DEC-169, DEC-175). |
 | Localização | Chamada à IA com a página inteira que devolve qual página da versão é a folha e onde está cada pergunta, sem ler valores (RN-052, DEC-170). |
 | Item de resposta | Registro de uma pergunta em uma aplicação (valor lido, confiança, valor final, estado). |
 | Grupo | Filtro salvo (idade, estado civil, resposta a uma pergunta) recalculado a cada consulta. |
@@ -321,7 +324,7 @@ RN-010 — Valor e estado separados
 O item DEVE guardar o valor lido pela IA, a confiança, o valor final e o estado como campos separados.
 
 RN-011 — Respondente
-O respondente DEVE ter nome, data de nascimento e CPF (obrigatório, identificador único), e PODE ter endereço. Exceção: o respondente de papel antigo PODE não ter CPF (DEC-172, Q-064). Perguntas marcadas como "campo do respondente" alimentam esses atributos.
+O respondente DEVE ter nome, data de nascimento e CPF (obrigatório, identificador único), e PODE ter endereço. Exceção: o respondente de papel antigo PODE não ter CPF nem data de nascimento (DEC-172, DEC-176). Perguntas marcadas como "campo do respondente" alimentam esses atributos.
 
 RN-012 — CPF validado
 O CPF DEVE ser validado na leitura (dígitos verificadores). CPF inválido, ilegível ou ausente vai para revisão, e a aplicação NÃO é concluída sem CPF válido, exceto na versão de papel antigo (DEC-172).
@@ -333,7 +336,7 @@ RN-014 — Correção de CPF
 Se o revisor corrigir um CPF já vinculado, o vínculo DEVE ser refeito: a aplicação passa ao respondente do CPF corrigido (ou a um novo), com auditoria.
 
 RN-015 — Correspondência de respondente
-A identificação é só pelo CPF, sempre conferido por uma pessoa, e o vínculo acontece na conclusão da aplicação. CPF já cadastrado vincula ao respondente existente; CPF novo cria um respondente. Na aplicação de papel antigo concluída sem CPF, o vínculo segue a Q-064.
+A identificação é só pelo CPF, sempre conferido por uma pessoa, e o vínculo acontece na conclusão da aplicação. CPF já cadastrado vincula ao respondente existente; CPF novo cria um respondente. Na aplicação de papel antigo concluída sem CPF, o vínculo é só pelo nome, escolhido pela usuária entre os respondentes de mesmo nome ou um novo (DEC-176).
 
 RN-016 — Data e local da aplicação
 Todo formulário impresso DEVE trazer os campos "local" e "data da aplicação", lidos como os demais. Se o formulário não tiver esses campos ou vierem em branco, o digitalizador os informa; sem data e local, a aplicação NÃO é concluída.
@@ -494,8 +497,8 @@ As perguntas marcadas como nome, data de nascimento ou CPF do respondente (`camp
 RN-052 — Localização das perguntas e papel antigo (DEC-169 a DEC-173)
 1. Toda página de formulário (`tipo = formulario`) passa, antes da leitura, por uma chamada de localização (RN-045) com a página inteira, que devolve o número da página da versão, a confiança e a região de cada pergunta daquela página. Os recortes da leitura saem dessas regiões, e não do `mapa_layout`.
 2. Com QR legível, a versão e a página são as do QR; a localização confere a página (DEC-171). Sem QR legível, a versão é a escolhida pela usuária no envio (DEC-169), e a página é a indicada pela localização.
-3. A aplicação vai para `identificacao_pendente` (ERR-004) quando a localização não reconhece alguma página, quando a página dela diverge da do QR, ou quando as páginas resultantes ficam faltantes, repetidas ou além do total da versão (CA-013). Pergunta que a localização não encontra na página segue a Q-065.
-4. A versão de papel antigo (Q-063) dispensa CPF e assinatura na conclusão (DEC-172) e não exige evidência de consentimento (DEC-173).
+3. A aplicação vai para `identificacao_pendente` (ERR-004) quando a localização não reconhece alguma página, quando a página dela diverge da do QR, ou quando as páginas resultantes ficam faltantes, repetidas ou além do total da versão (CA-013). Pergunta que a localização não encontra na página vai a `a_revisar`, sem leitura (DEC-177).
+4. A versão de papel antigo (DEC-175) dispensa CPF, data de nascimento e assinatura na conclusão (DEC-172, DEC-176) e não exige evidência de consentimento (DEC-173).
 5. A região de uma pergunta de identificação (`sensibilidade = identificacao`) que se sobrepõe à de uma pergunta de saúde ou outra leva as duas perguntas a `a_revisar`, sem leitura, para que identificação e saúde nunca saiam no mesmo recorte (RN-038, RN-039).
 
 5. Modelo e dicionário de dados
@@ -600,7 +603,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | status | status da versão | enum | sim | — | — | rascunho; publicada | rascunho | não | — | não |
 | publicada_em | data de publicação | timestamp | não | — | ISO 8601 UTC | — | NULL | não | — | não |
 | mapa_layout | coordenadas normalizadas de cada campo por página, gravadas na publicação (DEC-048); desde a DEC-170 servem só ao PDF imprimível, e os recortes saem da localização | jsonb | não | — | JSON | — | NULL | não | — | não |
-| papel_antigo | versão de pesquisa antiga, sem QR nem marcadores: dispensa CPF e assinatura na conclusão (DEC-172; provisório até a Q-063); imutável depois da publicação (RN-042) | boolean | sim | — | — | true/false | false | não | — | não |
+| papel_antigo | versão de pesquisa antiga, sem QR nem marcadores: dispensa CPF, data de nascimento e assinatura na conclusão (DEC-172, DEC-175, DEC-176); imutável depois da publicação (RN-042) | boolean | sim | — | — | true/false | false | não | — | não |
 | criada_em | data de criação | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
 
 **ENT-007 Pergunta**
@@ -641,7 +644,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | id | identificador do respondente | uuid | sim | 36 | UUID v4 | — | — | sim | — | não |
 | tenant_id | tenant do respondente | uuid | sim | 36 | UUID v4 | — | — | não | Tenant.id | não |
 | nome | nome completo | varchar | sim | 200 | — | — | — | não | — | pessoal |
-| data_nascimento | data de nascimento | date | sim (NULL só se anonimizado) | — | YYYY-MM-DD | não futura | — | não | — | pessoal |
+| data_nascimento | data de nascimento | date | sim (NULL só se anonimizado ou de papel antigo sem data, DEC-176) | — | YYYY-MM-DD | não futura | — | não | — | pessoal |
 | cpf_cifrado | CPF cifrado | bytea | sim (NULL só se anonimizado ou de papel antigo sem CPF, DEC-172) | variável | AES-256-GCM (IV + cifrado + tag + id da chave) | — | — | não | — | sensível |
 | cpf_hash | HMAC do CPF (busca) | bytea | sim (NULL só se anonimizado ou de papel antigo sem CPF, DEC-172) | 32 | HMAC-SHA256 com chave do tenant | — | — | sim (por tenant, quando não nulo) | — | sensível |
 | endereco | endereço | varchar | não | 500 | — | — | NULL | não | — | pessoal |
@@ -1084,7 +1087,7 @@ Quem executa: A usuária (no papel de revisora).
 Quando pode: Quando a aplicação está em `em_revisao`, `aguardando_cpf`, `sem_assinatura`, `identificacao_pendente` ou `erro_leitura` (conforme a ação, FL-001); sem reserva (DEC-112).
 Quando não pode: Quando faltam campos obrigatórios; quando o estado não admite a ação.
 Entradas: ações de revisão (confirmar, corrigir, em branco, ilegível, rasurado, não se aplica), conferência de assinatura, escolha do valor de cadastro em divergência (CA-014), identificação manual de páginas, nova leitura, página 1 assinada (CA-044).
-Sucesso: todos os campos resolvidos; nome, data de nascimento, CPF válido, data e local informados (DEC-020); assinatura presente. Na versão de papel antigo, CPF e assinatura não são exigidos (DEC-172).
+Sucesso: todos os campos resolvidos; nome, data de nascimento, CPF válido, data e local informados (DEC-020); assinatura presente. Na versão de papel antigo, CPF, data de nascimento e assinatura não são exigidos, e sem CPF a usuária escolhe o respondente de mesmo nome ou um novo (DEC-172, DEC-176).
 Erro e timeout: ERR-006 (campos obrigatórios ausentes), ERR-017 (edição concorrente, por exemplo em duas abas), ERR-018 (ação inválida no estado atual).
 Registros alterados: ItemResposta (estado, valor_final, revisor_id), Aplicacao (estado, respondente_id, concluida_em), Auditoria.
 Mensagens: "Aplicação concluída" ou "Aguardando [campo obrigatório]".
@@ -1142,7 +1145,7 @@ Quando não pode: Sem QR legível e sem versão escolhida (ERR-004); versão esc
 Entradas: arquivo(s), projeto e, opcionalmente, a versão (`uploadImages` com `versao_id`); na localização, cada página inteira e as perguntas da versão (RN-045, RN-052).
 Sucesso: páginas identificadas pelo QR ou pela localização, com as regiões das perguntas; leitura dos recortes dessas regiões (RF-007); na versão de papel antigo, conclusão sem CPF e sem assinatura (DEC-172).
 Erro e timeout: ERR-004 (página não reconhecida, divergente do QR, faltante ou repetida), ERR-039, ERR-003 (aviso de cota), ERR-041 (3 falhas da localização); timeout de 30 s por chamada (seção 6.6).
-Registros alterados: Aplicacao (`versao_id`, `origem_qr`), PaginaAplicacao (`numero_pagina`, `regioes`), ItemResposta, Respondente (papel antigo sem CPF, Q-064), Auditoria.
+Registros alterados: Aplicacao (`versao_id`, `origem_qr`), PaginaAplicacao (`numero_pagina`, `regioes`), ItemResposta, Respondente (papel antigo sem CPF, DEC-176), Auditoria.
 Mensagens: as do RF-006, do RF-007 e do RF-008.
 Estado final: os da FL-001.
 
@@ -1179,7 +1182,7 @@ Para cada tela, os estados obrigatórios (Bloco P, P.11): carregando, vazio, suc
 | TL-004 | Cadastro de formulário | carregando, vazio, sucesso (salvo), erro (validação), sem permissão, tempo esgotado |
 | TL-005 | Upload de imagens (com a escolha opcional da versão publicada, para envio sem QR, DEC-169) | carregando, vazio, sucesso (aplicação criada), erro (arquivo recusado), sem permissão, tempo esgotado |
 | TL-006 | Fila de revisão | carregando, vazio (fila vazia), sucesso (lista), erro, sem permissão, tempo esgotado |
-| TL-007 | Revisão lado a lado (com a página inteira à vista, para o item sem região, Q-065) | carregando, vazio, sucesso (salvo), erro (validação ou edição concorrente), sem permissão (estado não admite revisão), tempo esgotado |
+| TL-007 | Revisão lado a lado (com a página inteira à vista, para o item sem região, DEC-177) | carregando, vazio, sucesso (salvo), erro (validação ou edição concorrente), sem permissão (estado não admite revisão), tempo esgotado |
 | TL-008 | Dashboard | carregando, vazio (sem dados), sucesso (gráficos), erro, sem permissão, tempo esgotado |
 | TL-009 | Ficha individual | carregando, vazio, sucesso (evolução), erro, sem permissão (sessão expirada), tempo esgotado |
 | TL-010 | Exportação (agregada, linha a linha ou linha por item) | carregando, vazio, sucesso (arquivo gerado), erro, sem permissão, tempo esgotado |
@@ -1227,7 +1230,7 @@ Transições:
 | erro_leitura | digitalizador descarta | — | apaga imagens e valores lidos dos itens (DEC-077), audita | descartada | digitalizador |
 | em_revisao | digitalizador conclui | todos os itens resolvidos (FL-002); nome, data de nascimento, CPF válido, data e local informados (DEC-020); assinatura presente | grava manter_cadastro, vincula respondente, audita | concluida | digitalizador |
 | em_revisao | digitalizador conclui | CPF ausente, ilegível ou inválido; versão que não é de papel antigo | audita; ERR-006 | aguardando_cpf | digitalizador |
-| em_revisao | digitalizador conclui | versão de papel antigo (Q-063); itens resolvidos; nome, data de nascimento, data e local informados; CPF e assinatura em qualquer situação (DEC-172) | grava manter_cadastro; vincula pelo CPF válido ou, sem ele, pela Q-064; audita | concluida | digitalizador |
+| em_revisao | digitalizador conclui | versão de papel antigo (DEC-175); itens resolvidos; nome, data e local informados; CPF, data de nascimento e assinatura em qualquer situação (DEC-172, DEC-176) | vincula pelo CPF válido (grava manter_cadastro) ou, sem ele, ao respondente de mesmo nome escolhido pela usuária ou a um novo (DEC-176); audita | concluida | digitalizador |
 | em_revisao | digitalizador conclui | assinatura marcada como ausente; demais condições atendidas | grava manter_cadastro; NÃO vincula respondente (DEC-064); audita | sem_assinatura | digitalizador |
 | em_revisao | digitalizador descarta | — | apaga imagens e valores lidos dos itens (DEC-077), audita | descartada | digitalizador |
 | aguardando_cpf | digitalizador informa CPF válido | — | volta para revisão | em_revisao | digitalizador |
@@ -1243,7 +1246,8 @@ Precedência na conclusão (a primeira que se aplica decide):
 
 1. Algum item fora dos estados resolvidos (FL-002) → ERR-022; nada é gravado.
 2. CPF ausente, ilegível ou inválido → resposta de sucesso com aviso ERR-006 e estado `aguardando_cpf` (a transição é gravada); na versão de papel antigo, a regra não se aplica (DEC-172).
-3. Nome, data de nascimento, data ou local ausentes, ilegíveis, rasurados ou marcados como não se aplica → ERR-006; nada é gravado; permanece em `em_revisao` (DEC-079).
+3. Nome, data de nascimento, data ou local ausentes, ilegíveis, rasurados ou marcados como não se aplica → ERR-006; nada é gravado; permanece em `em_revisao` (DEC-079); na versão de papel antigo, a data de nascimento não entra nesta regra (DEC-176).
+3a. Versão de papel antigo sem CPF válido, com respondentes de mesmo nome, sem a escolha da usuária (um deles ou novo) ou com respondente fora da lista → ERR-001; nada é gravado (DEC-176).
 4. Assinatura ausente → `sem_assinatura`; presente → `concluida`; na versão de papel antigo, `concluida` nos dois casos (DEC-172).
 
 Operações por estado (fora destas combinações → ERR-018):
@@ -1901,14 +1905,16 @@ E, nos exemplos 2 a 4, quando a usuária informa as páginas (`identifyApplicati
 
 CA-054 — Papel antigo conclui sem CPF e sem assinatura
 Dado que a aplicação A3, da versão 2 de "Condições de Saúde" (papel antigo), está em `em_revisao` com todos os itens resolvidos, nome "Maria Souza", data de nascimento 1950-03-12, data da aplicação 2024-05-10 e local "Centro Dia"
+E que já existe a respondente R1, "MARIA  SOUZA", sem CPF e sem data de nascimento
 Quando a usuária conclui a aplicação nas situações da tabela
 Então o resultado segue a tabela
 
 | Exemplo | Versão | CPF | Assinatura | Resultado esperado |
 |---|---|---|---|---|
-| 1 | papel antigo | em branco | ausente | `concluida`, sem CPF; vínculo pela Q-064; entra no dashboard e na exportação, com a coluna CPF vazia no formato longo (DEC-172) |
+| 1 | papel antigo | em branco | ausente | Sem escolha do respondente: ERR-001, nada é gravado; escolhendo R1: `concluida`, vinculada a R1, que passa a ter a data de nascimento 1950-03-12; entra no dashboard e na exportação, com a coluna CPF vazia no formato longo (DEC-172, DEC-176) |
 | 2 | papel antigo | "52998224725" | ausente | `concluida`; vincula pelo CPF (RN-015); entra no dashboard e na exportação |
-| 3 | papel antigo | "52998224700" (inválido) | presente | `concluida`, sem CPF; vínculo pela Q-064 |
+| 3 | papel antigo | "52998224700" (inválido) | presente | Escolhendo respondente novo: `concluida`, com um respondente novo "Maria Souza", sem CPF (DEC-176) |
+| 6 | papel antigo, data de nascimento em branco | em branco | ausente | Escolhendo R1: `concluida`, vinculada a R1, que continua sem data de nascimento e fica fora dos filtros por idade (DEC-176) |
 | 4 | não é papel antigo | em branco | presente | `aguardando_cpf`; aviso ERR-006 |
 | 5 | não é papel antigo | "52998224725" | ausente | `sem_assinatura` (fora dos relatórios, CA-021) |
 
@@ -1925,7 +1931,7 @@ E os casos da tabela são tratados assim
 | 1 | página 1, regiões de NOME e PRESSAO sem sobreposição | Leitura dos dois recortes, em chamadas separadas |
 | 2 | Traz o texto "Maria" junto das regiões | Resposta recusada (RN-037) e tratada como falha da chamada, com retentativa; após 3 falhas, `erro_leitura` (ERR-041) |
 | 3 | Região de NOME sobreposta à de PRESSAO | NOME e PRESSAO em `a_revisar`, sem leitura (RN-052) |
-| 4 | Sem região de PRESSAO | PRESSAO em `a_revisar`, sem leitura; a usuária responde vendo a página inteira (Q-065) |
+| 4 | Sem região de PRESSAO | PRESSAO em `a_revisar`, sem leitura; a usuária responde vendo a página inteira (DEC-177) |
 
 8. Rastreabilidade e catálogo de erros
 
@@ -2054,9 +2060,9 @@ Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, f
 | Q-060 | 05/11/2026 | Dados de identificação no formato longo | O Change Request traz só o CPF; as perguntas de nome e data de nascimento virariam linhas da planilha | A: só o CPF; nome e data de nascimento não entram (minimização) | B: coluna `Nome` ao lado do CPF; data de nascimento fora | C: nome e data de nascimento como colunas | A | Coluna `Nome` ao lado do CPF; data de nascimento fora; perguntas de identificação e de data da aplicação não viram linhas | "No excel gerado eu preciso do nome do respondente" (Carlos Yano, 05/11/2026): B. Incorporada como DEC-162. | respondida | RN-051, DEC-072, DEC-162 |
 | Q-061 | 05/11/2026 | Recorte do formato longo | O contrato aceita os filtros do dashboard, que só existem no IMP-004 (RF-009) | A: só projetos e período; `filtros` → ERR-001 até o IMP-004 | B: esperar os filtros do dashboard | — | A | Só projetos e período; `filtros` recusados com ERR-001 | De acordo (Carlos Yano, 05/11/2026). Incorporada como DEC-163. | respondida | RF-009, RN-051, DEC-163 |
 | Q-062 | 05/11/2026 | Apóstrofo no XLSX | O apóstrofo da DEC-161 aparece na célula ao abrir o XLSX no Excel; o responsável pediu para tirá-lo (IA-TEST do IMP-007, PR #50) | A: apóstrofo só no CSV; XLSX com célula de texto, nunca fórmula | B: sem apóstrofo nos dois (o CSV volta a abrir fórmulas, F-19) | — | A | Apóstrofo só no CSV | "Apóstrofo só no CSV" (Carlos Yano, 05/11/2026): A. Incorporada como DEC-166. | respondida | RN-037, RN-051, DEC-161, DEC-166 |
-| Q-063 | 06/11/2026 | Como o sistema sabe que é papel antigo | A dispensa de CPF e assinatura (DEC-172) e a base legal fora do sistema (DEC-173) valem só para o papel antigo; se valerem para qualquer envio sem QR, um formulário oficial com o QR estragado concluiria sem CPF | A: marca `papel_antigo` na versão, escolhida pela usuária ao criar ou importar o formulário e imutável depois da publicação (RN-042); a versão de papel antigo não gera PDF imprimível | B: todo envio sem QR legível é papel antigo | — | A | Vale a A: `Versao.papel_antigo`, definida no rascunho e imutável na publicação; só a aplicação de versão de papel antigo tem a dispensa da DEC-172 | — | aberta | DEC-169, DEC-172, DEC-173, ENT-006, RN-052 |
-| Q-064 | 06/11/2026 | Respondente sem CPF no papel antigo | O respondente é identificado só pelo CPF (RN-015) e o cadastro exige CPF (ENT-009); sem regra, a aplicação de papel antigo sem CPF não tem a quem se vincular, e os direitos do titular (RF-010) procuram pelo CPF | A: vincular por nome e data de nascimento iguais (sem acento e sem diferença de maiúsculas), sempre conferido pela usuária na conclusão; sem correspondência, cria respondente sem CPF; mais de uma, a usuária escolhe; o pedido do titular também busca por nome e data de nascimento | B: cada aplicação sem CPF cria um respondente novo, sem evolução individual | C: A, e o respondente sem CPF recebe o CPF quando uma aplicação posterior com CPF válido casar por nome e data de nascimento | A | Vale a A | — | aberta | DEC-172, RN-011, RN-015, ENT-009, RF-010, CA-054 |
-| Q-065 | 06/11/2026 | Pergunta que a localização não encontra | A IA pode não achar uma pergunta na página (rasgada, fora da foto, campo que o papel antigo não tinha, como o CPF); sem regra, o item fica sem recorte nem leitura | A: o item vai a `a_revisar` sem leitura, e a usuária responde olhando a página inteira na revisão (em branco, se o papel não tinha o campo) | B: a aplicação vai para `identificacao_pendente` até a usuária reenviar a página | — | A | Vale a A | — | aberta | DEC-170, RN-052, FL-002, CA-055 |
+| Q-063 | 06/11/2026 | Como o sistema sabe que é papel antigo | A dispensa de CPF e assinatura (DEC-172) e a base legal fora do sistema (DEC-173) valem só para o papel antigo; se valerem para qualquer envio sem QR, um formulário oficial com o QR estragado concluiria sem CPF | A: marca `papel_antigo` na versão, escolhida pela usuária ao criar ou importar o formulário e imutável depois da publicação (RN-042); a versão de papel antigo não gera PDF imprimível | B: todo envio sem QR legível é papel antigo | — | A | Vale a A: `Versao.papel_antigo`, definida no rascunho e imutável na publicação; só a aplicação de versão de papel antigo tem a dispensa da DEC-172 | "A" (Carlos Yano, 06/11/2026). Incorporada como DEC-175. | respondida | DEC-169, DEC-172, DEC-173, ENT-006, RN-052 |
+| Q-064 | 06/11/2026 | Respondente sem CPF no papel antigo | O respondente é identificado só pelo CPF (RN-015) e o cadastro exige CPF (ENT-009); sem regra, a aplicação de papel antigo sem CPF não tem a quem se vincular, e os direitos do titular (RF-010) procuram pelo CPF | A: vincular por nome e data de nascimento iguais (sem acento e sem diferença de maiúsculas), sempre conferido pela usuária na conclusão; sem correspondência, cria respondente sem CPF; mais de uma, a usuária escolhe; o pedido do titular também busca por nome e data de nascimento | B: cada aplicação sem CPF cria um respondente novo, sem evolução individual | C: A, e o respondente sem CPF recebe o CPF quando uma aplicação posterior com CPF válido casar por nome e data de nascimento | A | Vale a A | "Somente nome, pois nem sempre teremos CPF e data de nascimento preenchidos" (Carlos Yano, 06/11/2026). Incorporada como DEC-176, com a data de nascimento também dispensada no papel antigo. | respondida | DEC-172, RN-011, RN-015, ENT-009, RF-010, CA-054 |
+| Q-065 | 06/11/2026 | Pergunta que a localização não encontra | A IA pode não achar uma pergunta na página (rasgada, fora da foto, campo que o papel antigo não tinha, como o CPF); sem regra, o item fica sem recorte nem leitura | A: o item vai a `a_revisar` sem leitura, e a usuária responde olhando a página inteira na revisão (em branco, se o papel não tinha o campo) | B: a aplicação vai para `identificacao_pendente` até a usuária reenviar a página | — | A | Vale a A | "A" (Carlos Yano, 06/11/2026). Incorporada como DEC-177. | respondida | DEC-170, RN-052, FL-002, CA-055 |
 
 10. Gates externos (GX)
 
@@ -2096,7 +2102,7 @@ Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tool
 - [x] 9. Testes sentinela cobrindo riscos: TS-001 a TS-008.
 - [x] 10. Gates externos registrados: GX-001 (bloqueia piloto e produção).
 - [x] 11. Nenhum trecho exige "bom senso": lacunas resolvidas pelas DEC-054 a DEC-060 e DEC-064 a DEC-072.
-- [ ] 12. Toda Q respondida: Q-001 a Q-035 e Q-037 a Q-051 respondidas (Q-031 em 03/11/2026 como DEC-117; Q-032 a Q-035 em 05/11/2026 como DEC-126 a DEC-129; Q-037 a Q-050 em 05/11/2026 como DEC-133 a DEC-139 e DEC-143 a DEC-149; Q-051 em 05/11/2026 como DEC-152); Q-036 superada em 06/11/2026 pela DEC-170; Q-063 a Q-065 abertas (CHG-017).
+- [x] 12. Toda Q respondida: Q-001 a Q-035 e Q-037 a Q-051 respondidas (Q-031 em 03/11/2026 como DEC-117; Q-032 a Q-035 em 05/11/2026 como DEC-126 a DEC-129; Q-037 a Q-050 em 05/11/2026 como DEC-133 a DEC-139 e DEC-143 a DEC-149; Q-051 em 05/11/2026 como DEC-152); Q-036 superada em 06/11/2026 pela DEC-170; Q-063 a Q-065 em 06/11/2026 como DEC-175 a DEC-177 (CHG-017).
 - [ ] 13. Consenso DEV/TEST sem divergência bloqueante: depende da próxima rodada de revisão independente.
 - [x] 14. REQ autocontida: referências externas (MeuRemedio, Kit v3) são informativas; o Bloco P está em `docs/spec/BLOCO_P.md`.
 - [ ] 15. Última revisão independente sem achado bloqueante ou alto, com médios e baixos registrados (DEC-061, DEC-073): pendente (REV-REQ-007).
