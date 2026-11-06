@@ -303,7 +303,7 @@ paths:
         Cria formulário com a versão 1 em rascunho, já com os 5 campos obrigatórios da RN-050
         (DEC-135, CA-048). Projeto arquivado → ERR-001 (`campos`: `projeto`, DEC-146). `papel_antigo`
         marca a versão 1 como de papel antigo (DEC-175).
-      x-trace: [RF-004, RF-011, RN-050, CA-048, DEC-135, DEC-146]
+      x-trace: [RF-004, RF-011, RF-013, RN-050, CA-048, DEC-135, DEC-146, DEC-175]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -339,8 +339,9 @@ paths:
         `copiar_de_versao_id`, a versão nasce com os 5 campos da RN-050; com ele, copia as perguntas
         da origem, padroniza as dos 5 campos, injeta as que faltarem e dá sufixo a código reservado
         em pergunta comum (RN-050, DEC-145, DEC-147, CA-048). Quando a versão nova não é de papel
-        antigo, a marca `nao_consta` é retirada das perguntas copiadas (DEC-179).
-      x-trace: [RF-004, RF-011, RF-013, CA-001, RN-042, RN-050, CA-048, DEC-147, DEC-179]
+        antigo, a marca `nao_consta` é retirada das perguntas copiadas (DEC-179) e o `total_paginas`
+        informado é apagado; quando é, ele é copiado (DEC-189).
+      x-trace: [RF-004, RF-011, RF-013, CA-001, RN-042, RN-050, CA-048, DEC-147, DEC-179, DEC-189]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -479,7 +480,7 @@ paths:
         fiduciais (DEC-048). A página 1 traz o termo de consentimento do tenant
         (`termo_consentimento`, DEC-094) com campo de assinatura.
         Versão em rascunho ou de papel antigo não gera PDF → ERR-018 (CA-028, CA-052, DEC-175).
-      x-trace: [RF-004, CA-028, CA-052, DEC-005, DEC-048, DEC-094, DEC-175]
+      x-trace: [RF-004, RF-013, CA-028, CA-052, DEC-005, DEC-048, DEC-094, DEC-175]
       parameters:
         - $ref: '#/components/parameters/FormId'
         - $ref: '#/components/parameters/VersionId'
@@ -532,7 +533,7 @@ paths:
         sem `sem_dados_reais` = true (`campos`: `sem_dados_reais`) → 400 ERR-001; arquivo fora
         dos limites → 400 ERR-029 com o motivo (DEC-136). O resultado, um formulário novo com a
         versão 1 em rascunho, é consultado em `getFormImport`.
-      x-trace: [RF-011, CA-045, CA-046, CA-047, RN-049, RN-050, DEC-132, DEC-133, DEC-136, DEC-146]
+      x-trace: [RF-011, CA-045, CA-046, CA-047, RN-049, RN-050, DEC-132, DEC-133, DEC-136, DEC-146, RF-013, CA-058, DEC-181, DEC-190]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -638,11 +639,12 @@ paths:
         QR. Versão diferente da do QR legível e válido de alguma folha → 400 ERR-039, auditado; QR
         de versão inválida (CA-039) não decide a versão (DEC-180), mas versão de papel antigo em
         aplicação com alguma folha de QR legível, válido ou não → 400 ERR-039, auditado (DEC-184).
-        Ao sair de identificacao_pendente, data e local gravados no envio preenchem os itens
-        `nao_consta` da versão de papel antigo, ou são apagados (DEC-182, DEC-185).
+        A conferência com o QR considera só as folhas mantidas (sem `descartar`), e só conta o QR no
+        formato do MinhaPesquisa (DEC-187). Data e local gravados no envio são aplicados ou apagados
+        ao fim da localização que segue (DEC-182, DEC-185, DEC-186).
         Continua inválido → 400 ERR-004 ou ERR-039. Versão de outro tenant, de outro projeto ou
         inexistente → 400 ERR-039, auditado (DEC-100). Próximo estado conforme FL-001.
-      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, CA-057, DEC-100, DEC-171, DEC-180, DEC-184, DEC-185]
+      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, CA-057, DEC-100, DEC-171, DEC-180, DEC-184, DEC-185, DEC-186, DEC-187]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -679,8 +681,9 @@ paths:
         reavaliação da tabela de criação da FL-001. Permitido também em projeto arquivado (DEC-098).
         `versao_id` substitui a escolhida no envio (DEC-169, DEC-180), mas versão de papel antigo não vale
         com folha de QR legível (DEC-184); `data_aplicacao` e `local_aplicacao`, quando vierem, substituem
-        os gravados no envio, só o que vier (DEC-182, DEC-185).
-      x-trace: [RF-006, RF-013, CA-013, CA-040, CA-057, RN-040, DEC-098, DEC-169, DEC-180, DEC-182, DEC-184, DEC-185]
+        os gravados no envio, só o que vier, e são aplicados ou apagados ao fim da localização (DEC-182,
+        DEC-185, DEC-186).
+      x-trace: [RF-006, RF-013, CA-013, CA-040, CA-057, RN-040, DEC-098, DEC-169, DEC-180, DEC-182, DEC-184, DEC-185, DEC-186]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1386,8 +1389,10 @@ paths:
         sobrescrita das respostas, expurgo de imagens e exportações, descarte das aplicações em
         andamento e registro na ListaEliminacoes por 180 dias (CA-023, DEC-026). Acesso e
         portabilidade geram CSV ou JSON (CA-024). Pedido em `falhou` pode ser executado de
-        novo; já concluído ou cancelado → ERR-018.
-      x-trace: [RF-010, CA-023, CA-024, DEC-026]
+        novo; já concluído ou cancelado → ERR-018. Na eliminação de respondente sem CPF, as aplicações
+        de papel antigo em andamento de mesmo nome não são descartadas sozinhas: ficam listadas em
+        `aplicacoes_mesmo_nome` para a usuária decidir (DEC-191).
+      x-trace: [RF-010, CA-023, CA-024, CA-056, DEC-026, DEC-191]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1639,7 +1644,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-036', title: Campos obrigatórios ausentes, status: 400, detail: 'Publicação recusada: faltam [lista dos campos].', errorCode: ERR-036, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, campos: [data_aplicacao] }
     FileRejected:
-      description: Arquivo recusado (ERR-029, com motivo), projeto arquivado ou, na importação, falta da declaração `sem_dados_reais` (ERR-001)
+      description: Arquivo recusado (ERR-029, com motivo), projeto arquivado, data da aplicação futura no envio (DEC-182) ou, na importação, falta da declaração `sem_dados_reais` (ERR-001)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -1973,8 +1978,8 @@ components:
         versao_id:
           type: string
           format: uuid
-          description: Versão publicada do projeto, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180); a de papel antigo não vale se alguma folha tiver QR legível, válido ou não (DEC-184). Inexistente, não publicada ou de outro projeto → `aviso` ERR-039. No `addApplicationPages`, substitui a escolhida no envio
-        data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação da pergunta `nao_consta`; vira o padrão do projeto (DEC-179). Guardada enquanto a aplicação estiver em identificacao_pendente e só vale se a versão final for de papel antigo com essa pergunta `nao_consta`; senão é apagada (DEC-182, DEC-185). No addApplicationPages, substitui a gravada. Futura → 400 ERR-001' }
+          description: Versão publicada do projeto, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180); a de papel antigo não vale se alguma folha tiver QR legível, válido ou não (DEC-184). Sem QR legível de versão válida em nenhuma folha, versão escolhida inexistente, não publicada ou de outro projeto → `aviso` ERR-039. No `addApplicationPages`, substitui a escolhida no envio
+        data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação da pergunta `nao_consta`; vira o padrão do projeto (DEC-179). Guardada até a localização confirmar a versão e as páginas (DEC-186) e só vale se a versão final for de papel antigo com essa pergunta `nao_consta`; senão é apagada (DEC-182, DEC-185). No addApplicationPages, substitui a gravada. Futura → 400 ERR-001' }
         local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: local da aplicação da pergunta `nao_consta`; vira o padrão do projeto (DEC-179). Mesmas regras de `data_aplicacao` (DEC-182, DEC-185)' }
 
     UploadResponse:
@@ -2054,7 +2059,7 @@ components:
             endereco: { type: string, nullable: true }
         candidatos_nome:
           type: array
-          description: 'Versão de papel antigo sem CPF válido: respondentes com o mesmo nome normalizado, só depois de openReview, com auditoria (DEC-176); CPF não é devolvido'
+          description: 'Versão de papel antigo sem CPF válido: respondentes com o mesmo nome normalizado do `valor_final` atual do NOME, calculados a cada consulta, só depois de openReview, com auditoria (DEC-176); a conclusão confere contra a lista calculada na hora; CPF não é devolvido'
           items:
             type: object
             additionalProperties: false
@@ -2381,6 +2386,7 @@ components:
         solicitado_em: { type: string, format: date-time }
         executado_em: { type: string, format: date-time, nullable: true }
         url_resultado: { type: string, format: uri, nullable: true, description: 'Acesso/portabilidade (CSV ou JSON), link assinado de 5 min' }
+        aplicacoes_mesmo_nome: { type: array, items: { type: string, format: uuid }, description: 'Eliminação de respondente sem CPF: aplicações de papel antigo fora de concluida e descartada cujo NOME tem o mesmo nome normalizado (DEC-176), para a usuária decidir o descarte (DEC-191); a consulta é auditada sem o nome' }
 
     DataSubjectRequestList:
       type: object
