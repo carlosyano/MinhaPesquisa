@@ -67,6 +67,44 @@ export async function vincular(n: Nucleo, tx: Executor, ator: Ator, aplicacaoId:
 }
 
 /**
+ * Vínculo sem CPF válido no papel antigo (DEC-176): com `escolhido`, um dos candidatos pelo nome, que
+ * ganha nascimento e endereço lidos só onde estão vazios (com histórico para a reversão); com null,
+ * um respondente novo sem CPF. O nome do cadastro escolhido não muda.
+ */
+export async function vincularSemCpf(n: Nucleo, tx: Executor, ator: Ator, aplicacaoId: string, itens: Item[], escolhido: string | null): Promise<string> {
+  const lidos = atributosLidos(itens);
+  let id: string;
+  if (escolhido) {
+    id = escolhido;
+    const atual = (await linha<{ data_nascimento: string | null; endereco: string | null }>(
+      tx,
+      sql`SELECT to_char(data_nascimento, 'YYYY-MM-DD') AS data_nascimento, endereco FROM respondente WHERE id = ${id} FOR UPDATE`,
+    ))!;
+    let mudou = false;
+    for (const a of ['data_nascimento', 'endereco'] as const) {
+      const novo = lidos[a];
+      if (novo === undefined || atual[a] !== null) continue;
+      await tx.execute(sql`
+        INSERT INTO historico_atributo_respondente (id, tenant_id, respondente_id, aplicacao_id, atributo, valor_anterior_cifrado, valor_gravado_hash, criado_em)
+        VALUES (${n.id()}, ${ator.tenantId}, ${id}, ${aplicacaoId}, ${a}, ${n.cifrar(null)}, ${n.hmac(novo)}, ${n.agora()})`);
+      await tx.execute(sql`UPDATE respondente SET ${sql.raw(a)} = ${novo} WHERE id = ${id}`);
+      await n.auditar(tx, ator, 'ALTERAR_CADASTRO', 'Respondente', id, { origem: 'aplicacao' }, a);
+      mudou = true;
+    }
+    if (mudou) await tx.execute(sql`UPDATE respondente SET versao = versao + 1 WHERE id = ${id}`);
+  } else {
+    id = n.id();
+    await tx.execute(sql`
+      INSERT INTO respondente (id, tenant_id, nome, data_nascimento, endereco, criado_em)
+      VALUES (${id}, ${ator.tenantId}, ${lidos.nome ?? ''}, ${lidos.data_nascimento ?? null}::date, ${lidos.endereco ?? null}, ${n.agora()})`);
+    await n.auditar(tx, ator, 'CRIAR_RESPONDENTE', 'Respondente', id, { sem_cpf: true });
+  }
+  const anterior = (await linha<{ r: string | null }>(tx, sql`SELECT respondente_anterior_id AS r FROM aplicacao WHERE id = ${aplicacaoId}`))?.r;
+  if (anterior && anterior !== id) await anonimizarSemAplicacao(n, tx, ator, anterior, aplicacaoId);
+  return id;
+}
+
+/**
  * Respondente sem nenhuma aplicação concluída é anonimizado (DEC-078), com registro na
  * ListaEliminacoes. Vale na nova conclusão e no descarte da aplicação reaberta (DEC-130).
  */

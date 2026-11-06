@@ -23,7 +23,7 @@ import { MINUTO, somar } from '../infra/relogio.js';
 import type { Nucleo } from '../nucleo.js';
 import { reaplicarCampos } from '../regras/campos-padrao.js';
 import { normalizarConteudo, type PerguntaEntrada } from '../regras/formularios.js';
-import { montarVersao, validarEstrutura, type PerguntaLida } from '../regras/importacao.js';
+import { montarVersao, montarVersaoAntiga, validarEstrutura, type PerguntaLida } from '../regras/importacao.js';
 import { ajustar, cotaDoTenant, reservar } from './dominio.js';
 import type { ExtratorEstrutura } from './extrator.js';
 import { ESPERAS_MS } from './worker.js';
@@ -50,6 +50,7 @@ interface LinhaImportacao {
   estado: string;
   total_paginas: number;
   criada_por: string;
+  papel_antigo?: boolean;
 }
 
 interface Preparada {
@@ -205,17 +206,18 @@ export class WorkerImportacao {
     if (tarefas.some((x) => x.situacao !== 'concluida')) return;
     const imp = (await linha<LinhaImportacao>(
       tx,
-      sql`SELECT id, projeto_id, nome_formulario, estado, total_paginas, criada_por FROM importacao_formulario WHERE id = ${importacaoId}`,
+      sql`SELECT id, projeto_id, nome_formulario, estado, total_paginas, criada_por, papel_antigo FROM importacao_formulario WHERE id = ${importacaoId}`,
     ))!;
     const fonte = await fonteDeMedida();
-    const v = montarVersao(
-      tarefas.map((x) => x.resultado?.perguntas ?? []),
-      {
-        altura: (p: PerguntaEntrada) => bloco(fonte, normalizarConteudo([p], [])[0]).altura,
-        topo: A - TOPO,
-        limiteInferior,
-      },
-    );
+    const lidas = tarefas.map((x) => x.resultado?.perguntas ?? []);
+    // Papel antigo: a página do original, sem a medida da DEC-143 (DEC-181).
+    const v = imp.papel_antigo
+      ? montarVersaoAntiga(lidas)
+      : montarVersao(lidas, {
+          altura: (p: PerguntaEntrada) => bloco(fonte, normalizarConteudo([p], [])[0]).altura,
+          topo: A - TOPO,
+          limiteInferior,
+        });
     if (v.lidas === 0) {
       await this.encerrar(tx, tenantId, importacaoId, 'IMPORTACAO_FALHOU', { paginas: imp.total_paginas, perguntas: 0 });
       return;
@@ -223,6 +225,8 @@ export class WorkerImportacao {
     const perguntas = normalizarConteudo(reaplicarCampos(v.perguntas), []);
     const { formId, versaoId } = await criarFormularioRascunho(this.n, tx, { tenantId, projetoId: imp.projeto_id, nome: imp.nome_formulario });
     await gravarConteudo(this.n, tx, tenantId, versaoId, perguntas, []);
+    // Papel antigo: a marca e o total com as páginas do original (DEC-181).
+    if (imp.papel_antigo) await tx.execute(sql`UPDATE versao SET papel_antigo = true, total_paginas = ${imp.total_paginas} WHERE id = ${versaoId}`);
     await tx.execute(sql`
       UPDATE importacao_formulario SET estado = 'concluida', aviso = NULL, formulario_id = ${formId}, versao_id = ${versaoId},
              avisos = ${JSON.stringify(v.avisos)}::jsonb, concluida_em = ${this.n.agora()}, chave_storage = NULL

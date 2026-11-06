@@ -277,7 +277,7 @@ const config: Config = {
   armazenamento,
   antimalware,
   gerarId: randomUUID,
-  ...(motor ? { motorLeitura: () => motor } : {}),
+  ...(motor ? { motorLeitura: () => motor, localizador: () => motor } : {}),
   ...(extrator ? { extratorEstrutura: () => extrator } : {}),
 };
 const api = await criarApi(config, 0, HOST);

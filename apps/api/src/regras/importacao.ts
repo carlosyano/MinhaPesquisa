@@ -196,31 +196,7 @@ function itens(rotulos: string[], prefixo: 'opcao' | 'linha'): OpcaoEntrada[] {
  * e distribuição pelas páginas do PDF (passo 4).
  */
 export function montarVersao(paginas: readonly (readonly PerguntaLida[])[], medida: Medida): VersaoImportada {
-  const avisos: Aviso[] = [];
-  const reconhecidas = new Map<CampoLido, PerguntaLida>();
-  const comuns: Ajustada[] = [];
-
-  paginas.forEach((lidas, i) => {
-    lidas.forEach((q, j) => {
-      const pagina = i + 1;
-      const posicao = j + 1;
-      const avisar = (motivo: MotivoAviso) => {
-        if (!avisos.some((a) => a.pagina === pagina && a.posicao === posicao && a.motivo === motivo)) avisos.push({ pagina, posicao, motivo });
-      };
-      const c = q.campo_padrao ?? null;
-      if (c && !reconhecidas.has(c)) {
-        reconhecidas.set(c, q);
-        if (c === 'endereco' || c === 'aplicador') {
-          const enunciado = q.enunciado.trim().slice(0, LIMITE_ENUNCIADO) || CAMPOS_DEC149[c].enunciado;
-          comuns.push({ pagina, posicao, enunciado, tipo: 'texto_curto', opcoes: [], linhas: [], faixa: null, campo: CAMPOS_DEC149[c] });
-        }
-        return;
-      }
-      if (c) avisar('campo_repetido');
-      const a = ajustar(q, pagina, posicao, avisar);
-      if (a) comuns.push(a);
-    });
-  });
+  const { avisos, reconhecidas, comuns } = lerPaginas(paginas, false);
 
   // Passo 1: os 5 campos, reconhecidos (com o enunciado do original) ou injetados.
   const cinco = CAMPOS_RN050.map((c, i) => {
@@ -237,24 +213,7 @@ export function montarVersao(paginas: readonly (readonly PerguntaLida[])[], medi
   const usados = new Set([...CODIGOS_RESERVADOS, ...comuns.flatMap((p) => (p.campo ? [p.campo.codigo] : []))]);
   const perguntas: PerguntaEntrada[] = [...cinco];
   for (const a of comuns) {
-    // Endereço e aplicador são opcionais no formulário (DEC-152).
-    const base: PerguntaEntrada = a.campo
-      ? { ...padronizar({ codigo: a.campo.codigo, tipo: a.tipo, enunciado: a.enunciado, ordem: perguntas.length + 1, pagina }, a.campo), obrigatorio: false }
-      : {
-          codigo: '',
-          tipo: a.tipo,
-          enunciado: a.enunciado,
-          ordem: perguntas.length + 1,
-          pagina,
-          sensibilidade: 'saude', // DEC-138
-          ...(a.opcoes.length ? { opcoes: itens(a.opcoes, 'opcao') } : {}),
-          ...(a.linhas.length ? { linhas: itens(a.linhas, 'linha') } : {}),
-          ...(a.faixa ? { valor_min: a.faixa.min, valor_max: a.faixa.max } : {}),
-        };
-    if (base.tipo === 'multipla_escolha' && !base.opcoes!.some((o) => o.codigo === 'nenhuma_das_anteriores')) {
-      base.opcoes = [...base.opcoes!, { codigo: 'nenhuma_das_anteriores', rotulo: 'Nenhuma das anteriores', ordem: base.opcoes!.length + 1 }];
-    }
-    if (base.tipo === 'sim_nao') delete base.opcoes; // opções fixas sim e nao (RN-047)
+    const base = comoEntrada(a, perguntas.length + 1, pagina);
     const altura = medida.altura(base);
     if (altura > medida.topo - medida.limiteInferior(2)) {
       avisos.push({ pagina: a.pagina, posicao: a.posicao, motivo: 'nao_cabe' });
@@ -272,4 +231,89 @@ export function montarVersao(paginas: readonly (readonly PerguntaLida[])[], medi
 
   avisos.sort((x, z) => x.pagina - z.pagina || x.posicao - z.posicao);
   return { perguntas, avisos, lidas: reconhecidas.size + perguntas.length - cinco.length - comuns.filter((p) => p.campo).length };
+}
+
+/**
+ * Versão 1 de papel antigo (DEC-181, DEC-190): cada pergunta, inclusive os campos reconhecidos, fica
+ * na página e na posição do original, sem a medida da DEC-143; os campos da RN-050 que faltam são
+ * injetados no início da página 1, na ordem da tabela, com `nao_consta` (salvo o NOME, DEC-179).
+ */
+export function montarVersaoAntiga(paginas: readonly (readonly PerguntaLida[])[]): VersaoImportada {
+  const { avisos, reconhecidas, comuns } = lerPaginas(paginas, true);
+  const presentes = new Set([...reconhecidas.keys()].map(campoDe));
+  const injetadas = CAMPOS_RN050.filter((c) => !presentes.has(c)).map((c, i) => ({
+    ...padronizar({ codigo: c.codigo, tipo: c.tipo, enunciado: c.enunciado, ordem: i + 1, pagina: 1 }, c),
+    ...(c.codigo === 'NOME' ? {} : { nao_consta: true }),
+  }));
+  const usados = new Set([...CODIGOS_RESERVADOS, ...comuns.flatMap((p) => (p.campo ? [p.campo.codigo] : []))]);
+  const perguntas: PerguntaEntrada[] = [...injetadas];
+  for (const a of comuns) {
+    const base = comoEntrada(a, perguntas.length + 1, a.pagina);
+    if (!a.campo) base.codigo = semColisao(transformar(a.enunciado, true).toUpperCase() || `P${a.pagina}_${a.posicao}`, usados);
+    perguntas.push(base);
+  }
+  avisos.sort((x, z) => x.pagina - z.pagina || x.posicao - z.posicao);
+  return { perguntas, avisos, lidas: reconhecidas.size + comuns.filter((p) => !p.campo).length };
+}
+
+/** Pergunta ajustada no formato de entrada do conteúdo, ainda sem o código das comuns. */
+function comoEntrada(a: Ajustada, ordem: number, pagina: number): PerguntaEntrada {
+  const ehRn050 = !!a.campo && CAMPOS_RN050.includes(a.campo);
+  const base: PerguntaEntrada = a.campo
+    ? // Endereço e aplicador são opcionais no formulário (DEC-152).
+      { ...padronizar({ codigo: a.campo.codigo, tipo: a.tipo, enunciado: a.enunciado, ordem, pagina }, a.campo), ...(ehRn050 ? {} : { obrigatorio: false }) }
+    : {
+        codigo: '',
+        tipo: a.tipo,
+        enunciado: a.enunciado,
+        ordem,
+        pagina,
+        sensibilidade: 'saude', // DEC-138
+        ...(a.opcoes.length ? { opcoes: itens(a.opcoes, 'opcao') } : {}),
+        ...(a.linhas.length ? { linhas: itens(a.linhas, 'linha') } : {}),
+        ...(a.faixa ? { valor_min: a.faixa.min, valor_max: a.faixa.max } : {}),
+      };
+  if (base.tipo === 'multipla_escolha' && !base.opcoes!.some((o) => o.codigo === 'nenhuma_das_anteriores')) {
+    base.opcoes = [...base.opcoes!, { codigo: 'nenhuma_das_anteriores', rotulo: 'Nenhuma das anteriores', ordem: base.opcoes!.length + 1 }];
+  }
+  if (base.tipo === 'sim_nao') delete base.opcoes; // opções fixas sim e nao (RN-047)
+  return base;
+}
+
+/**
+ * Leitura das páginas na ordem do envio: ajustes com aviso e campos reconhecidos. Endereço e
+ * aplicador ficam entre as comuns; no papel antigo, os da RN-050 também, na posição do original.
+ */
+function lerPaginas(paginas: readonly (readonly PerguntaLida[])[], papelAntigo: boolean) {
+  const avisos: Aviso[] = [];
+  const reconhecidas = new Map<CampoLido, PerguntaLida>();
+  const comuns: Ajustada[] = [];
+
+  paginas.forEach((lidas, i) => {
+    lidas.forEach((q, j) => {
+      const pagina = i + 1;
+      const posicao = j + 1;
+      const avisar = (motivo: MotivoAviso) => {
+        if (!avisos.some((a) => a.pagina === pagina && a.posicao === posicao && a.motivo === motivo)) avisos.push({ pagina, posicao, motivo });
+      };
+      const c = q.campo_padrao ?? null;
+      if (c && !reconhecidas.has(c)) {
+        reconhecidas.set(c, q);
+        if (papelAntigo && c !== 'endereco' && c !== 'aplicador') {
+          const campo = campoDe(c);
+          const enunciado = q.enunciado.trim().slice(0, LIMITE_ENUNCIADO) || campo.enunciado;
+          comuns.push({ pagina, posicao, enunciado, tipo: campo.tipo, opcoes: [], linhas: [], faixa: null, campo });
+        } else if (c === 'endereco' || c === 'aplicador') {
+          const enunciado = q.enunciado.trim().slice(0, LIMITE_ENUNCIADO) || CAMPOS_DEC149[c].enunciado;
+          comuns.push({ pagina, posicao, enunciado, tipo: 'texto_curto', opcoes: [], linhas: [], faixa: null, campo: CAMPOS_DEC149[c] });
+        }
+        return;
+      }
+      if (c) avisar('campo_repetido');
+      const a = ajustar(q, pagina, posicao, avisar);
+      if (a) comuns.push(a);
+    });
+  });
+
+  return { avisos, reconhecidas, comuns };
 }

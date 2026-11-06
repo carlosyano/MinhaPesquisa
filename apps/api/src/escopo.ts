@@ -17,6 +17,9 @@ export interface LinhaProjeto {
   status: 'ativo' | 'arquivado';
   criado_em: Date;
   versao: number;
+  padrao_data_aplicacao: string | null;
+  /** Cifrado (RN-028). */
+  padrao_local_aplicacao: string | null;
 }
 
 export const etag = (versao: number) => `"${versao}"`;
@@ -24,7 +27,8 @@ export const etag = (versao: number) => `"${versao}"`;
 /** Colunas de LinhaProjeto, com as datas do ciclo de coleta como YYYY-MM-DD (DEC-137). */
 export const COLUNAS_PROJETO = sql.raw(
   `id, nome, descricao, objetivo, coordenador, to_char(coleta_inicio, 'YYYY-MM-DD') AS coleta_inicio,
-   to_char(coleta_fim, 'YYYY-MM-DD') AS coleta_fim, status, criado_em, versao`,
+   to_char(coleta_fim, 'YYYY-MM-DD') AS coleta_fim, status, criado_em, versao,
+   to_char(padrao_data_aplicacao, 'YYYY-MM-DD') AS padrao_data_aplicacao, padrao_local_aplicacao`,
 );
 
 /** Projeto do tenant da sessão (a RLS limita ao tenant, RN-004); senão 404 auditado. */
@@ -40,11 +44,12 @@ export async function projetoNoEscopo(tx: Executor, id: string, bloquear = false
   return p;
 }
 
-/** Valores-padrão da seção 2.9 da REQ para os parâmetros usados do IMP-002 ao IMP-007. */
+/** Valores-padrão da seção 2.9 da REQ para os parâmetros usados do IMP-002 ao IMP-008. */
 export const PADRAO_PARAMETRO: Record<string, string> = {
   custo_ia_teto: '500.00', // R$ por tenant e mês civil (CA-030, DEC-035)
   retencao_exportacao_dias: '7', // dias até apagar o arquivo da exportação (DEC-069)
   limite_confianca: '1.00', // sem confirmação automática até a calibração (DEC-127); depois, 0,90 (DEC-028)
+  limite_confianca_localizacao: '0.50', // página reconhecida pela localização, até a calibração (DEC-178)
   termo_consentimento:
     'Termo de consentimento. Autorizo o uso das minhas respostas a este formulário, inclusive as de saúde, ' +
     'pela instituição responsável pela pesquisa, para fins de acompanhamento e análise, conforme a Lei Geral de ' +

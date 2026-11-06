@@ -13,7 +13,7 @@ export async function lerConteudo(tx: Executor, versaoId: string): Promise<{ per
   const ps = await linhas<Omit<Pergunta, 'opcoes' | 'linhas'> & { id: string; valor_min: string | null; valor_max: string | null }>(
     tx,
     sql`SELECT id, codigo, tipo, enunciado, ordem, pagina, obrigatorio, campo_respondente, campo_aplicacao, sensibilidade,
-               valor_min, valor_max, unidade
+               valor_min, valor_max, unidade, nao_consta
           FROM pergunta WHERE versao_id = ${versaoId} ORDER BY ordem, codigo`,
   );
   const ops = await linhas<{ pergunta_id: string; codigo: string; rotulo: string; ordem: number }>(
@@ -50,6 +50,7 @@ export async function lerConteudo(tx: Executor, versaoId: string): Promise<{ per
       valor_max: p.valor_max === null ? null : Number(p.valor_max),
       unidade: p.unidade,
       opcoes: opcoes.length || TIPOS_COM_OPCOES.includes(p.tipo) ? opcoes : null,
+      nao_consta: p.nao_consta,
     };
   });
   return { perguntas, regras_salto: regras };
@@ -65,10 +66,10 @@ export async function gravarConteudo(n: Nucleo, tx: Executor, tenantId: string, 
     ids.set(p.codigo, id);
     await tx.execute(sql`
       INSERT INTO pergunta (id, tenant_id, versao_id, codigo, tipo, enunciado, ordem, pagina, obrigatorio,
-                            campo_respondente, campo_aplicacao, sensibilidade, valor_min, valor_max, unidade)
+                            campo_respondente, campo_aplicacao, sensibilidade, valor_min, valor_max, unidade, nao_consta)
       VALUES (${id}, ${tenantId}, ${versaoId}, ${p.codigo}, ${p.tipo}, ${p.enunciado}, ${p.ordem}, ${p.pagina},
               ${p.obrigatorio}, ${p.campo_respondente}, ${p.campo_aplicacao}, ${p.sensibilidade},
-              ${p.valor_min}, ${p.valor_max}, ${p.unidade})`);
+              ${p.valor_min}, ${p.valor_max}, ${p.unidade}, ${p.nao_consta ?? false})`);
     for (const o of p.opcoes ?? []) {
       await tx.execute(sql`
         INSERT INTO opcao (id, tenant_id, pergunta_id, codigo, rotulo, ordem)

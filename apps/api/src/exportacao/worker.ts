@@ -107,7 +107,8 @@ export class WorkerExportacao {
       tx,
       sql`SELECT a.id, to_char(a.data_aplicacao, 'YYYY-MM-DD') AS data_aplicacao, a.versao_id, r.nome, r.cpf_cifrado
             FROM aplicacao a LEFT JOIN respondente r ON r.id = a.respondente_id
-           WHERE a.projeto_id = ANY(${arrayUuid(p.projeto_ids)}::uuid[]) AND a.estado = 'concluida' AND a.assinatura = 'presente'
+           WHERE a.projeto_id = ANY(${arrayUuid(p.projeto_ids)}::uuid[]) AND a.estado = 'concluida'
+             AND (a.assinatura = 'presente' OR EXISTS (SELECT 1 FROM versao v WHERE v.id = a.versao_id AND v.papel_antigo)) -- DEC-172
              AND (${p.periodo_de}::date IS NULL OR a.data_aplicacao BETWEEN ${p.periodo_de}::date AND ${p.periodo_ate}::date)
            ORDER BY a.data_aplicacao, a.id`,
     );

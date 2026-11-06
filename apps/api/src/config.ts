@@ -1,7 +1,7 @@
 // Configuração da API. No notebook vem do ambiente e das chaves locais (DEC-113, DEC-114);
 // nos testes, do harness. Nenhum segredo fica no repositório.
 
-import type { ReadEngine } from '@minhapesquisa/motor-leitura';
+import type { Localizador, ReadEngine } from '@minhapesquisa/motor-leitura';
 import type { Antimalware } from './infra/antimalware.js';
 import type { ExtratorEstrutura } from './leitura/extrator.js';
 import type { Armazenamento } from './infra/armazenamento.js';
@@ -40,10 +40,30 @@ export interface Config {
    */
   motorLeitura?: (contexto: { aplicacaoId: string; pagina: number; campos: string[] }) => ReadEngine;
   /**
+   * Localização das perguntas (RN-052, DEC-174) para cada folha. O contexto só serve para o
+   * localizador simulado dos testes; o real recebe só a página e as perguntas (RN-045). Sem
+   * localizador configurado, nenhuma folha é localizada, e a aplicação espera em `em_leitura`.
+   */
+  localizador?: (contexto: ContextoLocalizacao) => Localizador;
+  /**
    * Extrator de estrutura da importação de formulário (DEC-141) para cada chamada; o contexto só
    * serve para o extrator simulado dos testes. Sem extrator configurado, nenhuma página é lida.
    */
   extratorEstrutura?: (contexto: { importacaoId: string; pagina: number }) => ExtratorEstrutura;
   /** Destino do log operacional (sem dado pessoal, RN-028); padrão: saída de erro. */
   log?: (linha: string) => void;
+}
+
+/** O que o localizador simulado precisa para o padrão da DEC-174 (6); nada disso vai ao provedor. */
+export interface ContextoLocalizacao {
+  aplicacaoId: string;
+  imagemId: string;
+  /** Página do QR legível da folha, quando há. */
+  paginaQr: number | null;
+  /** Posição da folha entre as folhas de formulário da aplicação, na ordem do envio, a partir de 1. */
+  posicao: number;
+  /** Regiões do `mapa_layout` da versão por código, quando há (versão oficial). */
+  mapa: { codigo: string; pagina: number; regiao: { x: number; y: number; largura: number; altura: number } }[] | null;
+  /** Região da assinatura na página 1 pelo `mapa_layout`, quando há. */
+  assinatura: { x: number; y: number; largura: number; altura: number } | null;
 }

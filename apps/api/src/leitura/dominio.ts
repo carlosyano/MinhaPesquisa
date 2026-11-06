@@ -7,6 +7,7 @@ import { naoEncontrado } from '../infra/erros.js';
 import { linha, linhas, sql, type Executor } from '../infra/banco.js';
 import { ehUuid, type Nucleo } from '../nucleo.js';
 import { cpfValido, mascararCpf } from '../regras/cpf.js';
+import { normalizarNome } from '../regras/papel-antigo.js';
 import { decisaoSalto, estadoAposLeitura, type DecisaoSalto, type EstadoItem, type SaltoItem, type TipoPergunta } from '../regras/leitura.js';
 
 export const ESTADOS_REVISAO = new Set(['em_revisao', 'aguardando_cpf', 'sem_assinatura']);
@@ -24,6 +25,11 @@ export function competencia(agora: Date): { inicio: string; fim: string } {
   const mes = Number(partes.find((p) => p.type === 'month')!.value);
   const ultimo = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
   return { inicio: `${ano}-${dois(mes)}-01`, fim: `${ano}-${dois(mes)}-${dois(ultimo)}` };
+}
+
+/** Data de hoje em America/Sao_Paulo, AAAA-MM-DD (DEC-058). */
+export function hoje(agora: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: FUSO, year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora);
 }
 
 export interface Cota {
@@ -312,11 +318,13 @@ export interface LinhaAplicacao {
   cadastro_versao: number | null;
   cpf_exibido_em: Date | null;
   criada_em: Date;
+  origem_qr: boolean;
+  paginas_informadas: boolean;
 }
 
 export const COLUNAS_APLICACAO = sql.raw(
   `id, tenant_id, projeto_id, versao_id, estado, aviso, assinatura, versao, respondente_id, respondente_anterior_id,
-   manter_cadastro, cadastro_versao, cpf_exibido_em, criada_em`,
+   manter_cadastro, cadastro_versao, cpf_exibido_em, criada_em, origem_qr, paginas_informadas`,
 );
 
 /** Atributos do cadastro que o formulário pode trazer (CA-014). */
@@ -384,6 +392,36 @@ interface LinhaPagina {
 /** CPF completo só com a revisão aberta e a aplicação ainda em revisão (RN-013, DEC-126). */
 export const cpfExibido = (a: Pick<LinhaAplicacao, 'cpf_exibido_em' | 'estado'>) => a.cpf_exibido_em !== null && ESTADOS_REVISAO.has(a.estado);
 
+export interface Candidato {
+  respondente_id: string;
+  nome: string;
+  data_nascimento: string | null;
+}
+
+/** Versão de papel antigo da aplicação (DEC-170); false sem versão. */
+export async function ehPapelAntigo(tx: Executor, a: Pick<LinhaAplicacao, 'versao_id'>): Promise<boolean> {
+  if (!a.versao_id) return false;
+  return (await linha<{ p: boolean }>(tx, sql`SELECT papel_antigo AS p FROM versao WHERE id = ${a.versao_id}`))?.p ?? false;
+}
+
+/**
+ * Candidatos pelo nome (DEC-176): no papel antigo sem CPF válido e com a revisão aberta, os
+ * respondentes não anonimizados com o mesmo nome normalizado do valor efetivo do NOME, calculados a
+ * cada consulta. null quando a lista não se aplica.
+ */
+export async function candidatosNome(tx: Executor, a: LinhaAplicacao, itens: Item[], papelAntigo: boolean): Promise<Candidato[] | null> {
+  if (!papelAntigo || !cpfExibido(a) || cpfDaAplicacao(itens)) return null;
+  const i = itens.find((x) => x.campo_respondente === 'nome');
+  const v = i ? valorEfetivo(i) : null;
+  const alvo = v ? normalizarNome(v) : '';
+  if (!alvo) return [];
+  const rs = await linhas<{ id: string; nome: string; data_nascimento: string | null }>(
+    tx,
+    sql`SELECT id, nome, to_char(data_nascimento, 'YYYY-MM-DD') AS data_nascimento FROM respondente WHERE NOT anonimizado ORDER BY criado_em, id`,
+  );
+  return rs.filter((r) => normalizarNome(r.nome) === alvo).map((r) => ({ respondente_id: r.id, nome: r.nome, data_nascimento: r.data_nascimento }));
+}
+
 /** Corpo `Application` do contrato. CPF mascarado fora da revisão aberta (RN-013, DEC-126). */
 export async function corpoAplicacao(n: Nucleo, tx: Executor, a: LinhaAplicacao, extra: { cadastro_existente?: Cadastro | null } = {}) {
   const paginas = await linhas<LinhaPagina>(
@@ -397,6 +435,8 @@ export async function corpoAplicacao(n: Nucleo, tx: Executor, a: LinhaAplicacao,
   const cpf = cpfDaAplicacao(itens);
   const div = cpf && ESTADOS_REVISAO.has(a.estado) ? divergencias(itens, await cadastroPorCpf(n, tx, cpf)) : [];
   const c = extra.cadastro_existente;
+  const papelAntigo = await ehPapelAntigo(tx, a);
+  const candidatos = await candidatosNome(tx, a, itens, papelAntigo);
   return {
     id: a.id,
     projeto_id: a.projeto_id,
@@ -404,6 +444,9 @@ export async function corpoAplicacao(n: Nucleo, tx: Executor, a: LinhaAplicacao,
     estado: a.estado,
     assinatura: a.assinatura,
     aviso: a.aviso,
+    origem_qr: a.origem_qr,
+    papel_antigo: papelAntigo,
+    ...(candidatos ? { candidatos_nome: candidatos } : {}),
     divergencias_cadastro: div,
     paginas: paginas.map((p) => ({ imagem_id: p.id, numero_pagina: p.numero_pagina, tipo: p.tipo, registro_ok: p.registro_ok })),
     cadastro_existente: c ? { nome: c.nome, data_nascimento: c.data_nascimento, endereco: c.endereco } : null,

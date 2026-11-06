@@ -14,12 +14,23 @@
 
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { aplicarMigracoes, criarPapeis } from '@minhapesquisa/db';
-import { dimensoes, ErroLeitura, type CampoSchema, type ReadEngine, type TipoFalha } from '@minhapesquisa/motor-leitura';
+import {
+  dimensoes,
+  ErroLeitura,
+  validarLocalizacao,
+  type CampoSchema,
+  type EntradaLocalizacao,
+  type Localizador,
+  type PerguntaLocalizar,
+  type ReadEngine,
+  type RegiaoPergunta,
+  type TipoFalha,
+} from '@minhapesquisa/motor-leitura';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { criarApi } from './app.js';
-import type { Config } from './config.js';
+import type { Config, ContextoLocalizacao } from './config.js';
 import { linha, linhas, sql } from './infra/banco.js';
 import { AntimalwareEicar } from './infra/antimalware.js';
 import { ArmazenamentoEmMemoria } from './infra/armazenamento.js';
@@ -131,6 +142,137 @@ class MotorSimulado {
   }
 }
 
+type Regiao = { x: number; y: number; largura: number; altura: number };
+type LocalizacaoOk = {
+  pagina?: number | null;
+  confianca?: number;
+  regioes?: Record<string, Regiao | null>;
+  regiao_assinatura?: Regiao | null;
+  extra?: Record<string, unknown>;
+};
+type LocalizacaoSimulada = LocalizacaoOk | { falha: { tipo: TipoFalha; vezes: number }; depois?: LocalizacaoOk };
+
+interface ChamadaLocalizador {
+  imagem_id: string;
+  pagina_informada: number | null;
+  perguntas: Record<number, string[]>;
+  entrada: string;
+  largura: number;
+  altura: number;
+  resultado: 'ok' | TipoFalha;
+  em: Date;
+}
+
+/** Região da assinatura quando a versão não tem mapa (papel antigo): a faixa de baixo da folha. */
+const ASSINATURA_PADRAO: Regiao = { x: 0.05, y: 0.88, largura: 0.9, altura: 0.08 };
+
+/**
+ * Localizador simulado (DEC-174): devolve, por folha, o padrão da DEC-174 (6) com o que o teste
+ * programou por cima e registra a chamada como o localizador real a receberia. A resposta passa pelo
+ * mesmo `validarLocalizacao` do adaptador, de modo que um campo a mais ou um código fora da versão
+ * é falha `malformada`, como seria com o provedor.
+ */
+class LocalizadorSimulado {
+  private readonly roteiros = new Map<string, Record<string, LocalizacaoSimulada>>();
+  private readonly tentativas = new Map<string, number>();
+  private readonly registro = new Map<string, ChamadaLocalizador[]>();
+  private custo = { estimadoUsd: 0, realUsd: 0 };
+
+  constructor(private readonly agora: () => Date) {}
+
+  programar(aplicacaoId: string, roteiro: Record<string, LocalizacaoSimulada>): void {
+    this.roteiros.set(aplicacaoId, roteiro);
+  }
+
+  definirCusto(c: { estimadoUsd: number; realUsd: number }): void {
+    this.custo = { ...c };
+  }
+
+  chamadas(aplicacaoId: string): ChamadaLocalizador[] {
+    return [...(this.registro.get(aplicacaoId) ?? [])];
+  }
+
+  /** Regiões padrão da página: as do mapa da versão ou, sem mapa, uma faixa horizontal por pergunta. */
+  private padrao(ctx: ContextoLocalizacao, perguntas: PerguntaLocalizar[]): RegiaoPergunta[] {
+    const linhasDe = (p: PerguntaLocalizar) => (p.linhas?.length ? p.linhas : [null]);
+    return perguntas.flatMap((p, k) => {
+      // Os blocos do mapa são contíguos; como um localizador real, que aponta a área da pergunta e não
+      // o bloco inteiro, o padrão recua 2,5% em cima e embaixo, mais que a folga de cada lado, para
+      // que perguntas vizinhas não se sobreponham com a folga (DEC-174 (5)). O mesmo vale nas faixas.
+      const MARGEM = 0.025;
+      const doMapa = ctx.mapa?.find((m) => m.codigo === p.codigo)?.regiao;
+      const faixa = 1 / perguntas.length;
+      const bloco: Regiao = doMapa ?? { x: 0.05, y: k * faixa, largura: 0.9, altura: faixa };
+      const r: Regiao = { ...bloco, y: bloco.y + MARGEM, altura: Math.max(0.001, bloco.altura - 2 * MARGEM) };
+      return linhasDe(p).map((linha) => ({ codigo: p.codigo, linha, ...r }));
+    });
+  }
+
+  para(ctx: ContextoLocalizacao): Localizador {
+    return {
+      estimarCustoLocalizacaoUsd: () => this.custo.estimadoUsd,
+      localizar: async (img: Buffer, entrada: EntradaLocalizacao) => {
+        const chave = `${ctx.aplicacaoId}|${ctx.imagemId}`;
+        const n = (this.tentativas.get(chave) ?? 0) + 1;
+        this.tentativas.set(chave, n);
+        const prog = this.roteiros.get(ctx.aplicacaoId)?.[ctx.imagemId];
+        const falha = prog && 'falha' in prog && n <= prog.falha.vezes ? prog.falha.tipo : undefined;
+        const ok: LocalizacaoOk = !prog ? {} : 'falha' in prog ? (prog.depois ?? {}) : prog;
+        const { largura, altura } = dimensoes(img);
+        const informada = entrada.pagina_informada ?? null;
+        const chamada: ChamadaLocalizador = {
+          imagem_id: ctx.imagemId,
+          pagina_informada: informada,
+          perguntas: Object.fromEntries(entrada.paginas.map((p) => [p.pagina, p.perguntas.flatMap((q) => (q.linhas?.length ? q.linhas.map((l) => `${q.codigo}.${l}`) : [q.codigo]))])),
+          entrada: JSON.stringify(entrada),
+          largura,
+          altura,
+          resultado: falha ?? 'ok',
+          em: this.agora(),
+        };
+        const registrar = (resultado: ChamadaLocalizador['resultado']) =>
+          this.registro.set(ctx.aplicacaoId, [...(this.registro.get(ctx.aplicacaoId) ?? []), { ...chamada, resultado }]);
+        if (falha) {
+          registrar(falha);
+          throw new ErroLeitura(falha);
+        }
+
+        const total = entrada.paginas.length ? Math.max(...entrada.paginas.map((p) => p.pagina)) : 0;
+        const sugerida = informada ?? ctx.paginaQr ?? ctx.posicao;
+        const pagina = informada !== null ? informada : ok.pagina !== undefined ? ok.pagina : sugerida >= 1 && sugerida <= total ? sugerida : null;
+        const daPagina = entrada.paginas.find((p) => p.pagina === pagina)?.perguntas ?? [];
+        let regioes = this.padrao(ctx, daPagina);
+        for (const [k, r] of Object.entries(ok.regioes ?? {})) {
+          const [codigo, linha] = k.split('.') as [string, string | undefined];
+          const alvo = (x: RegiaoPergunta) => x.codigo === codigo && (linha === undefined || x.linha === linha);
+          if (r === null) {
+            regioes = regioes.filter((x) => !alvo(x));
+            continue;
+          }
+          const existentes = regioes.filter(alvo);
+          if (existentes.length) regioes = regioes.map((x) => (alvo(x) ? { ...x, ...r } : x));
+          else regioes.push({ codigo, linha: linha ?? null, ...r });
+        }
+        const assinatura = ok.regiao_assinatura !== undefined ? ok.regiao_assinatura : pagina === 1 ? (ctx.assinatura ?? ASSINATURA_PADRAO) : null;
+        const bruto = {
+          ...(informada === null ? { pagina, confianca: ok.confianca ?? 0.99 } : {}),
+          regioes,
+          regiao_assinatura: assinatura,
+          ...(ok.extra ?? {}),
+        };
+        try {
+          const r = validarLocalizacao(bruto, entrada);
+          registrar('ok');
+          return { ...r, custoUsd: this.custo.realUsd };
+        } catch (e) {
+          registrar('malformada');
+          throw e;
+        }
+      },
+    };
+  }
+}
+
 type PaginaExtraida = { perguntas: PerguntaLida[] } | { falha: { tipo: TipoFalha; vezes: number }; depois?: { perguntas: PerguntaLida[] } };
 
 interface ChamadaExtrator {
@@ -210,6 +352,7 @@ export async function criarHarness() {
   const armazenamento = new ArmazenamentoEmMemoria(relogio.agora);
   await armazenamento.iniciar();
   const motor = new MotorSimulado(relogio.agora);
+  const localizador = new LocalizadorSimulado(relogio.agora);
   const extrator = new ExtratorSimulado(relogio.agora);
   const logs: string[] = [];
   const config: Config = {
@@ -227,6 +370,7 @@ export async function criarHarness() {
     antimalware: new AntimalwareEicar(),
     gerarId: randomUUID,
     motorLeitura: (contexto) => motor.para(contexto),
+    localizador: (contexto) => localizador.para(contexto),
     extratorEstrutura: (contexto) => extrator.para(contexto),
     log: (l) => void logs.push(l),
   };
@@ -340,6 +484,12 @@ export async function criarHarness() {
       chamadas: async (aplicacaoId: string) => motor.chamadas(aplicacaoId),
     },
 
+    localizador: {
+      programar: (aplicacaoId: string, roteiro: Record<string, LocalizacaoSimulada>) => localizador.programar(aplicacaoId, roteiro),
+      custo: (c: { estimadoUsd: number; realUsd: number }) => localizador.definirCusto(c),
+      chamadas: async (aplicacaoId: string) => localizador.chamadas(aplicacaoId),
+    },
+
     worker: {
       processar: () => worker.processar(),
     },
@@ -445,13 +595,15 @@ export async function criarHarness() {
           const a = await linha<{
             estado: string;
             respondente_id: string | null;
+            versao_id: string | null;
+            origem_qr: boolean;
             data_aplicacao: string | null;
             local_aplicacao: string | null;
             motivo_descarte: string | null;
             motivo_reabertura: string | null;
           }>(
             tx,
-            sql`SELECT estado, respondente_id, to_char(data_aplicacao, 'YYYY-MM-DD') AS data_aplicacao, local_aplicacao,
+            sql`SELECT estado, respondente_id, versao_id, origem_qr, to_char(data_aplicacao, 'YYYY-MM-DD') AS data_aplicacao, local_aplicacao,
                        motivo_descarte, motivo_reabertura
                   FROM aplicacao WHERE id = ${aplicacaoId}`,
           );
@@ -464,6 +616,20 @@ export async function criarHarness() {
             motivo_reabertura: n.decifrar(a.motivo_reabertura),
             itens: itens.map((i) => ({ pergunta_codigo: i.codigo, linha_codigo: i.linha_codigo, valor_ia: i.valor_ia, valor_final: i.valor_final, estado: i.estado })),
           };
+        });
+      },
+
+      async folhas(aplicacaoId: string) {
+        return n.banco.manutencao(async (tx) => {
+          const fs = await linhas<{ imagem_id: string; tipo: 'formulario' | 'assinatura'; numero_pagina: number | null; regioes: RegiaoPergunta[] | null }>(
+            tx,
+            sql`SELECT id AS imagem_id, tipo, numero_pagina, regioes FROM pagina_aplicacao
+                 WHERE aplicacao_id = ${aplicacaoId} AND expurgada_em IS NULL ORDER BY ordem_envio, id`,
+          );
+          return fs.map((f) => ({
+            ...f,
+            regioes: f.regioes?.map((r) => ({ codigo: r.codigo, linha: r.linha ?? null, x: r.x, y: r.y, largura: r.largura, altura: r.altura })) ?? null,
+          }));
         });
       },
 

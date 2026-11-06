@@ -47,6 +47,7 @@ export const PAGINA_DEMO = `<!doctype html>
       <label for="modelo">Modelo (JPEG, PNG ou PDF, até 50 páginas)</label>
       <input id="modelo" type="file" multiple accept="image/jpeg,image/png,application/pdf" required>
       <label><input id="sem-dados" type="checkbox" required> O modelo não tem dados de pessoas reais</label>
+      <label><input id="papel-antigo" type="checkbox"> Pesquisa antiga em papel, sem QR (cada pergunta fica na página do original)</label>
       <button type="submit">Importar</button>
     </form>
     <div id="importacao" hidden>
@@ -70,6 +71,9 @@ export const PAGINA_DEMO = `<!doctype html>
   <h2>3. Enviar as fotos (uma pessoa por envio)</h2>
   <form id="f-upload">
     <input id="arquivos" type="file" multiple accept="image/jpeg,image/png,application/pdf" required>
+    <label><input id="com-versao" type="checkbox"> Folhas sem QR: enviar com o formulário atual (acima); a IA indica a página de cada folha</label>
+    <label for="data-envio">Data da aplicação, se o papel não tem (opcional)</label><input id="data-envio" type="date">
+    <label for="local-envio">Local da aplicação, se o papel não tem (opcional)</label><input id="local-envio" type="text" maxlength="200">
     <br><button type="submit">Enviar</button>
   </form>
 
@@ -135,7 +139,7 @@ async function carregarFormularios(preferida) {
   const sel = $('form-atual'); sel.replaceChildren();
   for (const { f, v } of versoes) {
     const o = document.createElement('option');
-    o.value = v.id; o.dataset.form = f.id; o.textContent = f.nome + ' (versão ' + v.numero + ')';
+    o.value = v.id; o.dataset.form = f.id; o.textContent = f.nome + ' (versão ' + v.numero + ')' + (v.papel_antigo ? ' — papel antigo' : '');
     sel.appendChild(o);
   }
   usarFormulario(preferida || (versoes[0] && versoes[0].v.id));
@@ -339,6 +343,10 @@ $('tentar').addEventListener('click', async () => {
 $('f-upload').addEventListener('submit', async (e) => {
   e.preventDefault(); mensagem();
   const fd = new FormData();
+  // Campos de texto antes dos arquivos (DEC-169, DEC-179).
+  if ($('com-versao').checked && DADOS.versaoId) fd.append('versao_id', DADOS.versaoId);
+  if ($('data-envio').value) fd.append('data_aplicacao', $('data-envio').value);
+  if ($('local-envio').value.trim()) fd.append('local_aplicacao', $('local-envio').value.trim());
   for (const f of $('arquivos').files) fd.append('arquivos', f, f.name);
   try { mostrar(await chamar('POST', '/projects/' + DADOS.projetoId + '/applications/upload', fd, true)); }
   catch (err) { mensagem(err.message); }
@@ -391,6 +399,7 @@ $('f-importar').addEventListener('submit', async (e) => {
   const fd = new FormData();
   fd.append('nome_formulario', $('nome-importacao').value);
   fd.append('sem_dados_reais', $('sem-dados').checked ? 'true' : 'false');
+  if ($('papel-antigo').checked) fd.append('papel_antigo', 'true');
   for (const f of $('modelo').files) fd.append('arquivos', f, f.name);
   try { await mostrarImportacao(await chamar('POST', '/projects/' + DADOS.projetoId + '/form-imports', fd, true)); }
   catch (err) { mensagem(err.message); }
