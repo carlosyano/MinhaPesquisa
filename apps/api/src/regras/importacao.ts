@@ -248,7 +248,7 @@ export function montarVersaoAntiga(paginas: readonly (readonly PerguntaLida[])[]
   const usados = new Set([...CODIGOS_RESERVADOS, ...comuns.flatMap((p) => (p.campo ? [p.campo.codigo] : []))]);
   const perguntas: PerguntaEntrada[] = [...injetadas];
   for (const a of comuns) {
-    const base = comoEntrada(a, perguntas.length + 1, a.pagina);
+    const base = comoEntrada(a, perguntas.length + 1, a.pagina, false); // sem "nenhuma das anteriores" (DEC-195)
     if (!a.campo) base.codigo = semColisao(transformar(a.enunciado, true).toUpperCase() || `P${a.pagina}_${a.posicao}`, usados);
     perguntas.push(base);
   }
@@ -257,7 +257,7 @@ export function montarVersaoAntiga(paginas: readonly (readonly PerguntaLida[])[]
 }
 
 /** Pergunta ajustada no formato de entrada do conteúdo, ainda sem o código das comuns. */
-function comoEntrada(a: Ajustada, ordem: number, pagina: number): PerguntaEntrada {
+function comoEntrada(a: Ajustada, ordem: number, pagina: number, comNenhuma = true): PerguntaEntrada {
   const ehRn050 = !!a.campo && CAMPOS_RN050.includes(a.campo);
   const base: PerguntaEntrada = a.campo
     ? // Endereço e aplicador são opcionais no formulário (DEC-152).
@@ -273,7 +273,7 @@ function comoEntrada(a: Ajustada, ordem: number, pagina: number): PerguntaEntrad
         ...(a.linhas.length ? { linhas: itens(a.linhas, 'linha') } : {}),
         ...(a.faixa ? { valor_min: a.faixa.min, valor_max: a.faixa.max } : {}),
       };
-  if (base.tipo === 'multipla_escolha' && !base.opcoes!.some((o) => o.codigo === 'nenhuma_das_anteriores')) {
+  if (comNenhuma && base.tipo === 'multipla_escolha' && !base.opcoes!.some((o) => o.codigo === 'nenhuma_das_anteriores')) {
     base.opcoes = [...base.opcoes!, { codigo: 'nenhuma_das_anteriores', rotulo: 'Nenhuma das anteriores', ordem: base.opcoes!.length + 1 }];
   }
   if (base.tipo === 'sim_nao') delete base.opcoes; // opções fixas sim e nao (RN-047)
