@@ -3,7 +3,7 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v2.7 (CHG-011 propagada no IMP-005; CHG-012 aceita em 04/11/2026; CHG-013 a CHG-016 aceitas em 05/11/2026; CHG-017 proposta em 06/11/2026) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v2.7 (CHG-011 propagada no IMP-005; CHG-012 aceita em 04/11/2026; CHG-013 a CHG-016 aceitas em 05/11/2026; CHG-017 aceita em 06/11/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
 **Versão do plano:** 3.17
@@ -538,7 +538,7 @@ validado pelo CI a cada merge.
 | CHG-014 — importação de formulário, campos obrigatórios padronizados e ciclo de coleta (DEC-132 a DEC-146) | mudança normativa | aceita em 05/11/2026 (REQ v2.4, PLANO v3.10); implementada no IMP-006 |
 | CHG-015 — exportação em formato longo (DEC-153 a DEC-165) | mudança normativa | aceita em 05/11/2026 (REQ v2.5, PLANO v3.13); implementação no IMP-007 |
 | CHG-016 — apóstrofo contra fórmulas só no CSV (DEC-166) | mudança normativa | aceita em 05/11/2026 (REQ v2.6, PLANO v3.14); implementação no IMP-007 |
-| CHG-017 — pesquisas sem QR e localização das perguntas pela IA (DEC-169 a DEC-183) | mudança normativa | proposta em 06/11/2026 (REQ v2.7, PLANO v3.17); Q-063 a Q-071 respondidas (DEC-175 a DEC-183); rodadas 1 e 2 corrigidas (REV-REQ-011 e REV-REQ-012, REV-PLANO-013 e REV-PLANO-014); aguarda a rodada 3 e o aceite; implementação no IMP-008 |
+| CHG-017 — pesquisas sem QR e localização das perguntas pela IA (DEC-169 a DEC-183) | mudança normativa | aceita em 06/11/2026 (REQ v2.7, PLANO v3.17); Q-063 a Q-071 respondidas (DEC-175 a DEC-183); rodadas 1 e 2 corrigidas (REV-REQ-011 e REV-REQ-012, REV-PLANO-013 e REV-PLANO-014); rodada 3 em andamento; implementação no IMP-008 |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
