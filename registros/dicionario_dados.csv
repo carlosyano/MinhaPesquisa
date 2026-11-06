@@ -43,6 +43,7 @@ ENT-006 Versao,numero,número da versão,int,sim,—,—,≥ 1,auto,sim (por for
 ENT-006 Versao,status,status da versão,enum,sim,—,—,rascunho; publicada,rascunho,não,—,não
 ENT-006 Versao,publicada_em,data de publicação,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
 ENT-006 Versao,mapa_layout,"coordenadas normalizadas de cada campo por página, gravadas na publicação (DEC-048); desde a DEC-170 servem só ao PDF imprimível, e os recortes saem da localização; NULL na versão de papel antigo (DEC-181)",jsonb,não,—,JSON,—,NULL,não,—,não
+ENT-006 Versao,total_paginas,"número de folhas da versão, usado na conferência de páginas (RN-052, CA-013), gravado na publicação: na versão oficial, a maior página das perguntas (as páginas do PDF); na de papel antigo, o informado no rascunho (`updateVersion`; a importação grava as páginas do original, DEC-181) ou, sem ele, a maior página das perguntas; informado fora do papel antigo ou menor que a maior página das perguntas → ERR-001; desmarcar `papel_antigo` apaga o informado",int,não,—,—,1..50,NULL,não,—,não
 ENT-006 Versao,papel_antigo,"versão de pesquisa antiga, sem QR nem marcadores: dispensa CPF, data de nascimento e assinatura na conclusão (DEC-172, DEC-175, DEC-176); imutável depois da publicação (RN-042)",boolean,sim,—,—,true/false,false,não,—,não
 ENT-006 Versao,criada_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-007 Pergunta,id,identificador da pergunta,uuid,sim,36,UUID v4,—,—,sim,—,não
@@ -83,8 +84,8 @@ ENT-010 Aplicacao,projeto_id,projeto da aplicação,uuid,sim,36,UUID v4,—,—,
 ENT-010 Aplicacao,versao_id,"versão do formulário: a do QR legível ou, sem QR legível, a escolhida no envio ou no `identifyApplication` (DEC-169, DEC-180); pode ficar NULL só em identificacao_pendente",uuid,não,36,UUID v4,—,NULL,não,Versao.id,não
 ENT-010 Aplicacao,origem_qr,a versão veio do QR (true) ou da escolha da usuária no envio ou no `identifyApplication` (false) (DEC-169); continua true quando a versão informada é a do QR (DEC-180),boolean,sim,—,—,true/false,true,não,—,não
 ENT-010 Aplicacao,respondente_id,respondente (só na conclusão),uuid,não,36,UUID v4,—,NULL,não,Respondente.id,pessoal (indireto)
-ENT-010 Aplicacao,data_aplicacao,"data da aplicação (obrigatória em sem_assinatura e concluida); no papel antigo, pode vir do envio (DEC-182)",date,não,—,YYYY-MM-DD,não futura,NULL,não,—,pessoal
-ENT-010 Aplicacao,local_aplicacao,"local da aplicação (obrigatório em sem_assinatura e concluida); no papel antigo, pode vir do envio (DEC-182)",varchar,não,200,—,—,NULL,não,—,pessoal
+ENT-010 Aplicacao,data_aplicacao,"data da aplicação (obrigatória em sem_assinatura e concluida); no papel antigo, pode vir do envio, guardada até a aplicação sair de `identificacao_pendente` (DEC-182, DEC-185)",date,não,—,YYYY-MM-DD,não futura,NULL,não,—,pessoal
+ENT-010 Aplicacao,local_aplicacao,"local da aplicação (obrigatório em sem_assinatura e concluida); no papel antigo, pode vir do envio, guardado até a aplicação sair de `identificacao_pendente` (DEC-182, DEC-185)",varchar,não,200,—,—,NULL,não,—,pessoal
 ENT-010 Aplicacao,aplicador,nome do aplicador,varchar,não,200,—,—,NULL,não,—,pessoal
 ENT-010 Aplicacao,estado,estado da aplicação,enum,sim,—,—,identificacao_pendente; aguardando_cota; em_leitura; erro_leitura; em_revisao; aguardando_cpf; sem_assinatura; concluida; descartada,identificacao_pendente,não,—,não
 ENT-010 Aplicacao,assinatura,status da assinatura,enum,não,—,—,presente; ausente; nao_conferida,nao_conferida,não,—,não

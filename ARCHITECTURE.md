@@ -71,7 +71,7 @@ packages/contratos <── apps/api, apps/web (tipos)
 
 1. Upload → validação, antimalware, remoção de metadados → QR ou versão escolhida no envio (DEC-169) → estado inicial (FL-001).
 2. Worker → reserva de orçamento (DEC-051) → localização da página inteira (DEC-174) → recortes das regiões → ReadEngine → estado dos itens (FL-002).
-3. Revisão sem reserva, com If-Match (DEC-112) → conclusão com vínculo por CPF.
+3. Revisão sem reserva, com If-Match (DEC-112) → conclusão com vínculo por CPF ou, no papel antigo sem CPF, pelo nome (DEC-176).
 4. Eliminação LGPD → anonimização, expurgo e lista de eliminações reaplicada após restore.
 5. Login com senha local → sessão plena, sem MFA (DEC-108).
 

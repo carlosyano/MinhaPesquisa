@@ -338,8 +338,9 @@ paths:
         Alterações em versão publicada sempre criam nova versão (RN-042, CA-001). Sem
         `copiar_de_versao_id`, a versão nasce com os 5 campos da RN-050; com ele, copia as perguntas
         da origem, padroniza as dos 5 campos, injeta as que faltarem e dá sufixo a código reservado
-        em pergunta comum (RN-050, DEC-145, DEC-147, CA-048).
-      x-trace: [RF-004, RF-011, CA-001, RN-042, RN-050, CA-048, DEC-147]
+        em pergunta comum (RN-050, DEC-145, DEC-147, CA-048). Quando a versão nova não é de papel
+        antigo, a marca `nao_consta` é retirada das perguntas copiadas (DEC-179).
+      x-trace: [RF-004, RF-011, RF-013, CA-001, RN-042, RN-050, CA-048, DEC-147, DEC-179]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -402,7 +403,9 @@ paths:
         `nao_consta` fora do papel antigo ou das perguntas de CPF, data de nascimento, data e local,
         ou desmarcar `papel_antigo` com perguntas `nao_consta` → ERR-001 (DEC-179, CA-057). Código, tipo,
         obrigatoriedade e sensibilidade das perguntas da RN-050 são reaplicados pelo sistema (DEC-145).
-      x-trace: [RF-004, RF-011, CA-001, CA-015, RN-042, TS-006, RN-021, DEC-095, DEC-097, RN-050, CA-048, DEC-143, DEC-145]
+        `total_paginas` fora do papel antigo ou menor que a maior página das perguntas → ERR-001; desmarcar
+        `papel_antigo` o apaga (ENT-006, DEC-181).
+      x-trace: [RF-004, RF-011, RF-013, CA-001, CA-015, RN-042, TS-006, RN-021, DEC-095, DEC-097, RN-050, CA-048, CA-057, CA-058, DEC-143, DEC-145, DEC-179, DEC-181]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -443,8 +446,8 @@ paths:
         sem `nenhuma_das_anteriores` (RN-047) → ERR-036 com os códigos das perguntas em `campos`
         (DEC-096). Pergunta que não cabe na sua página → ERR-036 com os códigos em `campos`
         (DEC-143), exceto no papel antigo (DEC-181). Grava o mapa de layout (DEC-048), exceto no papel
-        antigo.
-      x-trace: [RF-004, CA-036, RN-017, RN-047, DEC-048, DEC-096, RF-011, DEC-143]
+        antigo, e `total_paginas` (ENT-006).
+      x-trace: [RF-004, CA-036, RN-017, RN-047, DEC-048, DEC-096, RF-011, RF-013, DEC-143, DEC-181]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -633,11 +636,13 @@ paths:
         página informada prevalece e só as folhas alteradas são localizadas de novo, só para as
         regiões (RN-052, item 3a). `origem_qr` passa a false, exceto quando a versão informada é a do
         QR. Versão diferente da do QR legível e válido de alguma folha → 400 ERR-039, auditado; QR
-        de versão inválida (CA-039) não decide a versão (DEC-180). Data e local do envio passam a
-        valer se a versão informada for de papel antigo (DEC-182).
+        de versão inválida (CA-039) não decide a versão (DEC-180), mas versão de papel antigo em
+        aplicação com alguma folha de QR legível, válido ou não → 400 ERR-039, auditado (DEC-184).
+        Ao sair de identificacao_pendente, data e local gravados no envio preenchem os itens
+        `nao_consta` da versão de papel antigo, ou são apagados (DEC-182, DEC-185).
         Continua inválido → 400 ERR-004 ou ERR-039. Versão de outro tenant, de outro projeto ou
         inexistente → 400 ERR-039, auditado (DEC-100). Próximo estado conforme FL-001.
-      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, DEC-100, DEC-171, DEC-180]
+      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, CA-057, DEC-100, DEC-171, DEC-180, DEC-184, DEC-185]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -672,7 +677,10 @@ paths:
       description: |
         Corrige página faltante: mesmas validações do upload (ERR-029, RN-040, DEC-042) e
         reavaliação da tabela de criação da FL-001. Permitido também em projeto arquivado (DEC-098).
-      x-trace: [RF-006, CA-013, CA-040, RN-040, DEC-098]
+        `versao_id` substitui a escolhida no envio (DEC-169, DEC-180), mas versão de papel antigo não vale
+        com folha de QR legível (DEC-184); `data_aplicacao` e `local_aplicacao`, quando vierem, substituem
+        os gravados no envio, só o que vier (DEC-182, DEC-185).
+      x-trace: [RF-006, RF-013, CA-013, CA-040, CA-057, RN-040, DEC-098, DEC-169, DEC-180, DEC-182, DEC-184, DEC-185]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1865,6 +1873,7 @@ components:
         perguntas: { type: array, items: { $ref: '#/components/schemas/Question' } }
         regras_salto: { type: array, items: { $ref: '#/components/schemas/SkipRule' } }
         papel_antigo: { type: boolean, description: 'Versão de papel antigo (DEC-175); muda só no rascunho (updateVersion); ausente no updateVersion = mantém' }
+        total_paginas: { type: integer, minimum: 1, maximum: 50, nullable: true, description: 'Só no papel antigo: número de folhas do formulário, gravado pela importação com as páginas do original (DEC-181) ou informado no rascunho; nulo = a maior página das perguntas. Não pode ser menor que ela (ERR-001). Na resposta de versão publicada, o total gravado na publicação (ENT-006)' }
 
     VersionCreate:
       type: object
@@ -1964,9 +1973,9 @@ components:
         versao_id:
           type: string
           format: uuid
-          description: Versão publicada do projeto, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180). Inexistente, não publicada ou de outro projeto → `aviso` ERR-039. No `addApplicationPages`, substitui a escolhida no envio
-        data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação das perguntas `nao_consta`; vira o padrão do projeto (DEC-179). Só vale se a versão final for de papel antigo (DEC-182); futura → 400 ERR-001' }
-        local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: local da aplicação das perguntas `nao_consta`; vira o padrão do projeto (DEC-179)' }
+          description: Versão publicada do projeto, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180); a de papel antigo não vale se alguma folha tiver QR legível, válido ou não (DEC-184). Inexistente, não publicada ou de outro projeto → `aviso` ERR-039. No `addApplicationPages`, substitui a escolhida no envio
+        data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação da pergunta `nao_consta`; vira o padrão do projeto (DEC-179). Guardada enquanto a aplicação estiver em identificacao_pendente e só vale se a versão final for de papel antigo com essa pergunta `nao_consta`; senão é apagada (DEC-182, DEC-185). No addApplicationPages, substitui a gravada. Futura → 400 ERR-001' }
+        local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: local da aplicação da pergunta `nao_consta`; vira o padrão do projeto (DEC-179). Mesmas regras de `data_aplicacao` (DEC-182, DEC-185)' }
 
     UploadResponse:
       type: object
@@ -2021,7 +2030,7 @@ components:
         id: { type: string, format: uuid }
         projeto_id: { type: string, format: uuid }
         versao_id: { type: string, format: uuid, nullable: true }
-        origem_qr: { type: boolean, description: 'true quando a versão veio do QR; false quando veio da escolha no envio ou do identifyApplication (DEC-169)' }
+        origem_qr: { type: boolean, description: 'true quando a versão veio do QR, inclusive quando a versão informada no identifyApplication é a do QR (DEC-180); false quando veio da escolha no envio ou de outra versão informada no identifyApplication (DEC-169)' }
         papel_antigo: { type: boolean, description: 'Herdado da versão, só leitura (DEC-173, DEC-175)' }
         estado: { $ref: '#/components/schemas/ApplicationState' }
         assinatura: { type: string, enum: [presente, ausente, nao_conferida] }
@@ -2168,7 +2177,7 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: 'Só na versão de papel antigo sem CPF válido: um dos `candidatos_nome` da aplicação, ou nulo para respondente novo; sem candidatos, ausente também cria respondente novo. Enviado em outro caso → ERR-001 (DEC-176)'
+          description: 'Só na versão de papel antigo sem CPF válido: um dos `candidatos_nome` da aplicação, ou nulo para respondente novo; sem candidatos, ausente também cria respondente novo. Enviado em outro caso → ERR-001, antes da regra do CPF (FL-001, precedência 1a; DEC-176)'
 
     SignatureUpload:
       type: object
@@ -2176,7 +2185,7 @@ components:
       required: [arquivo, assinatura]
       properties:
         arquivo: { type: string, format: binary, description: Imagem da página 1 assinada (JPEG/PNG/PDF) }
-        assinatura: { type: string, enum: [presente], description: Confirmação humana da conferência (RN-044) }
+        assinatura: { type: string, enum: [presente], description: 'Confirmação humana da conferência (RN-044); sem QR legível na folha, vale também como a confirmação da usuária de que ela é a página 1 (DEC-183)' }
 
     ReasonRequest:
       type: object
