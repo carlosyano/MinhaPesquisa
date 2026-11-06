@@ -597,9 +597,10 @@ paths:
         da localização pela IA (RN-052, DEC-171). O estado inicial segue a tabela de criação da
         FL-001; o campo `aviso` traz ERR-004, ERR-039 ou ERR-003 quando aplicável (CA-004,
         CA-039, CA-030, CA-052). Com QR legível, a versão é a do QR em todas as folhas (DEC-180).
-        No papel antigo, `data_aplicacao` e `local_aplicacao` preenchem as perguntas `nao_consta`
-        e viram o padrão do projeto (DEC-179, CA-057).
-      x-trace: [RF-006, RF-013, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040, CA-052, CA-057, RN-040, DEC-029, DEC-169, DEC-179, DEC-180]
+        No papel antigo, `data_aplicacao` e `local_aplicacao` viram o padrão do projeto no próprio
+        envio (DEC-192) e preenchem as perguntas `nao_consta` quando a localização confirma a versão
+        e as páginas (DEC-179, DEC-186, CA-057). Só conta o QR no formato do MinhaPesquisa (DEC-187).
+      x-trace: [RF-006, RF-013, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040, CA-052, CA-053, CA-055, CA-057, RN-040, DEC-029, DEC-169, DEC-179, DEC-180, DEC-182, DEC-185, DEC-186, DEC-187, DEC-192]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1363,7 +1364,7 @@ paths:
       tags: [lgpd]
       summary: Consulta pedido do titular (com link do resultado para acesso/portabilidade)
       description: Consulta pedido do titular (com link do resultado para acesso/portabilidade).
-      x-trace: [RF-010, CA-024]
+      x-trace: [RF-010, CA-024, CA-056, DEC-191, DEC-193]
       parameters:
         - $ref: '#/components/parameters/RequestId'
       responses:
@@ -1391,8 +1392,8 @@ paths:
         portabilidade geram CSV ou JSON (CA-024). Pedido em `falhou` pode ser executado de
         novo; já concluído ou cancelado → ERR-018. Na eliminação de respondente sem CPF, as aplicações
         de papel antigo em andamento de mesmo nome não são descartadas sozinhas: ficam listadas em
-        `aplicacoes_mesmo_nome` para a usuária decidir (DEC-191).
-      x-trace: [RF-010, CA-023, CA-024, CA-056, DEC-026, DEC-191]
+        `aplicacoes_mesmo_nome` para a usuária decidir, e a lista fica gravada no pedido (DEC-191, DEC-193).
+      x-trace: [RF-010, CA-023, CA-024, CA-056, DEC-026, DEC-191, DEC-193]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1979,8 +1980,8 @@ components:
           type: string
           format: uuid
           description: Versão publicada do projeto, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180); a de papel antigo não vale se alguma folha tiver QR legível, válido ou não (DEC-184). Sem QR legível de versão válida em nenhuma folha, versão escolhida inexistente, não publicada ou de outro projeto → `aviso` ERR-039. No `addApplicationPages`, substitui a escolhida no envio
-        data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação da pergunta `nao_consta`; vira o padrão do projeto (DEC-179). Guardada até a localização confirmar a versão e as páginas (DEC-186) e só vale se a versão final for de papel antigo com essa pergunta `nao_consta`; senão é apagada (DEC-182, DEC-185). No addApplicationPages, substitui a gravada. Futura → 400 ERR-001' }
-        local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: local da aplicação da pergunta `nao_consta`; vira o padrão do projeto (DEC-179). Mesmas regras de `data_aplicacao` (DEC-182, DEC-185)' }
+        data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação da pergunta `nao_consta`; vira o padrão do projeto no próprio envio (DEC-179, DEC-192). Guardada até a localização confirmar a versão e as páginas (DEC-186) e só vale se a versão final for de papel antigo com essa pergunta `nao_consta`; senão é apagada (DEC-182, DEC-185). No addApplicationPages, substitui a gravada. Futura → 400 ERR-001' }
+        local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: local da aplicação da pergunta `nao_consta`; vira o padrão do projeto no próprio envio (DEC-179, DEC-192). Mesmas regras de `data_aplicacao` (DEC-182, DEC-185)' }
 
     UploadResponse:
       type: object
@@ -2386,7 +2387,7 @@ components:
         solicitado_em: { type: string, format: date-time }
         executado_em: { type: string, format: date-time, nullable: true }
         url_resultado: { type: string, format: uri, nullable: true, description: 'Acesso/portabilidade (CSV ou JSON), link assinado de 5 min' }
-        aplicacoes_mesmo_nome: { type: array, items: { type: string, format: uuid }, description: 'Eliminação de respondente sem CPF: aplicações de papel antigo fora de concluida e descartada cujo NOME tem o mesmo nome normalizado (DEC-176), para a usuária decidir o descarte (DEC-191); a consulta é auditada sem o nome' }
+        aplicacoes_mesmo_nome: { type: array, items: { type: string, format: uuid }, description: 'Eliminação de respondente sem CPF: aplicações de papel antigo fora de concluida e descartada cujo NOME (`valor_final` ou, sem ele, `valor_ia`) tem o mesmo nome normalizado (DEC-176), para a usuária decidir o descarte (DEC-191); recalculada a cada consulta até a execução e gravada no pedido na execução (DEC-193); a consulta é auditada sem o nome' }
 
     DataSubjectRequestList:
       type: object
