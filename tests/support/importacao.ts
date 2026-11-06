@@ -54,6 +54,8 @@ export interface OpcoesImportacao {
   /** `null` omite o campo do multipart. */
   semDadosReais?: string | null;
   chave?: string;
+  /** Marca a versão 1 como de papel antigo (DEC-175, DEC-181); acrescentado no IA-TEST do IMP-008. */
+  papelAntigo?: boolean;
 }
 
 /** `importForm`: multipart com os arquivos, o nome do formulário e a declaração (DEC-133). */
@@ -62,6 +64,7 @@ export async function importar(c: Cliente, projetoId: string, arquivos: Arquivo[
   campos.push(['nome_formulario', o.nome ?? 'Hábitos']);
   const declaracao = o.semDadosReais === undefined ? 'true' : o.semDadosReais;
   if (declaracao !== null) campos.push(['sem_dados_reais', declaracao]);
+  if (o.papelAntigo !== undefined) campos.push(['papel_antigo', String(o.papelAntigo)]);
   return c.enviarFormulario(`/projects/${projetoId}/form-imports`, campos, { 'idempotency-key': o.chave ?? chaveIdempotencia() });
 }
 

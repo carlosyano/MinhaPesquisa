@@ -146,8 +146,8 @@ describe('CA-030 — teto mensal atingido', () => {
   // @trace FL-001, CA-030, CA-004
   it('identificação manual com o teto atingido → aguardando_cota (nada é lido)', async () => {
     const c = await cenario('500.00');
-    const imgs = await paginasJpeg(c.f);
-    imgs[1] = arquivo('p2.jpg', 'image/jpeg', await semQr(c.f.paginas[1]));
+    // Desde a CHG-017, só fica pendente sem nenhuma folha de QR legível (DEC-180, FL-001 linha 2).
+    const imgs = await Promise.all(c.f.paginas.map(async (p) => arquivo(`p${p.numero}.jpg`, 'image/jpeg', await semQr(p))));
     const r = await enviar(c.dig, c.projeto, imgs);
     expect(r.corpo).toMatchObject({ estado: 'identificacao_pendente', aviso: 'ERR-004' });
     const id = r.corpo.aplicacao_id;

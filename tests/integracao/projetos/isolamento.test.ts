@@ -38,7 +38,8 @@ beforeAll(async () => {
   projetoB = await projetoCriado(b, 'Saúde Idoso B');
   formB = await formularioPublicado(b, projetoB, 'Demografia B');
   rascunhoB = await criarFormulario(b, projetoB, 'Rascunho B');
-  const imgs = [await jpeg(formB.paginas[0]), await semQr(formB.paginas[1]), await jpeg(formB.paginas[2]), await jpeg(formB.paginas[3])];
+  // Desde a CHG-017, só fica pendente sem nenhuma folha de QR legível (DEC-180, FL-001 linha 2).
+  const imgs = await Promise.all(formB.paginas.map((p) => semQr(p)));
   const envio = await enviar(b, projetoB, [arquivo('b.pdf', 'application/pdf', await pdfDeImagens(imgs))]);
   expect(envio.status, envio.texto).toBe(202);
   aplicacaoB = { id: envio.corpo.aplicacao_id, imagemId: envio.corpo.paginas[1].imagem_id };

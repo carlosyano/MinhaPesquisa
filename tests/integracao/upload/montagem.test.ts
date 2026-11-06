@@ -1,5 +1,8 @@
 // Montagem da aplicação e QR (CA-013, CA-039, CA-040, FL-001 tabela de criação e saída de
 // identificacao_pendente, T-14). A ordem da tabela de criação vale quando há mais de uma condição.
+// Ajustado no IA-TEST do IMP-008 (CHG-017): na tabela de criação da REQ v2.7, o QR legível de
+// versão inválida é a linha 1 e a falta de QR válido sem versão escolhida, a linha 2 (DEC-180); a
+// folha sem QR numa aplicação com QR legível de versão válida recebe a versão do QR.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { comQr, conteudoForjado, jpeg, paginasDoPdf, semQr } from '../../support/arquivos.js';
@@ -116,16 +119,22 @@ describe('CA-039 — QR validado contra tenant, projeto e versão (T-14)', () =>
     await auditada(await esperarPendente(await enviar(dig, projeto, await paginas(formOutroProjeto, [1, 2, 3, 4])), 'ERR-039'));
   });
 
-  // @trace FL-001
-  it('ordem da tabela de criação: página sem QR (linha 1) prevalece sobre QR de outro tenant (linha 2) → ERR-004', async () => {
+  // @trace FL-001, DEC-180
+  it('ordem da tabela de criação: QR de outro tenant (linha 1) prevalece sobre a folha sem QR → ERR-039', async () => {
     const imgs = await paginas(f, [1, 2, 3, 4]);
     imgs[0] = arquivo('p1.jpg', 'image/jpeg', await jpeg(formOutroTenant.paginas[0]));
     imgs[1] = arquivo('p2.jpg', 'image/jpeg', await semQr(f.paginas[1]));
+    await esperarPendente(await enviar(dig, projeto, imgs), 'ERR-039');
+  });
+
+  // @trace FL-001, DEC-169
+  it('ordem da tabela de criação: nenhuma folha com QR legível e nenhuma versão escolhida (linha 2) → ERR-004', async () => {
+    const imgs = await Promise.all(f.paginas.map(async (p) => arquivo(`p${p.numero}.jpg`, 'image/jpeg', await semQr(p))));
     await esperarPendente(await enviar(dig, projeto, imgs), 'ERR-004');
   });
 
   // @trace FL-001
-  it('ordem da tabela de criação: QR de outro tenant (linha 2) prevalece sobre página faltante (linha 3) → ERR-039', async () => {
+  it('ordem da tabela de criação: QR de outro tenant (linha 1) prevalece sobre página faltante (linha 4) → ERR-039', async () => {
     const imgs = await paginas(f, [1, 2, 3]);
     imgs[0] = arquivo('p1.jpg', 'image/jpeg', await jpeg(formOutroTenant.paginas[0]));
     await esperarPendente(await enviar(dig, projeto, imgs), 'ERR-039');
@@ -135,8 +144,9 @@ describe('CA-039 — QR validado contra tenant, projeto e versão (T-14)', () =>
 describe('FL-001 — saída de identificacao_pendente pelo digitalizador', () => {
   // @trace CA-004, FL-001, RF-006
   it('identifyApplication com versão e números de página → em_leitura e leitura solicitada', async () => {
-    const imgs = await paginas(f, [1, 2, 3, 4]);
-    imgs[1] = arquivo('p2.jpg', 'image/jpeg', await semQr(f.paginas[1]));
+    // Todas as folhas sem QR e sem versão escolhida (FL-001, linha 2): com uma folha de QR legível,
+    // a versão do QR valeria para as outras (DEC-180) e a aplicação não ficaria pendente.
+    const imgs = await Promise.all(f.paginas.map(async (p) => arquivo(`p${p.numero}.jpg`, 'image/jpeg', await semQr(p))));
     const r = await enviar(dig, projeto, imgs);
     const id = await esperarPendente(r, 'ERR-004');
     const ok = await identificar(id, {
