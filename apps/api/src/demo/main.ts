@@ -1,6 +1,6 @@
 // Modo de demonstração local (DEC-104): sobe PostgreSQL 17 descartável, a API real e uma página
-// simples para importar um formulário de um modelo, baixar o PDF e enviar fotos reais do
-// formulário preenchido. Só para a máquina
+// simples para importar um formulário de um modelo, baixar o PDF, enviar fotos reais do
+// formulário preenchido e exportar a planilha em formato longo (RF-012). Só para a máquina
 // do desenvolvedor: tudo escuta em 127.0.0.1, os segredos são gerados a cada execução e nada
 // sobrevive ao encerramento (banco no contêiner, imagens em memória).
 //

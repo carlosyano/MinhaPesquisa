@@ -9,6 +9,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { randomUUID } from 'node:crypto';
 import { AuthController, NUCLEO } from './auth/auth.controller.js';
 import type { Config } from './config.js';
+import { ExportacaoController } from './exportacao/exportacao.controller.js';
 import { FormulariosController } from './formularios/formularios.controller.js';
 import { ImportacaoController } from './formularios/importacao.controller.js';
 import { FiltroErros, type Req } from './http.js';
@@ -29,7 +30,7 @@ export async function criarApi(config: Config, porta = 0, host = '127.0.0.1'): P
   const nucleo = new Nucleo(config);
 
   @Module({
-    controllers: [AuthController, ProjetosController, FormulariosController, ImportacaoController, UploadController, RevisaoController],
+    controllers: [AuthController, ProjetosController, FormulariosController, ImportacaoController, UploadController, RevisaoController, ExportacaoController],
     providers: [{ provide: NUCLEO, useValue: nucleo }],
   })
   class ModuloApi {}

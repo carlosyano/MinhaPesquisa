@@ -10,7 +10,14 @@ import { ServidorLinks, type Armazenamento } from './armazenamento.js';
 
 const CHAVE_VALIDA = /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*(?:\.[A-Za-z0-9]+)?$/;
 const TEMPORARIO = '.parcial';
-const TIPOS: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png' };
+const TIPOS: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  // Arquivos da exportação (DEC-165).
+  '.csv': 'text/csv; charset=utf-8',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
 
 /** Caminho do arquivo da chave sob a raiz; recusa qualquer chave que não seja segmentos simples. */
 export function caminhoNoDisco(raiz: string, chave: string): string {
@@ -62,7 +69,7 @@ export class ArmazenamentoEmDisco implements Armazenamento {
     return this.links.fechar();
   }
 
-  /** O tipo vem da extensão da chave na leitura (só JPEG hoje). */
+  /** O tipo vem da extensão da chave na leitura (imagens e arquivos da exportação). */
   async gravar(chave: string, bytes: Buffer, _tipo?: string): Promise<void> {
     const destino = caminhoNoDisco(this.raiz, chave);
     await mkdir(dirname(destino), { recursive: true });

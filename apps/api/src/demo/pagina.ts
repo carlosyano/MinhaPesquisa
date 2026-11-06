@@ -95,6 +95,15 @@ export const PAGINA_DEMO = `<!doctype html>
     <button type="button" id="tentar" hidden>Tentar a leitura de novo</button>
     <details><summary>Resposta da API</summary><pre id="json"></pre></details>
   </section>
+
+  <h2>6. Exportar (uma linha por item)</h2>
+  <p>Planilha das aplicações concluídas com assinatura, pronta para tabela dinâmica. Traz nome e CPF completos (fica auditado).</p>
+  <form id="f-exportar">
+    <label for="formato">Formato</label>
+    <select id="formato"><option value="xlsx">Excel (XLSX)</option><option value="csv">CSV</option></select>
+    <br><button type="submit">Exportar</button>
+  </form>
+  <p id="exportacao" hidden>Exportação: <strong id="estado-exportacao"></strong> <a id="baixar" class="botao" hidden>Baixar arquivo</a></p>
 </section>
 <p id="mensagem" class="erro" role="alert"></p>
 
@@ -371,6 +380,24 @@ $('publicar').addEventListener('click', async () => {
     usarFormulario(importacao.formulario_id, importacao.versao_id, importacao.nome_formulario + ' (importado)');
     $('publicar').disabled = true;
     $('importar').open = false;
+  } catch (err) { mensagem(err.message); }
+});
+
+// Exportação em formato longo (RF-012): acompanha a cada 1 s até concluir ou falhar.
+async function acompanharExportacao(id) {
+  const e = await chamar('GET', '/exports/' + id);
+  $('exportacao').hidden = false;
+  $('estado-exportacao').textContent = e.status;
+  $('baixar').hidden = !e.url_download;
+  if (e.url_download) $('baixar').href = e.url_download; // link de 5 min (DEC-113)
+  if (['enfileirada', 'em_andamento'].includes(e.status)) setTimeout(() => acompanharExportacao(id).catch((err) => mensagem(err.message)), 1000);
+}
+
+$('f-exportar').addEventListener('submit', async (e) => {
+  e.preventDefault(); mensagem();
+  try {
+    const r = await chamar('POST', '/exports', { formato: $('formato').value, escopo: 'linha_por_item', projeto_ids: [DADOS.projetoId] }, true);
+    await acompanharExportacao(r.id);
   } catch (err) { mensagem(err.message); }
 });
 

@@ -44,7 +44,7 @@ export class ServidorLinks {
   async iniciar(porta = 0): Promise<void> {
     this.servidor = createServer((req, res) => {
       void this.servir(req.url ?? '/').then(
-        (obj) => (obj ? res.writeHead(200, { 'content-type': obj.tipo, 'content-length': obj.bytes.length }).end(obj.bytes) : res.writeHead(403).end()),
+        (obj) => (obj ? res.writeHead(200, this.cabecalhos(req.url ?? '/', obj)).end(obj.bytes) : res.writeHead(403).end()),
         () => res.writeHead(403).end(),
       );
     });
@@ -55,6 +55,16 @@ export class ServidorLinks {
 
   async fechar(): Promise<void> {
     await new Promise<void>((ok) => (this.servidor ? this.servidor.close(() => ok()) : ok()));
+  }
+
+  /** Imagem abre no navegador; arquivo da exportação desce como download, com o nome do objeto. */
+  private cabecalhos(caminho: string, obj: { bytes: Buffer; tipo: string }): Record<string, string | number> {
+    const h: Record<string, string | number> = { 'content-type': obj.tipo, 'content-length': obj.bytes.length };
+    if (!obj.tipo.startsWith('image/')) {
+      const nome = decodeURIComponent(new URL(caminho, 'http://local').pathname).split('/').pop() ?? 'arquivo';
+      h['content-disposition'] = `attachment; filename="${nome.replace(/[^\w.-]/g, '_')}"`;
+    }
+    return h;
   }
 
   private async servir(caminho: string) {
