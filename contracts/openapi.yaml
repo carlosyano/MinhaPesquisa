@@ -849,7 +849,7 @@ paths:
       tags: [review]
       summary: Link assinado (5 min) do recorte do item para revisão lado a lado
       description: Só nos estados de revisão (CA-007, DEC-112); nos demais → 409 ERR-018. Item sem região (DEC-177) → a página inteira, com `regiao` nula (DEC-174). Item de complemento → o recorte da região da sua pergunta (RN-045, DEC-197).
-      x-trace: [RF-008, RF-013, CA-007, CA-055, DEC-112, DEC-177]
+      x-trace: [RF-008, RF-013, RF-014, CA-007, CA-055, CA-059, DEC-112, DEC-177, DEC-197, RN-045]
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
         - $ref: '#/components/parameters/ItemId'
@@ -878,8 +878,10 @@ paths:
         Edição concorrente (outra aba) é recusada pelo If-Match (ERR-017).
         A mudança de estado ou de valor de uma pergunta com opção com complemento reavalia o item de
         complemento pela pré-regra 1b da FL-002 (DEC-197, DEC-200); o item de complemento é revisado como os demais,
-        com `corrigir` limitado a 200 caracteres (REQ §5.4; acima → 400 ERR-001). No complemento de opção
-        não marcada, só `nao_se_aplica` é aceito; outra ação → 400 ERR-001 (DEC-205). A revisão humana
+        com `corrigir` limitado a 200 caracteres (REQ §5.4; acima → 400 ERR-001). As perguntas do patch são aplicadas
+        antes dos seus complementos, e cada complemento é validado depois da pré-regra 1b. No complemento
+        de opção não marcada, só `nao_se_aplica` é aceito; outra ação → 400 ERR-001 (DEC-205). Quando a
+        usuária tira a opção da pergunta, o complemento vai a `nao_se_aplica` (DEC-208). A revisão humana
         do complemento é mantida enquanto a opção continua marcada (DEC-204).
       x-trace: [RF-008, RF-014, CA-007, CA-008, CA-020, CA-059]
       security:
@@ -1060,7 +1062,7 @@ paths:
         A partir de `concluida`: se o CPF for corrigido, o vínculo é refeito e o cadastro revertido,
         com auditoria (CA-042). A partir de `sem_assinatura`: corrige a conferência e volta a
         `em_revisao`, preservando os itens.
-      x-trace: [RF-008, CA-042]
+      x-trace: [RF-008, RF-014, CA-042, CA-059, DEC-204]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1402,7 +1404,8 @@ paths:
         novo; já concluído ou cancelado → ERR-018. Na eliminação de respondente sem CPF, as aplicações
         de papel antigo em andamento de mesmo nome não são descartadas sozinhas: ficam listadas em
         `aplicacoes_mesmo_nome` para a usuária decidir, e a lista fica gravada no pedido (DEC-191, DEC-193).
-      x-trace: [RF-010, CA-023, CA-024, CA-056, DEC-026, DEC-191, DEC-193]
+        Na eliminação, o `nome_arquivo` das páginas do titular é apagado no ato (DEC-206).
+      x-trace: [RF-010, RF-014, CA-023, CA-024, CA-056, DEC-026, DEC-191, DEC-193, DEC-206]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1661,7 +1664,7 @@ components:
           schema:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
-              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-029', title: Arquivo recusado, status: 400, detail: 'Arquivo recusado: [motivo].', errorCode: ERR-029, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, motivo: excede o limite de 20 MB }
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-029', title: Arquivo recusado, status: 400, detail: 'Arquivo recusado: [motivo].', errorCode: ERR-029, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, motivo: excede o limite de 20 MB, posicao: 2 }
     QrInvalid:
       description: Identificação ainda inválida (ERR-004 ou ERR-039)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
@@ -1697,7 +1700,7 @@ components:
       type: object
       description: |
         Problem Details (RFC 9457). Nunca expõe stack trace nem detalhe interno. Extensões
-        permitidas: `campos` (ERR-001, ERR-006, ERR-036) e `motivo` (ERR-029).
+        permitidas: `campos` (ERR-001, ERR-006, ERR-036), `motivo` e `posicao` (ERR-029).
       required: [type, title, status, detail, errorCode, correlationId]
       properties:
         type: { type: string, format: uri }
@@ -1711,6 +1714,7 @@ components:
         motivo:
           type: string
           enum: [excede o limite de 20 MB, excede o limite de 50 páginas, tipo de arquivo não permitido, risco de segurança detectado]
+        posicao: { type: integer, minimum: 1, description: 'ERR-029 no upload: posição do arquivo recusado no envio, a partir de 1; o nome do arquivo nunca vai na resposta (RN-028, DEC-198)' }
 
     ErrorCode:
       type: string
@@ -2084,7 +2088,7 @@ components:
     PageRef:
       type: object
       additionalProperties: false
-      required: [imagem_id, tipo, registro_ok]
+      required: [imagem_id, tipo, registro_ok, ordem_envio, nome_arquivo]
       properties:
         imagem_id: { type: string, format: uuid }
         numero_pagina: { type: integer, minimum: 1, nullable: true }
