@@ -68,6 +68,7 @@ ENT-008 Opcao,pergunta_id,pergunta da opção,uuid,sim,36,UUID v4,—,—,não,P
 ENT-008 Opcao,codigo,código estável,varchar,sim,50,^[a-z0-9_]+$,—,—,sim (por pergunta),—,não
 ENT-008 Opcao,rotulo,texto impresso,varchar,sim,200,—,—,—,não,—,não
 ENT-008 Opcao,ordem,ordem,int,sim,—,—,≥ 1,—,não,—,não
+ENT-008 Opcao,com_complemento,"a opção pede um texto ao lado (""Outro: ____""), lido num item de complemento (DEC-197, DEC-202); só em `escolha_unica` e `multipla_escolha`, nunca em `nenhuma_das_anteriores` (RN-047)",boolean,sim,—,—,true/false,false,não,—,não
 ENT-009 Respondente,id,identificador do respondente,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-009 Respondente,tenant_id,tenant do respondente,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-009 Respondente,nome,nome completo,varchar,sim,200,—,—,—,não,—,pessoal
@@ -100,6 +101,7 @@ ENT-011 ItemResposta,tenant_id,tenant do item,uuid,sim,36,UUID v4,—,—,não,T
 ENT-011 ItemResposta,aplicacao_id,aplicação do item,uuid,sim,36,UUID v4,—,—,não,Aplicacao.id,não
 ENT-011 ItemResposta,pergunta_id,pergunta do item,uuid,sim,36,UUID v4,—,—,não,Pergunta.id,não
 ENT-011 ItemResposta,linha_id,linha da matriz (só perguntas do tipo matriz),uuid,não,36,UUID v4,—,NULL,não,LinhaMatriz.id,não
+ENT-011 ItemResposta,opcao_id,"opção com complemento do item de complemento (RN-009, DEC-197); NULL nos demais itens",uuid,não,36,UUID v4,—,NULL,não,Opcao.id,não
 ENT-011 ItemResposta,valor_ia,"valor lido pela IA, no formato canônico (§5.4); cifrado (DEC-041) quando a pergunta tem `campo_respondente`",text,não,2000,—,—,NULL,não,—,sensível
 ENT-011 ItemResposta,confianca,"confiança da IA (valor bruto, sem arredondamento)",decimal,não,"5,4",—,0.0000..1.0000,NULL,não,—,não
 ENT-011 ItemResposta,valor_final,"valor confirmado/corrigido, no formato canônico (§5.4); cifrado (DEC-041) quando a pergunta tem `campo_respondente`",text,não,2000,—,—,NULL,não,—,sensível
@@ -216,6 +218,7 @@ ENT-025 PaginaAplicacao,tipo,finalidade da imagem: `assinatura` é a página 1 a
 ENT-025 PaginaAplicacao,numero_pagina,"página da versão: a do QR ou, sem QR, a indicada pela localização ou pela usuária (DEC-171); NULL até identificar",int,não,—,—,≥ 1,NULL,não,—,não
 ENT-025 PaginaAplicacao,chave_storage,chave do objeto no bucket privado,varchar,sim,500,—,—,—,sim,—,não
 ENT-025 PaginaAplicacao,sha256,hash do arquivo sem metadados,bytea,sim,32,SHA-256,—,—,não,—,não
+ENT-025 PaginaAplicacao,nome_arquivo,"nome original do arquivo enviado de onde veio a página, sem a pasta, cortado em 255 caracteres (DEC-198); apagado (NULL) no expurgo da imagem; NULL nas páginas enviadas antes da v2.8",varchar,não,255,—,—,NULL,não,—,pessoal
 ENT-025 PaginaAplicacao,registro_ok,"marcadores dos cantos encontrados (DEC-048); desde a DEC-169 só informativo, não impede a leitura",boolean,sim,—,—,true/false,false,não,—,não
 ENT-025 PaginaAplicacao,regioes,"regiões das perguntas da página (e, na página 1, a da assinatura) devolvidas pela localização, em coordenadas normalizadas da imagem, com a confiança (RN-052)",jsonb,não,—,JSON,—,NULL,não,—,não
 ENT-025 PaginaAplicacao,criado_em,data do upload,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não

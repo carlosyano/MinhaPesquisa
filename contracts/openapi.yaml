@@ -1,12 +1,12 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     API da aplicação local MinhaPesquisa (DEC-107) — digitalização de pesquisas em papel com
     leitura por IA, revisão humana e dashboards, em conformidade com a LGPD. Uma única usuária,
     com todas as permissões (DEC-109); servida só em 127.0.0.1 (DEC-113).
-    Fonte normativa: REQ v2.7 e PLANO.md v3.18. Contract-first — este arquivo valida
+    Fonte normativa: REQ v2.8 e PLANO.md v3.19. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: a única rota pública (`login`) declara `security: []`; sem MFA (DEC-108);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -341,7 +341,7 @@ paths:
         em pergunta comum (RN-050, DEC-145, DEC-147, CA-048). Quando a versão nova não é de papel
         antigo, a marca `nao_consta` é retirada das perguntas copiadas (DEC-179) e o `total_paginas`
         informado é apagado; quando é, ele é copiado (DEC-189).
-      x-trace: [RF-004, RF-011, RF-013, CA-001, RN-042, RN-050, CA-048, DEC-147, DEC-179, DEC-189]
+      x-trace: [RF-004, RF-011, RF-013, CA-001, RN-042, RN-050, CA-048, DEC-147, DEC-179, DEC-189, RF-014, DEC-202]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -406,7 +406,7 @@ paths:
         obrigatoriedade e sensibilidade das perguntas da RN-050 são reaplicados pelo sistema (DEC-145).
         `total_paginas` fora do papel antigo ou menor que a maior página das perguntas → ERR-001; desmarcar
         `papel_antigo` o apaga (ENT-006, DEC-181).
-      x-trace: [RF-004, RF-011, RF-013, CA-001, CA-015, RN-042, TS-006, RN-021, DEC-095, DEC-097, RN-050, CA-048, CA-057, CA-058, DEC-143, DEC-145, DEC-179, DEC-181]
+      x-trace: [RF-004, RF-011, RF-013, CA-001, CA-015, RN-042, TS-006, RN-021, DEC-095, DEC-097, RN-050, CA-048, CA-057, CA-058, DEC-143, DEC-145, DEC-179, DEC-181, RF-014, CA-059, DEC-202]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -480,7 +480,7 @@ paths:
         fiduciais (DEC-048). A página 1 traz o termo de consentimento do tenant
         (`termo_consentimento`, DEC-094) com campo de assinatura.
         Versão em rascunho ou de papel antigo não gera PDF → ERR-018 (CA-028, CA-052, DEC-175).
-      x-trace: [RF-004, RF-013, CA-028, CA-052, DEC-005, DEC-048, DEC-094, DEC-175]
+      x-trace: [RF-004, RF-013, CA-028, CA-052, DEC-005, DEC-048, DEC-094, DEC-175, RF-014, CA-059, DEC-202]
       parameters:
         - $ref: '#/components/parameters/FormId'
         - $ref: '#/components/parameters/VersionId'
@@ -533,7 +533,7 @@ paths:
         sem `sem_dados_reais` = true (`campos`: `sem_dados_reais`) → 400 ERR-001; arquivo fora
         dos limites → 400 ERR-029 com o motivo (DEC-136). O resultado, um formulário novo com a
         versão 1 em rascunho, é consultado em `getFormImport`.
-      x-trace: [RF-011, CA-045, CA-046, CA-047, RN-049, RN-050, DEC-132, DEC-133, DEC-136, DEC-146, RF-013, CA-058, DEC-181, DEC-190]
+      x-trace: [RF-011, CA-045, CA-046, CA-047, RN-049, RN-050, DEC-132, DEC-133, DEC-136, DEC-146, RF-013, CA-058, DEC-181, DEC-190, RF-014, CA-059, DEC-197]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -600,7 +600,7 @@ paths:
         No papel antigo, `data_aplicacao` e `local_aplicacao` viram o padrão do projeto no próprio
         envio (DEC-192) e preenchem as perguntas `nao_consta` quando a localização confirma a versão
         e as páginas (DEC-179, DEC-186, CA-057). Só conta o QR no formato do MinhaPesquisa (DEC-187).
-      x-trace: [RF-006, RF-013, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040, CA-052, CA-053, CA-055, CA-057, RN-040, DEC-029, DEC-169, DEC-179, DEC-180, DEC-182, DEC-185, DEC-186, DEC-187, DEC-192]
+      x-trace: [RF-006, RF-013, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040, CA-052, CA-053, CA-055, CA-057, RN-040, DEC-029, DEC-169, DEC-179, DEC-180, DEC-182, DEC-185, DEC-186, DEC-187, DEC-192, RF-014, CA-060, DEC-198]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -684,7 +684,7 @@ paths:
         com folha de QR legível (DEC-184); `data_aplicacao` e `local_aplicacao`, quando vierem, substituem
         os gravados no envio, só o que vier, e são aplicados ou apagados ao fim da localização (DEC-182,
         DEC-185, DEC-186).
-      x-trace: [RF-006, RF-013, CA-013, CA-040, CA-057, RN-040, DEC-098, DEC-169, DEC-180, DEC-182, DEC-184, DEC-185, DEC-186]
+      x-trace: [RF-006, RF-013, CA-013, CA-040, CA-057, RN-040, DEC-098, DEC-169, DEC-180, DEC-182, DEC-184, DEC-185, DEC-186, RF-014, CA-060, DEC-198]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -795,7 +795,7 @@ paths:
       tags: [review]
       summary: Consulta aplicação
       description: CPF mascarado; completo só depois de openReview, com auditoria (RN-013).
-      x-trace: [RF-008, RN-013]
+      x-trace: [RF-008, RN-013, RF-014, CA-059, CA-060]
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
       responses:
@@ -820,7 +820,7 @@ paths:
       description: |
         Sem reserva (DEC-112). Exibe o CPF completo, com auditoria EXIBICAO_CPF (RN-013).
         Estado que não admite revisão → 409 ERR-018.
-      x-trace: [RF-008, RN-013, DEC-112]
+      x-trace: [RF-008, RN-013, DEC-112, RF-014, CA-059]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -874,7 +874,10 @@ paths:
         Ações: confirmar, corrigir, em branco, ilegível, rasurado, não se aplica (CA-007).
         Correções são auditadas sem valores (CA-008). Reavalia regras de salto (CA-020).
         Edição concorrente (outra aba) é recusada pelo If-Match (ERR-017).
-      x-trace: [RF-008, CA-007, CA-008, CA-020]
+        A mudança do valor de uma pergunta com opção com complemento reavalia o item de complemento
+        pela regra 1b da FL-002 (DEC-197, DEC-200); o item de complemento é revisado como os demais,
+        com `corrigir` limitado a 200 caracteres (REQ §5.4).
+      x-trace: [RF-008, RF-014, CA-007, CA-008, CA-020, CA-059]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -957,7 +960,7 @@ paths:
         Confere QR da versão e da página (sem QR legível, a folha não vai à IA e a usuária confirma
         na conferência que é a página 1, DEC-183) sem reler os outros campos; exige a confirmação humana
         da assinatura (RN-044); vincula o respondente com o `manter_cadastro` gravado (CA-044).
-      x-trace: [RF-008, RF-013, CA-044, RN-044, DEC-183]
+      x-trace: [RF-008, RF-013, CA-044, RN-044, DEC-183, RF-014, CA-060, DEC-198]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1257,8 +1260,10 @@ paths:
         `retencao_exportacao_dias` (RN-030). Sem assinatura fica fora (CA-021), exceto papel antigo (DEC-172). No CSV, células de
         texto que começam com `=`, `+`, `-`, `@`, tabulação ou retorno de carro recebem um
         apóstrofo; no XLSX saem como estão, em célula de texto, nunca como fórmula (DEC-166). Com `linha_por_item`, `filtros` → ERR-001 (DEC-163) e `rotulos` é ignorado
-        (a planilha traz código e rótulo).
-      x-trace: [RF-010, RF-012, RN-051, CA-021, CA-022, CA-050, CA-051, CA-054, DEC-014, DEC-109, DEC-110, DEC-153, DEC-163, DEC-166, DEC-172]
+        (a planilha traz código e rótulo). O formato longo traz as colunas `Arquivo` (nome do arquivo
+        da página da pergunta) e `Complemento` (texto ao lado da opção com complemento, só na linha
+        dessa opção), na ordem da RN-051 (DEC-201).
+      x-trace: [RF-010, RF-012, RF-014, RN-051, CA-021, CA-022, CA-050, CA-051, CA-054, CA-059, CA-060, DEC-014, DEC-109, DEC-110, DEC-153, DEC-163, DEC-166, DEC-172, DEC-201]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1861,6 +1866,7 @@ components:
               codigo: { type: string, pattern: '^[a-z0-9_]+$', maxLength: 50 }
               rotulo: { type: string, maxLength: 200 }
               ordem: { type: integer, minimum: 1 }
+              com_complemento: { type: boolean, default: false, description: 'A opção pede um texto ao lado ("Outro: ____"), lido num item de complemento e impresso no PDF com uma linha para escrever (DEC-197, DEC-202). Só em escolha_unica e multipla_escolha, nunca em nenhuma_das_anteriores; fora disso → 400 ERR-001 com o código da pergunta em `campos` (RN-047)' }
 
     SkipRule:
       type: object
@@ -1990,7 +1996,7 @@ components:
       properties:
         aplicacao_id: { type: string, format: uuid }
         estado: { $ref: '#/components/schemas/ApplicationState' }
-        paginas: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PageRef' } }
+        paginas: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PageRef' }, description: 'Na ordem do envio (arquivos na ordem recebida e, em cada um, as páginas na ordem do arquivo); a posição na lista, a partir de 1, é o número mostrado no resultado do envio, ao lado de `nome_arquivo` (DEC-198, CA-060)' }
         aviso:
           allOf:
             - $ref: '#/components/schemas/ErrorCode'
@@ -2080,6 +2086,7 @@ components:
         numero_pagina: { type: integer, minimum: 1, nullable: true }
         tipo: { type: string, enum: [formulario, assinatura] }
         registro_ok: { type: boolean }
+        nome_arquivo: { type: string, maxLength: 255, nullable: true, description: 'Nome original do arquivo de onde veio a página, sem a pasta (DEC-198); dado pessoal, nunca em log (RN-028); nulo nas páginas enviadas antes da REQ v2.8 e depois do expurgo da imagem' }
 
     PageImage:
       type: object
@@ -2124,6 +2131,7 @@ components:
         id: { type: string, format: uuid }
         pergunta_codigo: { type: string }
         linha_codigo: { type: string, nullable: true, description: Linha da matriz (RN-009) }
+        opcao_codigo: { type: string, nullable: true, description: 'Opção do item de complemento (RN-009, DEC-197): o texto escrito ao lado dessa opção, revisado como um valor à parte; segue a regra 1b da FL-002 e é opcional (DEC-199, DEC-200). Nulo nos demais itens' }
         valor_ia: { type: string, nullable: true, description: 'Formato canônico (REQ §5.4); CPF mascarado salvo depois de openReview (RN-013)' }
         confianca: { type: number, minimum: 0, maximum: 1, nullable: true, description: Valor bruto (até 4 casas) }
         valor_final: { type: string, nullable: true }

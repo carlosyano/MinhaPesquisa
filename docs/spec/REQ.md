@@ -1,9 +1,9 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005) · CHG-013 aceita na v2.3 · CHG-014 aceita na v2.4 · CHG-015 aceita na v2.5 · CHG-016 aceita na v2.6 · CHG-017 aceita na v2.7 (Q-063 a Q-071 respondidas; REV-REQ-011 a REV-REQ-015; Q-072 a Q-081 respondidas; ciclo de revisão encerrado pela DEC-073 na rodada 5; Q-082 e Q-083, do IA-DEV do IMP-008, respondidas)
-Versão: 2.7
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011) · 05/11/2026 (v2.3, CHG-013; v2.4, CHG-014; v2.5, CHG-015; v2.6, CHG-016) · 06/11/2026 (v2.7, CHG-017)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005) · CHG-013 aceita na v2.3 · CHG-014 aceita na v2.4 · CHG-015 aceita na v2.5 · CHG-016 aceita na v2.6 · CHG-017 aceita na v2.7 (Q-063 a Q-071 respondidas; REV-REQ-011 a REV-REQ-015; Q-072 a Q-081 respondidas; ciclo de revisão encerrado pela DEC-073 na rodada 5; Q-082 e Q-083, do IA-DEV do IMP-008, respondidas) · CHG-018 proposta na v2.8 (Q-084 a Q-089 respondidas; ciclo de revisão pendente)
+Versão: 2.8
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011) · 05/11/2026 (v2.3, CHG-013; v2.4, CHG-014; v2.5, CHG-015; v2.6, CHG-016) · 06/11/2026 (v2.7, CHG-017) · 07/11/2026 (v2.8, CHG-018, proposta)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado), aplicado no que couber à aplicação local da DEC-107
 Responsável: Carlos Yano
@@ -18,7 +18,7 @@ Nota da v2.6 (CHG-016, IA-TEST do IMP-007): o apóstrofo contra fórmulas fica s
 
 Nota da v2.7 (CHG-017, Change Request de 06/11/2026 em `docs/historico/`, revisto com o responsável): a usuária passa a digitalizar também pesquisas antigas, sem QR e sem os marcadores dos cantos, por scanner ou foto. Em toda página, a IA recebe a página inteira numa chamada só de localização, que devolve qual página da versão é a folha e a região de cada pergunta, sem ler nenhum valor; a leitura continua por recortes, em chamadas separadas (DEC-169 a DEC-171, exceção da RN-038). Sem QR, a usuária escolhe a versão no envio. A versão de papel antigo dispensa CPF e assinatura na conclusão (DEC-172), e a base legal desses dados é garantida fora do sistema (DEC-173). As Q-063 a Q-065 foram respondidas em 06/11/2026: o papel antigo é marcado na versão (DEC-175), o respondente sem CPF é vinculado só pelo nome, com a data de nascimento também dispensada (DEC-176), e a pergunta que a localização não encontra vai à revisão sem leitura (DEC-177). A revisão focada (REV-REQ-011) levou às Q-066 a Q-068: limite próprio de confiança da página (DEC-178), perguntas que "não constam" no papel antigo, com data e local digitados no envio e guardados como padrão do projeto (DEC-179), e o QR legível sempre decide a versão (DEC-180). A rodada 2 (REV-REQ-012) levou às Q-069 a Q-071: a importação de papel antigo mantém a página original de cada pergunta (DEC-181), data e local do envio só valem quando a versão final é de papel antigo (DEC-182) e a página 1 assinada sem QR é conferida pela usuária (DEC-183). A rodada 3 (REV-REQ-013), feita depois do aceite, levou às Q-072 e Q-073: aplicação com folha de QR legível, válido ou não, nunca recebe versão de papel antigo (DEC-184), e data e local do envio ficam guardados enquanto a aplicação está em `identificacao_pendente` (DEC-185). A rodada 4 (REV-REQ-014) levou às Q-074 a Q-079: data e local são aplicados ou apagados só quando a localização confirma a versão e as páginas (DEC-186); só conta o QR do MinhaPesquisa (DEC-187); a folha de página sem perguntas é reconhecida por eliminação (DEC-188); a cópia leva o total de páginas do papel antigo (DEC-189); os campos que o papel antigo não tem entram no início da página 1 (DEC-190); e a eliminação de respondente sem CPF lista as aplicações de papel antigo de mesmo nome (DEC-191). A rodada 5 (REV-REQ-015) encerrou o ciclo, com 0 bloqueantes e 0 altos, e levou às Q-080 e Q-081: o padrão de data e local muda no próprio envio (DEC-192), e a lista da eliminação usa o NOME revisado ou o lido e fica gravada no pedido (DEC-193). O IA-DEV do IMP-008 levou às Q-082 e Q-083: a múltipla escolha de papel antigo dispensa "nenhuma das anteriores" (DEC-195), e a contagem de folhas no envio vale também sem QR (DEC-196).
 
-Nota da v2.8 (CHG-018, testes preliminares do responsável em 07/11/2026, em andamento): as Q-084 e Q-085 foram respondidas em 07/11/2026. A opção "Outro" ganha um texto complementar, lido, revisado e exportado numa coluna própria (DEC-197), e o nome do arquivo enviado é gravado como dado pessoal, mostrado no resultado e exportado (DEC-198). A propagação às entidades, regras, requisitos, contrato e critérios de aceite ainda não foi feita: até lá, o texto atual desses itens continua valendo.
+Nota da v2.8 (CHG-018, testes preliminares do responsável em 07/11/2026): as Q-084 e Q-085 foram respondidas em 07/11/2026. A opção "Outro" ganha um texto complementar, lido, revisado e exportado numa coluna própria (DEC-197), e o nome do arquivo enviado é gravado como dado pessoal, mostrado no resultado e exportado (DEC-198). As Q-086 a Q-089, abertas na propagação, foram respondidas no mesmo dia: o complemento é opcional (DEC-199), segue a regra geral de confiança (DEC-200), sai nas colunas `Arquivo` e `Complemento` do formato longo (DEC-201) e é marcado também no editor, com uma linha impressa no PDF (DEC-202). O complemento é um item de resposta próprio, ligado à opção (RN-009, ENT-011), que só vale quando a opção é marcada (FL-002, regra 1b).
 
 1. Resumo em linguagem simples
 
@@ -66,6 +66,7 @@ Uma única instituição (clínica, cooperativa ou outra entidade que conduza pe
 - Relatórios e dashboards por projeto, por formulário, por respondente e por grupo dinâmico (filtros por idade, estado civil, condição de saúde etc.).
 - Acesso por senha local, trilha de auditoria, exportação e direitos do titular.
 - Exportação em formato longo (uma linha por item, XLSX ou CSV), pronta para tabela dinâmica (RF-012, DEC-153).
+- Texto escrito ao lado da opção "Outro", lido, revisado e exportado, e nome do arquivo enviado guardado em cada página e exportado (RF-014, DEC-197, DEC-198).
 - Instalação local, disco cifrado e backup diário cifrado em disco externo (DEC-107, DEC-117).
 
 2.7 Fora do escopo da v1 (etapa posterior)
@@ -279,8 +280,12 @@ Regra de precedência: em caso de conflito entre o texto desta REQ e esta tabela
 | DEC-193 | 06/11/2026 | negócio | Nome e momento da lista de aplicações na eliminação sem CPF (Q-081) | NOME revisado ou lido, lista gravada na execução; só o revisado, lista na hora | Na lista da DEC-191, o nome de cada aplicação é o `valor_final` do NOME ou, sem ele, o `valor_ia`. A lista é recalculada a cada consulta enquanto o pedido não foi executado e fica gravada no pedido na execução (`PedidoTitular.aplicacoes_mesmo_nome`), para continuar visível depois da anonimização | Resposta do responsável: aceita a recomendação (Carlos Yano, 06/11/2026); o NOME vai sempre à revisão (FL-002, regra 6) e a aplicação em andamento pode ainda não ter `valor_final` | definitivo | Baixo | DEC-176, DEC-191, ENT-018, CA-056 |
 | DEC-195 | 06/11/2026 | negócio | "Nenhuma das anteriores" na múltipla escolha de papel antigo (Q-082) | Só no papel antigo; em todo formulário; manter a RN-047 | Na versão de papel antigo, a `multipla_escolha` não precisa da opção `nenhuma_das_anteriores`: a importação de papel antigo não a acrescenta (RN-049) e a publicação não a exige (RN-047, DEC-096). Fora do papel antigo nada muda. Quando a opção existe, a regra 7 da FL-002 continua valendo | Resposta do responsável: aceita a recomendação, opção B (Carlos Yano, 06/11/2026); o papel antigo não tem essa caixa impressa, e a opção nunca viria marcada da leitura | definitivo | Baixo | RN-047, RN-049, DEC-096, DEC-181, CA-058 |
 | DEC-196 | 06/11/2026 | negócio | Contagem de folhas no envio sem QR (Q-083) | No envio, também sem QR; só no fim da localização | A linha 4 da tabela de criação da FL-001 vale também com a versão escolhida no envio: número de folhas diferente do total da versão leva a `identificacao_pendente` (ERR-004) já no envio, sem localização (CA-052, exemplo 2). O CA-053, exemplo 9, passa a partir dessa pendência | Resposta do responsável: opção A (Carlos Yano, 06/11/2026); evita localizar folhas que já se sabe que não fecham com a versão | definitivo | Baixo | FL-001, CA-052, CA-053, DEC-171, RN-052 |
-| DEC-197 | 07/11/2026 | negócio | Texto escrito ao lado da opção "Outro" (Q-084) | Texto livre da opção, lido, revisado e exportado; pergunta de texto curto depois; fora do escopo | A opção "Outro" ("Outros", "Especifique", "Qual?") pode ter um texto complementar: a importação a reconhece e marca a opção como opção com complemento; quando ela é marcada, a IA lê também o texto escrito ao lado, que vai à revisão como um valor à parte do item, e a exportação leva esse texto numa coluna própria. A propagação (ENT-008, ENT-011, RN-049, RF-007, revisão, RN-051, contrato e CAs) está na CHG-018 | Resposta do responsável: opção A (Carlos Yano, 07/11/2026); nos testes preliminares, "Outros: Maternidade" foi gravado só como `outro` e a palavra se perdeu | definitivo | Médio | ENT-008, ENT-011, RN-049, RN-051, RF-007, RF-012 |
-| DEC-198 | 07/11/2026 | negócio | Nome do arquivo enviado (Q-085) | Só na tela, sem gravar; gravar como dado pessoal; gravar e exportar | O nome original do arquivo enviado é gravado em cada página que veio dele (ENT-025), tratado como dado pessoal (o nome costuma trazer o nome da pessoa): expurgado com a imagem, nunca em log (RN-028). O resultado do envio mostra o nome do arquivo e o número sequencial da página na ordem de envio, e a exportação leva o nome do arquivo numa coluna própria. A propagação (ENT-025, RF-005, RN-051, contrato e CAs) está na CHG-018 | Resposta do responsável: opção C (Carlos Yano, 07/11/2026); um arquivo por pessoa, com todas as páginas, é o envio normal, e o nome do arquivo ajuda a conferir a planilha | definitivo | Médio | ENT-025, RF-005, RF-012, RN-028, RN-051 |
+| DEC-197 | 07/11/2026 | negócio | Texto escrito ao lado da opção "Outro" (Q-084) | Texto livre da opção, lido, revisado e exportado; pergunta de texto curto depois; fora do escopo | A opção "Outro" ("Outros", "Especifique", "Qual?") pode ter um texto complementar: a importação a reconhece e marca a opção como opção com complemento; quando ela é marcada, a IA lê também o texto escrito ao lado, que vai à revisão como um valor à parte do item, e a exportação leva esse texto numa coluna própria. Propagada na v2.8 (DEC-199 a DEC-202) | Resposta do responsável: opção A (Carlos Yano, 07/11/2026); nos testes preliminares, "Outros: Maternidade" foi gravado só como `outro` e a palavra se perdeu | definitivo | Médio | ENT-008, ENT-011, RN-049, RN-051, RF-007, RF-012 |
+| DEC-198 | 07/11/2026 | negócio | Nome do arquivo enviado (Q-085) | Só na tela, sem gravar; gravar como dado pessoal; gravar e exportar | O nome original do arquivo enviado é gravado em cada página que veio dele (ENT-025), tratado como dado pessoal (o nome costuma trazer o nome da pessoa): expurgado com a imagem, nunca em log (RN-028). O resultado do envio mostra o nome do arquivo e o número sequencial da página na ordem de envio, e a exportação leva o nome do arquivo numa coluna própria. Propagada na v2.8 (ENT-025, RF-006, RN-051, DEC-201) | Resposta do responsável: opção C (Carlos Yano, 07/11/2026); um arquivo por pessoa, com todas as páginas, é o envio normal, e o nome do arquivo ajuda a conferir a planilha | definitivo | Médio | ENT-025, RF-005, RF-012, RN-028, RN-051 |
+| DEC-199 | 07/11/2026 | negócio | Complemento vazio com "Outro" marcado (Q-086) | Opcional; obrigatório | O complemento é opcional: com a opção marcada e nada escrito, ilegível ou rasurado ao lado, o item de complemento é resolvido como `em_branco`, `ilegivel` ou `rasurado` e não impede a conclusão; a exportação leva a célula `Complemento` vazia | Resposta do responsável: recomendação aceita (Carlos Yano, 07/11/2026); o idoso muitas vezes marca "Outro" sem especificar | definitivo | Baixo | RN-009, FL-002, RN-051, CA-059 |
+| DEC-200 | 07/11/2026 | negócio | Revisão do complemento (Q-087) | Sempre à revisão, como o texto curto; regra geral de confiança | O item de complemento segue a regra geral da FL-002: lido em branco vai a `a_revisar` (regra 6a, DEC-074); acima do limite de confiança (DEC-028) é confirmado automaticamente (regra 8); senão vai a `a_revisar`. A regra 6 (texto curto e texto livre sempre à revisão, DEC-066) não se aplica a ele | Resposta do responsável: "Regra geral de confiança" (Carlos Yano, 07/11/2026), contra a recomendação de levá-lo sempre à revisão; até a calibração o limite é 1,00 (DEC-127), e na prática ele vai à revisão | definitivo | Médio | FL-002, DEC-028, DEC-066, DEC-074, CA-059 |
+| DEC-201 | 07/11/2026 | negócio | Colunas do complemento e do arquivo no formato longo (Q-088) | Colunas novas por pergunta; arquivo por aplicação | A RN-051 ganha a coluna `Arquivo`, logo depois de `ID_Aplicacao`, com o nome do arquivo da página da versão onde está a pergunta, e a coluna `Complemento`, logo depois de `Rotulo_Opcao_Valor`, preenchida só na linha da opção com complemento marcada, com o `valor_final` do item de complemento | Resposta do responsável: recomendação aceita (Carlos Yano, 07/11/2026); na tabela dinâmica, cada linha diz de que arquivo veio | definitivo | Médio | RN-051, RF-012, CA-050, CA-059, CA-060 |
+| DEC-202 | 07/11/2026 | negócio | Onde a opção ganha complemento (Q-089) | Editor e PDF; só na importação | A marca `com_complemento` da opção (ENT-008) é posta pela importação (RN-049) e pode ser ligada e desligada pela usuária no rascunho (`createVersion`, `updateVersion`); o PDF gerado (`generatePdf`) imprime uma linha para escrever depois do rótulo dessa opção. Só opções de `escolha_unica` e `multipla_escolha` a admitem, e nunca `nenhuma_das_anteriores` (RN-047) | Resposta do responsável: recomendação aceita (Carlos Yano, 07/11/2026) | definitivo | Baixo | ENT-008, RN-047, RN-049, RF-004, RF-011, CA-059 |
 
 3.1 Decisões ainda pendentes (viram Q ou GX)
 
@@ -342,7 +347,7 @@ RN-008 — Parâmetros de configuração
 Os parâmetros DEVEM ter escopo (tenant, plataforma ou projeto), padrão e forma de alteração com auditoria, conforme a tabela da seção 2.9.
 
 RN-009 — Item de resposta
-O item de resposta DEVE ser um por pergunta; na matriz, um por linha; na múltipla escolha, a lista de códigos fica no mesmo item.
+O item de resposta DEVE ser um por pergunta; na matriz, um por linha; na múltipla escolha, a lista de códigos fica no mesmo item. Cada opção com complemento (`com_complemento`, DEC-202) gera também um item de complemento, ligado à pergunta e à opção (`opcao_id`), com o texto escrito ao lado dela (DEC-197); ele só vale quando a opção é marcada (FL-002, regra 1b) e é opcional (DEC-199).
 
 RN-010 — Valor e estado separados
 O item DEVE guardar o valor lido pela IA, a confiança, o valor final e o estado como campos separados.
@@ -399,7 +404,7 @@ RN-027 — Trilha de auditoria (RNF-005)
 Trilha de auditoria imutável de acesso a dado individual, correção, exportação e mudança de status; a auditoria guarda só referências (quem, quando, qual registro, qual campo, qual ação), nunca os valores.
 
 RN-028 — Logs sem dado sensível (RNF-006)
-Logs sem dado de saúde, nome, CPF ou conteúdo lido.
+Logs sem dado de saúde, nome, CPF, conteúdo lido ou nome de arquivo enviado (DEC-198).
 
 RN-029 — Imagens privadas (RNF-007)
 Imagens em pasta local privada do notebook, acesso só por link assinado local válido por 5 minutos (DEC-112).
@@ -453,7 +458,7 @@ RN-045 — Contrato do motor de leitura
 O motor de leitura (DEC-007) DEVE receber uma imagem recortada e um schema dos campos esperados (tipo, opções, faixa), e DEVE devolver, por campo: o valor lido, a confiança e a região da imagem de onde veio (bounding box). O motor NÃO decide o que vai para revisão; quem chama é que decide. O motor NÃO conhece projeto, pesquisa, tenant, respondente nem receita; na leitura, também não conhece o formulário. Na localização (RN-052), o motor recebe a página inteira e a lista das perguntas da versão por página (código, enunciado e tipo, sem projeto nem tenant), e DEVE devolver só o número da página, a confiança, a região de cada pergunta (na matriz, de cada linha, com o código da pergunta e o da linha) e, na página 1, a região da assinatura; resposta com texto lido ou fora desse schema é recusada (RN-037).
 
 RN-047 — Estrutura de perguntas de matriz e múltipla escolha (DEC-010)
-Pergunta do tipo `matriz` DEVE ter linhas com código estável (ENT-024) e opções comuns; gera um item de resposta por linha (RN-009). Pergunta do tipo `multipla_escolha` DEVE ter a opção "nenhuma das anteriores" com código `nenhuma_das_anteriores`, exceto na versão de papel antigo (DEC-195). Pergunta do tipo `sim_nao` tem as opções fixas `sim` e `nao`, criadas automaticamente. Pergunta com `campo_respondente` ou `campo_aplicacao = aplicador` DEVE ter `sensibilidade = identificacao` (RN-039), definida automaticamente e não editável. Nas demais perguntas, `sensibilidade` é `saude` ou `outro`; `identificacao` nelas é recusada com ERR-001 (DEC-097). Sem a estrutura exigida, a publicação é recusada (ERR-036), com os códigos das perguntas com problema em `campos` (DEC-096).
+Pergunta do tipo `matriz` DEVE ter linhas com código estável (ENT-024) e opções comuns; gera um item de resposta por linha (RN-009). Pergunta do tipo `multipla_escolha` DEVE ter a opção "nenhuma das anteriores" com código `nenhuma_das_anteriores`, exceto na versão de papel antigo (DEC-195). Pergunta do tipo `sim_nao` tem as opções fixas `sim` e `nao`, criadas automaticamente. Só opções de `escolha_unica` e `multipla_escolha` podem ter `com_complemento`, e nunca a `nenhuma_das_anteriores`; caso contrário, o rascunho é recusado com ERR-001, com o código da pergunta em `campos` (DEC-202). Pergunta com `campo_respondente` ou `campo_aplicacao = aplicador` DEVE ter `sensibilidade = identificacao` (RN-039), definida automaticamente e não editável. Nas demais perguntas, `sensibilidade` é `saude` ou `outro`; `identificacao` nelas é recusada com ERR-001 (DEC-097). Sem a estrutura exigida, a publicação é recusada (ERR-036), com os códigos das perguntas com problema em `campos` (DEC-096).
 
 RN-048 — Autenticação e sessão (Bloco P P.2, DEC-108)
 Senha de 10 a 72 caracteres, com minúscula, maiúscula e dígito, fora da lista de senhas vazadas, guardada com Argon2id. Após 5 falhas em 15 minutos para o mesmo e-mail, exista ou não a conta, novas tentativas são bloqueadas por 15 minutos. Sessão expira após 30 minutos de inatividade ou 24 horas; no máximo 3 sessões ativas por usuário. Sem MFA, convite ou link de recuperação: a senha é redefinida por script local (DEC-108).
@@ -462,7 +467,7 @@ RN-046 — Conjunto-ouro e limites por domínio
 O conjunto-ouro e os limites de confiança SÃO por domínio. O conjunto-ouro do MinhaPesquisa (formulários de pesquisa, público 60+) NÃO serve para o MeuRemedio (receitas médicas). Cada domínio DEVE ter seu próprio gabarito humano e suas próprias metas de erro silencioso.
 
 RN-049 — Importação de formulário (DEC-132, DEC-133, DEC-136, DEC-138, DEC-139, DEC-143, DEC-144, DEC-146)
-Entradas: o projeto, ativo (arquivado → ERR-001, DEC-146); o nome do formulário novo; a declaração `sem_dados_reais` (sem ela, ERR-001); e um ou mais arquivos nos tipos e limites da DEC-029, com no máximo 50 páginas no envio, varredura de malware e remoção de metadados como no RF-006 (ERR-029). As páginas são lidas na ordem do envio. O extrator é instruído a devolver só o que está impresso e a ignorar respostas e marcas feitas à mão; a garantia de que não há dado pessoal é a declaração da usuária (DEC-133). Por pergunta, o extrator devolve: enunciado; tipo (um dos 10 do ENT-007, ou desconhecido); rótulos das opções; linhas de matriz; faixa, em escala e número; e `campo_padrao`, um dos 5 campos da RN-050, `endereco`, `aplicador` ou nenhum (DEC-144, DEC-149). A saída é validada contra esse formato (RN-037); saída fora do formato conta como falha da chamada, com as mesmas retentativas (FL-004). Primeiro, a pergunta com `campo_padrao` é tratada pelo passo 1 abaixo; as demais são ajustadas pela tabela; cada ajuste gera um aviso com a página e a posição no original, sem texto lido. Os avisos ficam em ordem de página e posição.
+Entradas: o projeto, ativo (arquivado → ERR-001, DEC-146); o nome do formulário novo; a declaração `sem_dados_reais` (sem ela, ERR-001); e um ou mais arquivos nos tipos e limites da DEC-029, com no máximo 50 páginas no envio, varredura de malware e remoção de metadados como no RF-006 (ERR-029). As páginas são lidas na ordem do envio. O extrator é instruído a devolver só o que está impresso e a ignorar respostas e marcas feitas à mão; a garantia de que não há dado pessoal é a declaração da usuária (DEC-133). Por pergunta, o extrator devolve: enunciado; tipo (um dos 10 do ENT-007, ou desconhecido); rótulos das opções e, em cada uma, se pede um texto ao lado ("Outro", "Outros", "Especifique", "Qual?" ou uma linha para escrever, DEC-197); linhas de matriz; faixa, em escala e número; e `campo_padrao`, um dos 5 campos da RN-050, `endereco`, `aplicador` ou nenhum (DEC-144, DEC-149). A saída é validada contra esse formato (RN-037); saída fora do formato conta como falha da chamada, com as mesmas retentativas (FL-004). Primeiro, a pergunta com `campo_padrao` é tratada pelo passo 1 abaixo; as demais são ajustadas pela tabela; cada ajuste gera um aviso com a página e a posição no original, sem texto lido. Os avisos ficam em ordem de página e posição.
 
 | Pergunta lida | Resultado | Aviso |
 |---|---|---|
@@ -474,6 +479,7 @@ Entradas: o projeto, ativo (arquivado → ERR-001, DEC-146); o nome do formulár
 | Enunciado com mais de 2000 caracteres, ou rótulo de opção ou linha com mais de 200 | cortado no limite | `texto_cortado` |
 | Opção ou linha com rótulo vazio | a opção ou linha é descartada; se a pergunta ficar sem opção ou sem linha, segue as linhas acima | `tipo_incerto` |
 | `sim_nao` | opções trocadas pelas fixas `sim` e `nao` (RN-047) | — |
+| Opção que pede texto ao lado | a opção entra com `com_complemento = true`, com o rótulo sem a linha de escrever e sem os dois-pontos do fim (DEC-197); em pergunta que não é `escolha_unica` nem `multipla_escolha`, a marca é descartada (RN-047) | — |
 | `multipla_escolha` sem opção de código `nenhuma_das_anteriores` | ganha a opção "Nenhuma das anteriores" no fim (RN-047), exceto na importação de papel antigo (DEC-195) | — |
 | `campo_padrao` já usado por pergunta anterior | fica como pergunta comum (DEC-144) | `campo_repetido` |
 | Mais alta que a área útil de uma página do PDF sem o termo de consentimento (página 2 em diante) | descartada (DEC-143) | `nao_cabe` |
@@ -502,6 +508,7 @@ O escopo `linha_por_item` gera um arquivo XLSX ou CSV (DEC-159) com uma linha de
 | Coluna | Conteúdo |
 |---|---|
 | ID_Aplicacao | identificador da aplicação (UUID, DEC-160) |
+| Arquivo | nome do arquivo enviado da página da versão onde está a pergunta (`PaginaAplicacao.nome_arquivo`, DEC-198, DEC-201); vazio quando a página foi enviada antes da v2.8 ou já foi expurgada |
 | CPF | CPF do cadastro do respondente, completo, com 11 dígitos sem pontuação, como texto (DEC-155); vazio no respondente de papel antigo sem CPF (DEC-172) |
 | Nome | nome do cadastro do respondente (DEC-162) |
 | Data_Aplicacao | data da aplicação, `YYYY-MM-DD` |
@@ -509,6 +516,7 @@ O escopo `linha_por_item` gera um arquivo XLSX ou CSV (DEC-159) com uma linha de
 | Codigo_Linha | código da linha da matriz (RN-019); vazio nas outras perguntas (DEC-154) |
 | Codigo_Opcao_Valor | código da opção marcada; em escala, número, data, texto curto e texto livre, o valor no formato canônico (§5.4, DEC-156); vazio quando `Situacao` não é `respondida` |
 | Rotulo_Opcao_Valor | rótulo da opção na versão da aplicação; vazio quando o valor não é opção ou não há valor |
+| Complemento | na linha da opção com complemento marcada, o `valor_final` do item de complemento (DEC-197, DEC-201); vazio nas demais linhas e quando o complemento está em branco, ilegível, rasurado ou não se aplica (DEC-199) |
 | Situacao | `respondida`, `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica` (DEC-158) |
 
 Entram só as aplicações `concluida` com assinatura `presente` (CA-021, DEC-157) e as de papel antigo `concluida` com qualquer assinatura (DEC-172), dos projetos pedidos e com `data_aplicacao` no período, quando informado; sem período, todas. Os valores são os de `valor_final`. Em cada aplicação, cada pergunta da versão gera linhas assim:
@@ -516,6 +524,7 @@ Entram só as aplicações `concluida` com assinatura `presente` (CA-021, DEC-15
 2. `matriz`: uma linha por linha da matriz, com a opção marcada nela;
 3. demais tipos: uma linha;
 4. item em branco, ilegível, rasurado ou "não se aplica": uma linha, com valor e rótulo vazios e a situação (RN-020); na matriz, uma por linha da matriz.
+O item de complemento não gera linha própria: o texto vai na coluna `Complemento` da linha da sua opção (DEC-201).
 As perguntas marcadas como nome, data de nascimento ou CPF do respondente (`campo_respondente`) e como data da aplicação (`campo_aplicacao = data_aplicacao`) não viram linhas (DEC-162). As linhas seguem a ordem de `Data_Aplicacao` e de `ID_Aplicacao` e, dentro da aplicação, a ordem das perguntas na versão (página e ordem) e das linhas da matriz. Sem aplicação que entre, o arquivo traz só o cabeçalho. As células de texto são neutralizadas contra fórmulas: com apóstrofo no CSV e como célula de texto no XLSX (DEC-166). Os filtros do dashboard não se aplicam (DEC-163). A exportação é auditada uma vez, com escopo, formato, projetos e número de aplicações, sem valores (RN-028); esse registro vale como o da exibição completa do CPF (DEC-072). O arquivo é apagado após `retencao_exportacao_dias` (RN-030, DEC-069), e a partir daí a consulta da exportação não traz mais o link.
 
 RN-052 — Localização das perguntas e papel antigo (DEC-169 a DEC-191)
@@ -668,6 +677,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | codigo | código estável | varchar | sim | 50 | ^[a-z0-9_]+$ | — | — | sim (por pergunta) | — | não |
 | rotulo | texto impresso | varchar | sim | 200 | — | — | — | não | — | não |
 | ordem | ordem | int | sim | — | — | ≥ 1 | — | não | — | não |
+| com_complemento | a opção pede um texto ao lado ("Outro: ____"), lido num item de complemento (DEC-197, DEC-202); só em `escolha_unica` e `multipla_escolha`, nunca em `nenhuma_das_anteriores` (RN-047) | boolean | sim | — | — | true/false | false | não | — | não |
 
 **ENT-009 Respondente**
 
@@ -715,6 +725,7 @@ Propriedades: entidade, campo técnico, significado, tipo, obrigatório, tamanho
 | aplicacao_id | aplicação do item | uuid | sim | 36 | UUID v4 | — | — | não | Aplicacao.id | não |
 | pergunta_id | pergunta do item | uuid | sim | 36 | UUID v4 | — | — | não | Pergunta.id | não |
 | linha_id | linha da matriz (só perguntas do tipo matriz) | uuid | não | 36 | UUID v4 | — | NULL | não | LinhaMatriz.id | não |
+| opcao_id | opção com complemento do item de complemento (RN-009, DEC-197); NULL nos demais itens | uuid | não | 36 | UUID v4 | — | NULL | não | Opcao.id | não |
 | valor_ia | valor lido pela IA, no formato canônico (§5.4); cifrado (DEC-041) quando a pergunta tem `campo_respondente` | text | não | 2000 | — | — | NULL | não | — | sensível |
 | confianca | confiança da IA (valor bruto, sem arredondamento) | decimal | não | 5,4 | — | 0.0000..1.0000 | NULL | não | — | não |
 | valor_final | valor confirmado/corrigido, no formato canônico (§5.4); cifrado (DEC-041) quando a pergunta tem `campo_respondente` | text | não | 2000 | — | — | NULL | não | — | sensível |
@@ -929,6 +940,7 @@ Apagado integralmente na eliminação do titular (CA-023).
 | numero_pagina | página da versão: a do QR ou, sem QR, a indicada pela localização ou pela usuária (DEC-171); NULL até identificar | int | não | — | — | ≥ 1 | NULL | não | — | não |
 | chave_storage | chave do objeto no bucket privado | varchar | sim | 500 | — | — | — | sim | — | não |
 | sha256 | hash do arquivo sem metadados | bytea | sim | 32 | SHA-256 | — | — | não | — | não |
+| nome_arquivo | nome original do arquivo enviado de onde veio a página, sem a pasta, cortado em 255 caracteres (DEC-198); apagado (NULL) no expurgo da imagem; NULL nas páginas enviadas antes da v2.8 | varchar | não | 255 | — | — | NULL | não | — | pessoal |
 | registro_ok | marcadores dos cantos encontrados (DEC-048); desde a DEC-169 só informativo, não impede a leitura | boolean | sim | — | — | true/false | false | não | — | não |
 | regioes | regiões das perguntas da página (e, na página 1, a da assinatura) devolvidas pela localização, em coordenadas normalizadas da imagem, com a confiança (RN-052) | jsonb | não | — | JSON | — | NULL | não | — | não |
 | criado_em | data do upload | timestamp | sim | — | ISO 8601 UTC | — | now() | não | — | não |
@@ -1032,6 +1044,7 @@ O arquivo enviado é um modelo sem dado pessoal (DEC-133) e é apagado ao fim da
 | data | ISO 8601 `YYYY-MM-DD` | `1951-01-01` |
 | cpf | 11 dígitos, sem máscara | `12345678909` |
 | texto_curto, texto_livre | texto UTF-8 normalizado (NFC), sem espaços nas pontas | `Rua A, 10` |
+| item de complemento (RN-009) | texto UTF-8 normalizado (NFC), sem espaços nas pontas, com até 200 caracteres | `Maternidade` |
 
 Filtros e comparações entre versões (RN-018) usam este formato.
 
@@ -1076,8 +1089,8 @@ Estado final: projeto ativo ou arquivado, reversível.
 Quem executa: A usuária.
 Quando pode: Quando o formulário está em rascunho.
 Quando não pode: Quando a versão está publicada (imutável); quando faltam campos obrigatórios (nome, nascimento, CPF, data e local da aplicação); criar formulário em projeto arquivado (ERR-001, DEC-146); pergunta que não cabe na página (DEC-143), exceto na versão de papel antigo (DEC-181).
-Entradas: dados do formulário, perguntas, opções, regras de salto. O rascunho novo sem cópia já traz os 5 campos da RN-050 (DEC-135).
-Sucesso: versão publicada, PDF gerado com QR code por página.
+Entradas: dados do formulário, perguntas, opções (com a marca `com_complemento`, DEC-202), regras de salto. O rascunho novo sem cópia já traz os 5 campos da RN-050 (DEC-135).
+Sucesso: versão publicada, PDF gerado com QR code por página e, depois do rótulo de cada opção com complemento, uma linha para escrever (DEC-202).
 Erro e timeout: ERR-001 (validação), ERR-036 (campos obrigatórios ausentes), ERR-009 (versão publicada é imutável), timeout de 30 s na geração do PDF.
 Registros alterados: Formulario, Versao, Pergunta, Opcao, RegraSalto, Auditoria.
 Mensagens: "Versão publicada" ou a mensagem do ERR-036.
@@ -1099,7 +1112,7 @@ Quem executa: A usuária.
 Quando pode: Quando o projeto está ativo (CA-027).
 Quando não pode: Quando o arquivo não é JPEG/PNG/PDF, passa de 20 MB (ou 50 páginas) ou falha na varredura de malware. Sem QR legível e sem versão escolhida, a aplicação é criada em `identificacao_pendente` (FL-001).
 Entradas: arquivo(s) de imagem, de scanner ou foto, com ou sem QR; projeto escolhido; versão publicada (`versao_id`), opcional; sem QR legível, é ela que define a versão (DEC-169); no papel antigo, data e local da aplicação, propostos com o padrão do projeto (DEC-179).
-Sucesso: aplicação criada com as páginas, versão do QR ou da escolha, localização e leitura disparadas (RN-052).
+Sucesso: aplicação criada com as páginas, versão do QR ou da escolha, localização e leitura disparadas (RN-052); cada página guarda o nome do arquivo de onde veio (DEC-198), e o resultado do envio lista as páginas na ordem do envio, numeradas a partir de 1, com o nome do arquivo de cada uma. O nome do arquivo é dado pessoal: não vai a log nem à auditoria (RN-028).
 Erro e timeout: ERR-001 (validação ou projeto arquivado, CA-027), ERR-029 (arquivo recusado), ERR-004 (sem QR legível e sem versão escolhida, ou páginas inconsistentes), ERR-039 (QR ou versão escolhida de outro contexto), ERR-003 (aviso de cota); timeout de 30 s no storage.
 Registros alterados: Aplicacao (com `origem_qr`), PaginaAplicacao, ItemResposta (pendente_leitura), Projeto (padrão de data e local, no próprio envio, DEC-179, DEC-192), Auditoria.
 Mensagens: "Upload concluído" ou a mensagem do ERR-029 com o motivo.
@@ -1110,7 +1123,7 @@ Quem executa: Worker assíncrono (pg-boss).
 Quando pode: Quando a aplicação tem versão e o tenant tem cota (reserva atômica de orçamento antes de cada chamada, inclusive a de localização).
 Quando não pode: Quando o teto de custo de IA foi atingido (aplicações ficam em `aguardando_cota`).
 Entradas: primeiro, cada página inteira com as perguntas da versão, na chamada de localização (RN-052, DEC-170), que devolve a página e as regiões; depois, os recortes dessas regiões (identificação e saúde em chamadas separadas, sem metadados).
-Sucesso: itens com valor_ia, confianca e estado (confirmado_automaticamente ou a_revisar).
+Sucesso: itens com valor_ia, confianca e estado (confirmado_automaticamente ou a_revisar); na pergunta com opção com complemento, a mesma leitura do recorte devolve também o texto escrito ao lado de cada uma dessas opções, com a sua confiança, gravado no item de complemento (RN-009, DEC-197), que segue a regra 1b da FL-002.
 Erro e timeout: timeout de 30 s por chamada, retentativas em 1 e 2 s (3 chamadas no total, DEC-129); após 3 falhas, aplicação vai para `erro_leitura` (ERR-041); teto atingido → `aguardando_cota` (ERR-003); página não reconhecida ou páginas inconsistentes na localização → `identificacao_pendente` (ERR-004).
 Registros alterados: PaginaAplicacao (`numero_pagina`, `regioes`), ItemResposta, Aplicacao (estado; data e local do envio aplicados ou apagados, DEC-186), Auditoria.
 Mensagens: "Leitura concluída" ou a mensagem do ERR-041.
@@ -1121,7 +1134,7 @@ Quem executa: A usuária (no papel de revisora).
 Quando pode: Quando a aplicação está em `em_revisao`, `aguardando_cpf`, `sem_assinatura`, `identificacao_pendente` ou `erro_leitura` (conforme a ação, FL-001); sem reserva (DEC-112).
 Quando não pode: Quando faltam campos obrigatórios; quando o estado não admite a ação.
 Entradas: ações de revisão (confirmar, corrigir, em branco, ilegível, rasurado, não se aplica), conferência de assinatura, escolha do valor de cadastro em divergência (CA-014), identificação manual de páginas, nova leitura, página 1 assinada (CA-044).
-Sucesso: todos os campos resolvidos; nome, data de nascimento, CPF válido, data e local informados (DEC-020); assinatura presente. Na versão de papel antigo, CPF, data de nascimento e assinatura não são exigidos, e sem CPF a usuária escolhe o respondente de mesmo nome ou um novo (DEC-172, DEC-176).
+Sucesso: todos os campos resolvidos, inclusive os itens de complemento, que são revisados como um valor à parte, ao lado da sua opção (DEC-197), e podem ficar em branco (DEC-199); nome, data de nascimento, CPF válido, data e local informados (DEC-020); assinatura presente. Na versão de papel antigo, CPF, data de nascimento e assinatura não são exigidos, e sem CPF a usuária escolhe o respondente de mesmo nome ou um novo (DEC-172, DEC-176).
 Erro e timeout: ERR-001 (escolha do respondente ausente ou fora dos candidatos no papel antigo sem CPF, ou `respondente_id` enviado fora desse caso, DEC-176), ERR-006 (campos obrigatórios ausentes), ERR-017 (edição concorrente, por exemplo em duas abas), ERR-018 (ação inválida no estado atual), ERR-022 (item não resolvido).
 Registros alterados: ItemResposta (estado, valor_final, revisor_id), Aplicacao (estado, respondente_id, concluida_em), Auditoria.
 Mensagens: "Aplicação concluída" ou "Aguardando [campo obrigatório]".
@@ -1166,7 +1179,7 @@ Quem executa: A usuária; o arquivo é gerado pelo worker assíncrono.
 Quando pode: Sempre que tiver sessão.
 Quando não pode: Com `filtros` (ERR-001, DEC-163); projeto inexistente (ERR-002).
 Entradas: formato (CSV ou XLSX), projetos e, opcionalmente, período (`exportData` com escopo `linha_por_item`).
-Sucesso: arquivo no formato longo da RN-051, disponível pelo link da consulta da exportação até `retencao_exportacao_dias` (DEC-069); auditoria registrada.
+Sucesso: arquivo no formato longo da RN-051, com as colunas `Arquivo` e `Complemento` (DEC-201), disponível pelo link da consulta da exportação até `retencao_exportacao_dias` (DEC-069); auditoria registrada.
 Erro e timeout: ERR-001 (validação), ERR-002 (projeto não encontrado), ERR-019 (Idempotency-Key reusada com outro conteúdo); timeout de 60 s no job (seção 6.6), com a exportação em `falhou`.
 Registros alterados: Exportacao, Auditoria.
 Mensagens: "Exportação concluída".
@@ -1182,6 +1195,17 @@ Erro e timeout: ERR-001 (data do envio futura, DEC-182; respondente fora dos can
 Registros alterados: Aplicacao (`versao_id`, `origem_qr`, data e local do envio, DEC-186), Projeto (padrão de data e local, DEC-192), PaginaAplicacao (`numero_pagina`, `regioes`), ItemResposta, Respondente (papel antigo sem CPF, DEC-176), Auditoria.
 Mensagens: as do RF-006, do RF-007 e do RF-008.
 Estado final: os da FL-001.
+
+**RF-014 — Texto da opção "Outro" e nome do arquivo enviado (CHG-018)**
+Quem executa: A usuária, no editor, no envio, na revisão e na exportação; a leitura e a exportação são feitas pelo worker assíncrono.
+Quando pode: No rascunho, para marcar a opção com complemento (DEC-202); no envio, na leitura, na revisão e na exportação, como no RF-006, no RF-007, no RF-008 e no RF-012.
+Quando não pode: `com_complemento` fora de `escolha_unica` e `multipla_escolha` ou em `nenhuma_das_anteriores` (ERR-001, RN-047); versão publicada (ERR-009).
+Entradas: a marca `com_complemento` da opção (editor ou importação, RN-049); o nome de cada arquivo enviado (`uploadImages`, `addApplicationPages`, `attachSignaturePage`); a revisão do item de complemento (`saveReview`).
+Sucesso: o PDF traz uma linha para escrever depois do rótulo da opção com complemento (DEC-202); o texto ao lado da opção marcada é lido, revisado e exportado na coluna `Complemento` (DEC-197, DEC-199 a DEC-201); cada página guarda o nome do arquivo de onde veio, mostrado no resultado do envio com o número da página na ordem do envio e exportado na coluna `Arquivo` (DEC-198, DEC-201).
+Erro e timeout: os do RF-004, do RF-006, do RF-007, do RF-008 e do RF-012.
+Registros alterados: Opcao (`com_complemento`), PaginaAplicacao (`nome_arquivo`), ItemResposta (item de complemento), Auditoria (sem o nome do arquivo nem o complemento, RN-028).
+Mensagens: as do RF-004, do RF-006, do RF-008 e do RF-012.
+Estado final: os da FL-001 e da FL-002.
 
 6.2 Requisitos não funcionais (RNF)
 
@@ -1213,10 +1237,10 @@ Para cada tela, os estados obrigatórios (Bloco P, P.11): carregando, vazio, suc
 | TL-001 | Login | carregando, vazio (sem conta), sucesso (redireciona), erro (credenciais inválidas), sem permissão (conta bloqueada), tempo esgotado (sessão expirada) |
 | TL-002 | Retirada na v2.1 (sem MFA, DEC-108) | — |
 | TL-003 | Lista de projetos | carregando, vazio (nenhum projeto), sucesso (lista), erro, sem permissão, tempo esgotado |
-| TL-004 | Cadastro de formulário | carregando, vazio, sucesso (salvo), erro (validação), sem permissão, tempo esgotado |
-| TL-005 | Upload de imagens (com a escolha opcional da versão publicada, para envio sem QR, DEC-169) | carregando, vazio, sucesso (aplicação criada), erro (arquivo recusado), sem permissão, tempo esgotado |
+| TL-004 | Cadastro de formulário (com a marca de complemento da opção, DEC-202) | carregando, vazio, sucesso (salvo), erro (validação), sem permissão, tempo esgotado |
+| TL-005 | Upload de imagens (com a escolha opcional da versão publicada, para envio sem QR, DEC-169; o resultado mostra o nome do arquivo e o número de cada página na ordem do envio, DEC-198) | carregando, vazio, sucesso (aplicação criada), erro (arquivo recusado), sem permissão, tempo esgotado |
 | TL-006 | Fila de revisão | carregando, vazio (fila vazia), sucesso (lista), erro, sem permissão, tempo esgotado |
-| TL-007 | Revisão lado a lado (com a página inteira à vista, para o item sem região, DEC-177) | carregando, vazio, sucesso (salvo), erro (validação ou edição concorrente), sem permissão (estado não admite revisão), tempo esgotado |
+| TL-007 | Revisão lado a lado (com a página inteira à vista, para o item sem região, DEC-177; o complemento aparece ao lado da sua opção, DEC-197) | carregando, vazio, sucesso (salvo), erro (validação ou edição concorrente), sem permissão (estado não admite revisão), tempo esgotado |
 | TL-008 | Dashboard | carregando, vazio (sem dados), sucesso (gráficos), erro, sem permissão, tempo esgotado |
 | TL-009 | Ficha individual | carregando, vazio, sucesso (evolução), erro, sem permissão (sessão expirada), tempo esgotado |
 | TL-010 | Exportação (agregada, linha a linha ou linha por item) | carregando, vazio, sucesso (arquivo gerado), erro, sem permissão, tempo esgotado |
@@ -1320,6 +1344,7 @@ Ordem de avaliação ao fim da leitura de um item (a primeira regra que se aplic
 |---|---|---|
 | 0 | Item sem leitura: pergunta `nao_consta` (DEC-179: CPF e data de nascimento → `em_branco`; data e local → `corrigido` com o valor do envio, ou `a_revisar` sem ele), pergunta sem região (DEC-177) ou com região sobreposta (RN-052, item 5) → `a_revisar`; vale mesmo para destino de regra de salto | em_branco, corrigido ou a_revisar |
 | 1 | Item é destino de regra de salto e a pergunta de origem está em `pendente_leitura`, `aguardando_condicao` ou `a_revisar` (CA-018) | aguardando_condicao |
+| 1b | Item de complemento (RN-009, DEC-197), avaliado só por esta regra: (a) item da pergunta em `pendente_leitura`, `aguardando_condicao` ou `a_revisar` → `aguardando_condicao`; (b) item da pergunta em qualquer outro estado, sem a opção do complemento no seu valor (inclusive `em_branco`, `ilegivel`, `rasurado` e `nao_se_aplica`) → `nao_se_aplica`; (c) opção marcada e complemento sem leitura (a pergunta não foi lida, regra 0) → `a_revisar`; (d) opção marcada e complemento lido → regras 6a, 7, 8 e 9, sem a regra 6 (DEC-200); acima de 200 caracteres está fora do schema (regra 7, §5.4) | aguardando_condicao, nao_se_aplica, a_revisar ou confirmado_automaticamente |
 | 2 | Origem resolvida, a regra manda pular e o item está em branco (CA-015) | nao_se_aplica |
 | 3 | Origem resolvida, a regra manda pular e o item está preenchido (CA-019) | a_revisar |
 | 4 | Origem em `nao_se_aplica` (origem pulada por outra regra): destino em branco → `nao_se_aplica`; destino preenchido → `a_revisar` | nao_se_aplica ou a_revisar |
@@ -1331,7 +1356,7 @@ Ordem de avaliação ao fim da leitura de um item (a primeira regra que se aplic
 | 8 | Confiança > limite_confianca (DEC-028; até a calibração o limite é 1,00 e esta regra não se aplica, DEC-127) | confirmado_automaticamente |
 | 9 | Demais casos (confiança ≤ limite) | a_revisar |
 
-Item sem leitura (regra 0) nunca conta como "em branco" nas regras 2, 4 e 6a, que só valem para o valor lido pela IA. O item `corrigido` com o valor do envio (DEC-179) fica com `revisor_id` nulo, e o preenchimento é auditado pelo worker, com os códigos das perguntas e sem os valores (RN-028). "Origem resolvida" (regras 2 e 3) significa origem em `confirmado_automaticamente`, `confirmado` ou `corrigido`. A regra 1 vale só para os três estados que listam; origem em `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica` segue para as regras 4 e 4a. Assim, todo estado da origem cai em exatamente uma das regras 1, 2/3, 4 ou 4a (ou, se a regra de salto não mandar pular, segue para as regras 5 a 9).
+Item sem leitura (regra 0) nunca conta como "em branco" nas regras 2, 4 e 6a, que só valem para o valor lido pela IA. O item de complemento não é destino de regra de salto e não passa pelas regras 0 a 6; o texto lido ao lado de uma opção não marcada é guardado em `valor_ia`, mas não é revisado nem exportado (regra 1b, b). O item `corrigido` com o valor do envio (DEC-179) fica com `revisor_id` nulo, e o preenchimento é auditado pelo worker, com os códigos das perguntas e sem os valores (RN-028). "Origem resolvida" (regras 2 e 3) significa origem em `confirmado_automaticamente`, `confirmado` ou `corrigido`. A regra 1 vale só para os três estados que listam; origem em `em_branco`, `ilegivel`, `rasurado` ou `nao_se_aplica` segue para as regras 4 e 4a. Assim, todo estado da origem cai em exatamente uma das regras 1, 2/3, 4 ou 4a (ou, se a regra de salto não mandar pular, segue para as regras 5 a 9).
 
 "Condição de salto resolvida" (evento da tabela abaixo) é a saída da origem de `pendente_leitura`, `aguardando_condicao` ou `a_revisar` para qualquer outro estado.
 
@@ -1345,6 +1370,9 @@ Item sem leitura (regra 0) nunca conta como "em branco" nas regras 2, 4 e 6a, qu
 | pendente_leitura | leitura concluída | regra 1 | — | aguardando_condicao | worker |
 | pendente_leitura | leitura concluída | regra 2 ou 4 (destino em branco) | — | nao_se_aplica | worker |
 | aguardando_condicao | condição de salto resolvida | regra 2 | — | nao_se_aplica | worker |
+| aguardando_condicao (item de complemento) | item da pergunta sai de `pendente_leitura`, `aguardando_condicao` ou `a_revisar` | regra 1b | avalia pela regra 1b | nao_se_aplica, a_revisar ou confirmado_automaticamente | worker ou API (reavaliação em saveReview) |
+| qualquer estado (item de complemento) | valor do item da pergunta muda e deixa de ter a opção | regra 1b (b) | — | nao_se_aplica | worker ou API (saveReview) |
+| nao_se_aplica (item de complemento) | valor do item da pergunta muda e passa a ter a opção | regra 1b (c) ou (d) | reavalia; o `valor_ia` lido é mantido | a_revisar ou confirmado_automaticamente | worker ou API (saveReview) |
 | aguardando_condicao | condição de salto resolvida | demais regras | avalia pelas regras 3 a 9 | confirmado_automaticamente, nao_se_aplica ou a_revisar | worker ou API (reavaliação em saveReview) |
 | a_revisar | revisor confirma | valor_ia preenchido e no schema (DEC-128); senão ERR-001 | valor_final = valor_ia | confirmado | digitalizador |
 | a_revisar | revisor corrige | — | valor_final = novo valor | corrigido | digitalizador |
@@ -1885,9 +1913,9 @@ CA-050 — Planilha em formato longo
 Dado que o projeto "Saúde 60+" tem a aplicação A1 (`concluida`, assinatura `presente`, data da aplicação 2026-11-05) da respondente "Maria da Silva", CPF "529.982.247-25", e a aplicação A2 (`concluida`, assinatura `ausente`)
 E a versão das duas tem, nesta ordem, NOME, DATA_NASCIMENTO, CPF, DATA_APLICACAO, LOCAL_APLICACAO, BENS_POSSUIDOS (`multipla_escolha`), SATISFACAO_COM (`matriz`, linhas `moradia` e `saude`), PESO (`numero`), FUMA (`sim_nao`) e DOENCAS (`multipla_escolha`)
 Quando a usuária exporta o projeto com escopo `linha_por_item`, formato XLSX e sem período
-Então o arquivo tem o cabeçalho ID_Aplicacao, CPF, Nome, Data_Aplicacao, Codigo_Pergunta, Codigo_Linha, Codigo_Opcao_Valor, Rotulo_Opcao_Valor, Situacao
+Então o arquivo tem o cabeçalho ID_Aplicacao, Arquivo, CPF, Nome, Data_Aplicacao, Codigo_Pergunta, Codigo_Linha, Codigo_Opcao_Valor, Rotulo_Opcao_Valor, Complemento, Situacao (DEC-201)
 E só as linhas da A1, na ordem da tabela (a A2 fica fora, CA-021)
-E todas com o ID da A1, CPF "52998224725", Nome "Maria da Silva" e Data_Aplicacao 2026-11-05
+E todas com o ID da A1, Arquivo "maria.pdf" (as páginas da A1 vieram desse arquivo), CPF "52998224725", Nome "Maria da Silva", Data_Aplicacao 2026-11-05 e Complemento vazio (nenhuma opção da versão tem complemento)
 E não há linhas de NOME, DATA_NASCIMENTO, CPF nem DATA_APLICACAO (DEC-162)
 E a auditoria registra a exportação uma vez, sem valores
 
@@ -2057,6 +2085,50 @@ E o resultado segue a tabela
 | 9 | Cópia da versão 1 publicada (`createVersion` com `copiar_de_versao_id`) | A cópia é de papel antigo, com `total_paginas` = 3; com `papel_antigo` = false, `total_paginas` nulo e nenhuma pergunta `nao_consta` (DEC-179, DEC-189) |
 | 10 | Cópia de uma versão de papel antigo publicada sem `total_paginas` informado, com perguntas até a página 2 | A cópia leva `total_paginas` = 2, o total gravado na publicação (ENT-006, DEC-189) |
 
+**US-013 — Como usuária, quero que o texto escrito ao lado de "Outro" e o nome do arquivo enviado cheguem à revisão e à planilha, para não perder a resposta e para conferir de onde ela veio.**
+Relacionado a: RF-014, CA-059, CA-060
+
+CA-059 — Opção "Outro" com complemento
+Dado que o projeto "Saúde 60+" tem a versão publicada com a pergunta MOTIVO_CONSULTA (`escolha_unica`, opções `rotina`, `dor` e `outros`, esta com `com_complemento`) e a pergunta DOENCAS (`multipla_escolha`, opções `diabetes`, `outra` com `com_complemento` e `nenhuma_das_anteriores`)
+E o limite de confiança é 0,90
+Quando a folha de uma aplicação é lida e revisada como na tabela
+Então o item de complemento de cada opção com complemento fica como na tabela (FL-002, regra 1b)
+E a aplicação conclui com os itens de complemento em qualquer estado resolvido (DEC-199)
+E na exportação `linha_por_item` a coluna Complemento sai como na tabela, só na linha da opção (DEC-201)
+
+| Exemplo | Leitura e revisão | Complemento | Linha exportada |
+|---|---|---|---|
+| 1 | MOTIVO_CONSULTA lida `outros` (0,95), texto "Maternidade" (0,95) | `confirmado_automaticamente`, "Maternidade" (DEC-200) | Codigo_Opcao_Valor `outros`, Rotulo_Opcao_Valor "Outros", Complemento "Maternidade" |
+| 2 | MOTIVO_CONSULTA lida `outros` (0,95), texto "Matrnidade" (0,60); a usuária corrige para "Maternidade" | `a_revisar`, depois `corrigido` | Complemento "Maternidade" |
+| 3 | MOTIVO_CONSULTA lida `outros` (0,95), nada escrito ao lado; a usuária marca em branco | `a_revisar` (regra 6a), depois `em_branco` | Complemento vazio; a aplicação conclui (DEC-199) |
+| 4 | MOTIVO_CONSULTA lida `dor` (0,95), texto "joelho" ao lado de "Outros" | `nao_se_aplica`, com o texto só em `valor_ia` (regra 1b, b) | Codigo_Opcao_Valor `dor`, Complemento vazio |
+| 5 | MOTIVO_CONSULTA lida `outros` (0,70), texto "Maternidade" (0,95) | `aguardando_condicao` enquanto a pergunta está `a_revisar`; quando a usuária confirma `outros`, `confirmado_automaticamente` | Complemento "Maternidade" |
+| 6 | Caso 1; depois a usuária corrige MOTIVO_CONSULTA para `rotina` | `nao_se_aplica` | Codigo_Opcao_Valor `rotina`, Complemento vazio |
+| 7 | MOTIVO_CONSULTA lida `outros` (0,95), texto com 201 caracteres (0,95) | `a_revisar` (fora do schema, regra 7) | — |
+| 8 | DOENCAS lida `diabetes;outra` (0,95), texto "Asma" (0,95) | complemento de `outra`: `confirmado_automaticamente`, "Asma" | Duas linhas de DOENCAS: `diabetes` com Complemento vazio e `outra` com Complemento "Asma" |
+
+| Exemplo | Formulário | Resultado esperado |
+|---|---|---|
+| 9 | Importação de um original com "Motivo: ( ) Rotina ( ) Dor ( ) Outros: ______" | A opção entra com código `outros`, rótulo "Outros" e `com_complemento` = true (RN-049) |
+| 10 | No editor, `updateVersion` com `com_complemento` na opção `diabetes` de DOENCAS | Gravado; o PDF da versão traz uma linha para escrever depois de "Diabetes" (DEC-202) |
+| 11 | `updateVersion` com `com_complemento` na opção `nenhuma_das_anteriores`, ou numa opção de `sim_nao` ou de `matriz` | Recusado com ERR-001 — Revise os campos destacados e tente novamente. (`campos`: o código da pergunta) (RN-047) |
+
+CA-060 — Nome do arquivo enviado
+Dado que o projeto "Saúde 60+" tem a versão 1 do formulário "Saúde Geral", publicada, com QR e 2 páginas
+Quando a usuária envia, de uma vez, "maria.pdf" (2 páginas) e "joao.jpg" e "joao-2.jpg" (uma página cada), de duas pessoas
+Então o resultado do envio lista as páginas na ordem do envio: 1 e 2 de "maria.pdf", 3 de "joao.jpg" e 4 de "joao-2.jpg" (DEC-198)
+E cada página guarda o nome do arquivo de onde veio (ENT-025)
+E nem o log nem a auditoria do upload trazem os nomes dos arquivos (RN-028)
+E o resultado segue a tabela
+
+| Exemplo | Situação | Resultado esperado |
+|---|---|---|
+| 1 | Exportação `linha_por_item` das duas aplicações concluídas | Arquivo "maria.pdf" nas linhas da aplicação de Maria; nas de João, "joao.jpg" nas perguntas da página 1 e "joao-2.jpg" nas da página 2 (DEC-201) |
+| 2 | Nome de arquivo com 300 caracteres | Gravado cortado em 255 caracteres |
+| 3 | Nome de arquivo `=SOMA(A1).pdf` | No XLSX, Arquivo sai em célula de texto, não de fórmula; no CSV, `'=SOMA(A1).pdf` (DEC-166) |
+| 4 | Imagem da página 1 de João expurgada (RN-030) | `nome_arquivo` da página apagado; nas linhas exportadas da página 1, Arquivo vazio |
+| 5 | Aplicação com páginas enviadas antes da v2.8 | Arquivo vazio nas linhas dessa aplicação |
+
 8. Rastreabilidade e catálogo de erros
 
 8.1 Matriz de Rastreabilidade (completa)
@@ -2078,6 +2150,7 @@ A matriz completa é mantida em `registros/matriz_rastreabilidade.csv`, idêntic
 | RF-011 | RN-017, RN-018, RN-019, RN-036, RN-037, RN-038, RN-047, RN-049, RN-050 | ENT-004, ENT-005, ENT-006, ENT-007, ENT-008, ENT-024, ENT-031 | FL-004 | US-006, US-011 | CA-045, CA-046, CA-047, CA-048, CA-049 | — | importForm, listFormImports, getFormImport, extractFormStructure (interna) | CMP-Forms | IMP-006 |
 | RF-012 | RN-020, RN-030, RN-037, RN-051 | ENT-009, ENT-010, ENT-011, ENT-013, ENT-026 | FL-001 | US-009, US-012 | CA-021, CA-050, CA-051 | — | exportData, getExport | CMP-LGPD | IMP-007 |
 | RF-013 | RN-016, RN-017, RN-036, RN-038, RN-039, RN-041, RN-045, RN-049, RN-050, RN-052 | ENT-004, ENT-006, ENT-007, ENT-009, ENT-010, ENT-025, ENT-031 | FL-001, FL-002 | US-001, US-003, US-011 | CA-052, CA-053, CA-054, CA-055, CA-057, CA-058 | — | uploadImages, identifyApplication, addApplicationPages, getPageImage, getItemImage, openReview, getApplication, saveReview, retryReading, confirmApplication, attachSignaturePage, createVersion, updateVersion, publishVersion, generatePdf, importForm, processAIReading (interna) | CMP-Upload, CMP-MotorIA, CMP-Forms | IMP-008 |
+| RF-014 | RN-009, RN-028, RN-047, RN-049, RN-051 | ENT-008, ENT-011, ENT-025 | FL-001, FL-002 | US-013 | CA-059, CA-060 | — | createVersion, updateVersion, generatePdf, importForm, uploadImages, addApplicationPages, attachSignaturePage, getApplication, openReview, saveReview, exportData, processAIReading (interna) | CMP-Forms, CMP-Upload, CMP-MotorIA, CMP-Revisao, CMP-LGPD | IMP-009 |
 
 8.2 Catálogo de Erros (ERR)
 
@@ -2207,6 +2280,10 @@ Q-001 a Q-004 foram incorporadas na v1.2. Q-005 a Q-011, abertas pela CHG-002, f
 | Q-083 | 06/11/2026 | Contagem de folhas no envio sem QR | A linha 4 da tabela de criação da FL-001 e o CA-052, exemplo 2, mandam a aplicação a `identificacao_pendente` já no envio quando o número de folhas difere do total da versão escolhida; o CA-053, exemplo 9, envia 3 fotos sem QR para a mesma versão de 2 páginas e espera `em_leitura` no envio e a localização das 3 antes da pendência. Os dois exemplos não podem valer juntos (IA-DEV do IMP-008) | A: a contagem vale no envio também sem QR; o CA-053, exemplo 9, passa a usar uma situação sem folha a mais (por exemplo, 2 fotos indicadas como a mesma página) | B: sem QR, a contagem fica para o fim da localização, e o CA-052, exemplo 2, e a linha 4 da FL-001 mudam | — | A | — | "Opção A" (Carlos Yano, 06/11/2026). Incorporada como DEC-196. | respondida | FL-001, CA-013, CA-052, CA-053, DEC-171, DEC-196, RN-052 |
 | Q-084 | 07/11/2026 | Texto escrito ao lado da opção "Outro" | A importação transforma "Outro: ____" numa opção comum e o modelo não tem texto complementar de opção: a leitura grava só `outro` e o texto escrito ao lado se perde (testes preliminares do responsável, "Outros: Maternidade") | A: a opção ganha um texto livre, lido pela IA, revisado como valor à parte e exportado numa coluna própria | B: a importação cria uma pergunta de texto curto logo depois da pergunta | C: fora do escopo; o texto não é capturado | A | — | "84: A" (Carlos Yano, 07/11/2026). Incorporada como DEC-197. | respondida | ENT-008, ENT-011, RN-049, RN-051, DEC-197 |
 | Q-085 | 07/11/2026 | Nome do arquivo enviado | O nome original do arquivo não é guardado; o responsável quer vê-lo no resultado, mas o nome costuma trazer o nome da pessoa (dado pessoal) | A: só na tela do envio, sem gravar | B: gravar na página como dado pessoal, expurgado com a imagem e fora da exportação | C: gravar e levar à exportação | A | — | "85: C" (Carlos Yano, 07/11/2026). Incorporada como DEC-198. | respondida | ENT-025, RF-005, RN-051, DEC-198 |
+| Q-086 | 07/11/2026 | Complemento vazio com "Outro" marcado | A DEC-197 não diz se o texto ao lado de "Outro" é obrigatório quando a opção é marcada (propagação da CHG-018) | A: opcional; o complemento fica em branco, ilegível ou rasurado e a aplicação conclui | B: obrigatório; sem ele a aplicação não conclui | — | A | — | Recomendação aceita (Carlos Yano, 07/11/2026). Incorporada como DEC-199. | respondida | RN-009, FL-002, DEC-197, DEC-199 |
+| Q-087 | 07/11/2026 | Revisão do complemento | O complemento é texto sem schema, como o texto curto, que vai sempre à revisão (DEC-066) (propagação da CHG-018) | A: sempre à revisão, como o texto curto | B: regra geral de confiança | — | A | — | "Regra geral de confiança" (Carlos Yano, 07/11/2026). Incorporada como DEC-200. | respondida | FL-002, DEC-066, DEC-197, DEC-200 |
+| Q-088 | 07/11/2026 | Colunas do complemento e do arquivo no formato longo | A DEC-197 e a DEC-198 pedem colunas próprias, sem nome nem posição, e uma aplicação pode ter páginas de mais de um arquivo (propagação da CHG-018) | A: `Arquivo` depois de `ID_Aplicacao`, com o arquivo da página da pergunta, e `Complemento` depois de `Rotulo_Opcao_Valor`, só na linha da opção | B: como A, mas `Arquivo` com todos os arquivos da aplicação, na ordem do envio, repetido em todas as linhas | — | A | — | Recomendação aceita (Carlos Yano, 07/11/2026). Incorporada como DEC-201. | respondida | RN-051, DEC-197, DEC-198, DEC-201 |
+| Q-089 | 07/11/2026 | Onde a opção ganha complemento | A DEC-197 fala só da importação; o formulário criado no editor e o PDF gerado pelo sistema também podem ter "Outro" (propagação da CHG-018) | A: também no editor, e o PDF imprime uma linha para escrever depois do rótulo | B: só na importação; o editor não muda a marca e o PDF não muda | — | A | — | Recomendação aceita (Carlos Yano, 07/11/2026). Incorporada como DEC-202. | respondida | ENT-008, RF-004, RN-049, DEC-197, DEC-202 |
 
 10. Gates externos (GX)
 
@@ -2235,7 +2312,7 @@ Testes sentinela são casos de teste de alto nível que validam os riscos críti
 
 Reavaliado na v1.3. Itens verificáveis por script são checados no CI por `tools/validar_consistencia.py`; o resultado do script prevalece sobre este texto.
 
-- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-013, RNF-001 a RNF-014, RN-001 a RN-052, ENT-001 a ENT-031, FL-001 a FL-004, TL-001 a TL-015, US-001 a US-012, 53 CAs (CA-001 a CA-058 e CA-014b, sem os retirados na v2.1: CA-010, CA-016, CA-025, CA-026b, CA-034, CA-037b, CA-038 e CA-043), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-082 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), as DEC seguintes da REQ e do PLANO até a DEC-193, Q-001 a Q-081 e GX-001. Verificado por script (IDs citados existem nos registros).
+- [x] 1. IDs únicos e rastreáveis: RF-001 a RF-014, RNF-001 a RNF-014, RN-001 a RN-052, ENT-001 a ENT-031, FL-001 a FL-004, TL-001 a TL-015, US-001 a US-013, 55 CAs (CA-001 a CA-060 e CA-014b, sem os retirados na v2.1: CA-010, CA-016, CA-025, CA-026b, CA-034, CA-037b, CA-038 e CA-043), ERR do catálogo (seção 8.2, incluindo os descontinuados), TS-001 a TS-008, DEC-001 a DEC-036 e DEC-054 a DEC-061, DEC-064 a DEC-082 (tabela da REQ; inclui DEC técnicas anteriores à Fase 3, como DEC-007, DEC-022 e DEC-036), DEC-037 a DEC-053, DEC-062 e DEC-063 (técnicas, no PLANO), as DEC seguintes da REQ e do PLANO até a DEC-193, Q-001 a Q-081 e GX-001. Verificado por script (IDs citados existem nos registros).
 - [x] 2. BDD com dados concretos: tabelas de exemplos nos CAs de alto risco CA-002, CA-008, CA-012, CA-023, CA-029, CA-030 e CA-032 (adicionadas na v1.3; na v1.2 só o CA-029 tinha tabela).
 - [x] 3. Estados e fluxos fechados: FL-001 com tabela de criação e entradas em `aguardando_cota`; FL-002 com ordem de avaliação explícita; FL-004 com as transições da importação (CHG-014). Estados verificados por script contra o dicionário e o contrato.
 - [x] 4. Dicionário de dados completo: 31 entidades com as 11 propriedades; `registros/dicionario_dados.csv` idêntico, verificado por script.
