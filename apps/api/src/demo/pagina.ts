@@ -16,7 +16,7 @@ export const PAGINA_DEMO = `<!doctype html>
   input[type=text], input[type=email], input[type=password], input[type=number] { width: 100%; max-width: 320px; padding: 6px; font-size: 1rem; }
   button, a.botao { margin-top: 12px; padding: 8px 14px; font-size: 1rem; cursor: pointer; }
   pre { background: #f4f4f4; padding: 10px; overflow-x: auto; font-size: .85rem; }
-  .erro { color: #a40000; font-weight: 600; } [hidden] { display: none; }
+  .erro { color: #a40000; font-weight: 600; } .ok { color: #11632b; font-weight: 600; } [hidden] { display: none; }
   table { border-collapse: collapse; margin-top: 8px; } td, th { border: 1px solid #ccc; padding: 4px 8px; text-align: left; vertical-align: top; }
   #itens input[type=text] { width: 140px; } #itens select { font-size: .9rem; }
   img.recorte { display: block; max-width: 260px; max-height: 160px; margin-top: 6px; border: 1px solid #999; }
@@ -64,11 +64,13 @@ export const PAGINA_DEMO = `<!doctype html>
   <h2>2. Imprimir o formulário</h2>
   <label for="form-atual">Formulário atual</label>
   <select id="form-atual"></select>
-  <p>Baixe o PDF, imprima, preencha com dados sintéticos e fotografe cada página (a foto da página 1 precisa mostrar o QR).</p>
+  <p id="texto-pdf">Baixe o PDF, imprima, preencha com dados sintéticos e digitalize ou fotografe cada página (a página 1 precisa mostrar o QR).</p>
   <a id="pdf" class="botao" download="formulario-demo.pdf">Baixar PDF</a>
+  <p id="sem-pdf" class="aviso" hidden>Formulário de papel antigo: não há PDF para imprimir (DEC-175). Digitalize as folhas originais já preenchidas.</p>
   <p class="cota" id="cota"></p>
 
-  <h2>3. Enviar as fotos (uma pessoa por envio)</h2>
+  <h2>3. Enviar as respostas (uma pessoa por envio)</h2>
+  <p>O normal é um arquivo por pessoa, com todas as páginas (PDF de até 50 páginas); fotos de cada página também servem.</p>
   <form id="f-upload">
     <input id="arquivos" type="file" multiple accept="image/jpeg,image/png,application/pdf" required>
     <label><input id="com-versao" type="checkbox"> Folhas sem QR: enviar com o formulário atual (acima); a IA indica a página de cada folha</label>
@@ -103,7 +105,7 @@ export const PAGINA_DEMO = `<!doctype html>
   </section>
 
   <h2>6. Exportar (uma linha por item)</h2>
-  <p>Planilha das aplicações concluídas com assinatura, pronta para tabela dinâmica. Traz nome e CPF completos (fica auditado).</p>
+  <p>Planilha das aplicações concluídas com assinatura, pronta para tabela dinâmica. Aplicação ainda em revisão não entra: sem nenhuma concluída, a planilha vem só com o cabeçalho. Traz nome e CPF completos (fica auditado).</p>
   <form id="f-exportar">
     <label for="formato">Formato</label>
     <select id="formato"><option value="xlsx">Excel (XLSX)</option><option value="csv">CSV</option></select>
@@ -123,6 +125,9 @@ function usarFormulario(versaoId) {
   if (!o) return;
   o.selected = true;
   DADOS.formId = o.dataset.form; DADOS.versaoId = versaoId;
+  // Papel antigo não tem PDF (DEC-175): o link daria ERR-018 e o navegador acusaria falha no download.
+  const papelAntigo = o.dataset.papelAntigo === 'true';
+  $('pdf').hidden = papelAntigo; $('texto-pdf').hidden = papelAntigo; $('sem-pdf').hidden = !papelAntigo;
   $('pdf').href = '/forms/' + DADOS.formId + '/versions/' + versaoId + '/pdf';
 }
 $('form-atual').addEventListener('change', () => usarFormulario($('form-atual').value));
@@ -139,7 +144,7 @@ async function carregarFormularios(preferida) {
   const sel = $('form-atual'); sel.replaceChildren();
   for (const { f, v } of versoes) {
     const o = document.createElement('option');
-    o.value = v.id; o.dataset.form = f.id; o.textContent = f.nome + ' (versão ' + v.numero + ')' + (v.papel_antigo ? ' — papel antigo' : '');
+    o.value = v.id; o.dataset.form = f.id; o.dataset.papelAntigo = String(!!v.papel_antigo); o.textContent = f.nome + ' (versão ' + v.numero + ')' + (v.papel_antigo ? ' — papel antigo' : '');
     sel.appendChild(o);
   }
   usarFormulario(preferida || (versoes[0] && versoes[0].v.id));
@@ -149,7 +154,7 @@ function csrf() {
   const m = document.cookie.match(/(?:^|; )mp_csrf=([^;]+)/);
   return m ? decodeURIComponent(m[1]) : '';
 }
-function mensagem(texto) { $('mensagem').textContent = texto || ''; }
+function mensagem(texto, ok) { $('mensagem').textContent = texto || ''; $('mensagem').className = ok ? 'ok' : 'erro'; }
 
 let etag = null; // ETag da última resposta da aplicação (If-Match da revisão e da conclusão, RN-043)
 
@@ -213,9 +218,10 @@ function mostrar(a) {
   $('json').textContent = JSON.stringify(a, null, 2);
   const corpo = $('paginas'); corpo.replaceChildren();
   const campos = $('campos-identificar'); campos.replaceChildren();
-  for (const p of a.paginas || []) {
+  // As páginas vêm na ordem de envio; a numeração 1, 2, 3… não muda quando a página do formulário é identificada.
+  for (const [n, p] of (a.paginas || []).entries()) {
     const tr = document.createElement('tr');
-    for (const v of [p.imagem_id.slice(0, 8), p.tipo, p.numero_pagina ?? '—', p.registro_ok ? 'ok' : 'falhou']) {
+    for (const v of [n + 1, p.tipo, p.numero_pagina ?? '—', p.registro_ok ? 'ok' : 'falhou']) {
       const td = document.createElement('td'); td.textContent = String(v); tr.appendChild(td);
     }
     const td = document.createElement('td'); tr.appendChild(td); corpo.appendChild(tr);
@@ -233,7 +239,7 @@ function mostrar(a) {
       td.appendChild(b);
     }
     if (p.tipo === 'formulario') {
-      const l = document.createElement('label'); l.textContent = 'Imagem ' + p.imagem_id.slice(0, 8);
+      const l = document.createElement('label'); l.textContent = 'Imagem ' + (n + 1);
       const i = document.createElement('input'); i.type = 'number'; i.min = '1'; i.required = true;
       i.dataset.imagem = p.imagem_id; if (p.numero_pagina) i.value = p.numero_pagina;
       campos.append(l, i);
@@ -277,6 +283,8 @@ function mostrarItens(a) {
       const vazio = document.createElement('option'); vazio.value = ''; vazio.textContent = i.estado === 'a_revisar' ? '— escolha —' : '(manter)';
       sel.appendChild(vazio);
       for (const [v, t] of Object.entries(ACOES)) { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); }
+      // Com confiança de 0,80 ou mais, a ação já vem em "confirmar"; só é gravada ao salvar a revisão.
+      if (i.estado === 'a_revisar' && i.confianca !== null && Number(i.confianca) >= 0.8) sel.value = 'confirmar';
       const valor = document.createElement('input'); valor.type = 'text'; valor.hidden = true; valor.value = i.valor_final ?? i.valor_ia ?? '';
       sel.addEventListener('change', () => { valor.hidden = sel.value !== 'corrigir'; });
       acao.append(sel, valor);
@@ -314,7 +322,10 @@ $('salvar').addEventListener('click', async () => {
     itens.push(item);
   }
   if (itens.length === 0) { mensagem('Escolha a ação de pelo menos um item.'); return; }
-  try { mostrar(await chamar('PATCH', '/applications/' + idDe(aplicacao) + '/review', { itens }, false, { 'if-match': etag || '' })); }
+  try {
+    mostrar(await chamar('PATCH', '/applications/' + idDe(aplicacao) + '/review', { itens }, false, { 'if-match': etag || '' }));
+    mensagem('Formulário salvo.', true);
+  }
   catch (err) { mensagem(err.message); }
 });
 
@@ -327,9 +338,20 @@ $('concluir').addEventListener('click', async () => {
     const id = idDe(aplicacao);
     await consultar(id); // ETag atual
     await chamar('POST', '/applications/' + id + '/confirm', corpo, true, { 'if-match': etag || '' });
-    mostrar(await consultar(id));
+    limpar();
+    mensagem('Aplicação concluída. Envie a próxima pessoa ou peça a exportação.', true);
   } catch (err) { mensagem(err.message); }
 });
+
+/** Depois de concluir: tira da tela o envio, o resultado e a revisão, para o próximo envio ou a exportação. */
+function limpar() {
+  clearTimeout(espera);
+  aplicacao = null; etag = null;
+  $('f-upload').reset();
+  for (const id of ['paginas', 'campos-identificar', 'itens', 'divergencias', 'json']) $(id).replaceChildren();
+  $('resultado').hidden = true; $('revisao').hidden = true; $('exportacao').hidden = true;
+  $('assinatura').selectedIndex = 0;
+}
 
 $('tentar').addEventListener('click', async () => {
   mensagem();
