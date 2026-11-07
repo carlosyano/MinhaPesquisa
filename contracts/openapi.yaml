@@ -337,6 +337,7 @@ paths:
       description: |
         Alterações em versão publicada sempre criam nova versão (RN-042, CA-001). Sem
         `copiar_de_versao_id`, a versão nasce com os 5 campos da RN-050; com ele, copia as perguntas
+        (com a marca `com_complemento` das opções, DEC-202)
         da origem, padroniza as dos 5 campos, injeta as que faltarem e dá sufixo a código reservado
         em pergunta comum (RN-050, DEC-145, DEC-147, CA-048). Quando a versão nova não é de papel
         antigo, a marca `nao_consta` é retirada das perguntas copiadas (DEC-179) e o `total_paginas`
@@ -480,6 +481,7 @@ paths:
         fiduciais (DEC-048). A página 1 traz o termo de consentimento do tenant
         (`termo_consentimento`, DEC-094) com campo de assinatura.
         Versão em rascunho ou de papel antigo não gera PDF → ERR-018 (CA-028, CA-052, DEC-175).
+        Depois do rótulo de cada opção com `com_complemento`, uma linha para escrever (DEC-202).
       x-trace: [RF-004, RF-013, CA-028, CA-052, DEC-005, DEC-048, DEC-094, DEC-175, RF-014, CA-059, DEC-202]
       parameters:
         - $ref: '#/components/parameters/FormId'
@@ -846,7 +848,7 @@ paths:
       operationId: getItemImage
       tags: [review]
       summary: Link assinado (5 min) do recorte do item para revisão lado a lado
-      description: Só nos estados de revisão (CA-007, DEC-112); nos demais → 409 ERR-018. Item sem região (DEC-177) → a página inteira, com `regiao` nula (DEC-174).
+      description: Só nos estados de revisão (CA-007, DEC-112); nos demais → 409 ERR-018. Item sem região (DEC-177) → a página inteira, com `regiao` nula (DEC-174). Item de complemento → o recorte da região da sua pergunta (RN-045, DEC-197).
       x-trace: [RF-008, RF-013, CA-007, CA-055, DEC-112, DEC-177]
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
@@ -874,9 +876,11 @@ paths:
         Ações: confirmar, corrigir, em branco, ilegível, rasurado, não se aplica (CA-007).
         Correções são auditadas sem valores (CA-008). Reavalia regras de salto (CA-020).
         Edição concorrente (outra aba) é recusada pelo If-Match (ERR-017).
-        A mudança do valor de uma pergunta com opção com complemento reavalia o item de complemento
-        pela regra 1b da FL-002 (DEC-197, DEC-200); o item de complemento é revisado como os demais,
-        com `corrigir` limitado a 200 caracteres (REQ §5.4).
+        A mudança de estado ou de valor de uma pergunta com opção com complemento reavalia o item de
+        complemento pela pré-regra 1b da FL-002 (DEC-197, DEC-200); o item de complemento é revisado como os demais,
+        com `corrigir` limitado a 200 caracteres (REQ §5.4; acima → 400 ERR-001). No complemento de opção
+        não marcada, só `nao_se_aplica` é aceito; outra ação → 400 ERR-001 (DEC-205). A revisão humana
+        do complemento é mantida enquanto a opção continua marcada (DEC-204).
       x-trace: [RF-008, RF-014, CA-007, CA-008, CA-020, CA-059]
       security:
         - sessionCookie: []
@@ -1996,7 +2000,7 @@ components:
       properties:
         aplicacao_id: { type: string, format: uuid }
         estado: { $ref: '#/components/schemas/ApplicationState' }
-        paginas: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PageRef' }, description: 'Na ordem do envio (arquivos na ordem recebida e, em cada um, as páginas na ordem do arquivo); a posição na lista, a partir de 1, é o número mostrado no resultado do envio, ao lado de `nome_arquivo` (DEC-198, CA-060)' }
+        paginas: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PageRef' }, description: 'Na ordem do envio (arquivos na ordem recebida e, em cada um, as páginas na ordem do arquivo); cada página traz `ordem_envio`, o número mostrado no resultado do envio, ao lado de `nome_arquivo` (DEC-198, CA-060)' }
         aviso:
           allOf:
             - $ref: '#/components/schemas/ErrorCode'
@@ -2086,7 +2090,8 @@ components:
         numero_pagina: { type: integer, minimum: 1, nullable: true }
         tipo: { type: string, enum: [formulario, assinatura] }
         registro_ok: { type: boolean }
-        nome_arquivo: { type: string, maxLength: 255, nullable: true, description: 'Nome original do arquivo de onde veio a página, sem a pasta (DEC-198); dado pessoal, nunca em log (RN-028); nulo nas páginas enviadas antes da REQ v2.8 e depois do expurgo da imagem' }
+        ordem_envio: { type: integer, minimum: 1, description: 'Posição da folha na aplicação, na ordem do envio; o addApplicationPages e o attachSignaturePage continuam a sequência, e folhas descartadas não liberam o número (ENT-025, DEC-198)' }
+        nome_arquivo: { type: string, maxLength: 255, nullable: true, description: 'Nome original do arquivo de onde veio a página, sem a pasta (DEC-198); dado pessoal, nunca em log nem em mensagem de erro (RN-028); nulo nas páginas enviadas antes da REQ v2.8, depois do expurgo da imagem e depois da eliminação do titular (DEC-206)' }
 
     PageImage:
       type: object
