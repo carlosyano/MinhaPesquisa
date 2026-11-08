@@ -1,0 +1,7 @@
+# Fim de linha LF no repositório, mesmo quando o arquivo é gravado no Windows com CRLF.
+* text=auto eol=lf
+*.docx binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.xlsx binary
