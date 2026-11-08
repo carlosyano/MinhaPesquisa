@@ -2,13 +2,14 @@
 // 1a, 2, 3, 3a e 4) e assinatura anexada sem QR (CA-044, DEC-183). Cada exemplo do CA-054 parte do
 // mesmo "Dado", num tenant próprio: a respondente R1 ("MARIA  SOUZA", sem CPF e sem nascimento) e a
 // aplicação A3 em `em_revisao`, com todos os itens resolvidos.
+// Ajustado no IA-TEST do IMP-009 (DEC-201): a coluna do CPF vem de `COL`, porque `Arquivo` entrou antes dela.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { jpeg, semQr } from '../../support/arquivos.js';
 import { esperarErro } from '../../support/catalogo.js';
 import { chaveIdempotencia, type Cliente, type Resposta } from '../../support/cliente.js';
 import { entrar, MINUTO, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
-import { exportada, linhas } from '../../support/exportacao.js';
+import { COL, exportada, linhas } from '../../support/exportacao.js';
 import { arquivo, enviar, formularioPublicado, projetoCriado, type FormularioPublicado } from '../../support/formularios.js';
 import { criarHarness, type Harness, type RespondenteGravado, type RoteiroLeitura } from '../../support/harness.js';
 import { abrir, concluir, confirmarPendentes, consultar, prepararCotacao } from '../../support/leitura.js';
@@ -106,7 +107,7 @@ describe('CA-054 — papel antigo conclui sem CPF e sem assinatura (DEC-172, DEC
     const a = await exportada(h, c.dig, { formato: 'csv', escopo: 'linha_por_item', projeto_ids: [c.projeto] });
     const doA3 = linhas(a, 'csv').slice(1).filter((l) => l[0] === c.a3);
     expect(doA3.length).toBeGreaterThan(0);
-    expect(doA3.every((l) => l[1] === '')).toBe(true);
+    expect(doA3.every((l) => l[COL.CPF] === '')).toBe(true);
   });
 
   // @trace CA-054, RN-015, DEC-172
@@ -119,7 +120,7 @@ describe('CA-054 — papel antigo conclui sem CPF e sem assinatura (DEC-172, DEC
     expect(comCpf).toHaveLength(1);
     expect((await h.inspect.aplicacao(c.a3)).respondente_id).toBe(comCpf[0].id);
     const a = await exportada(h, c.dig, { formato: 'csv', escopo: 'linha_por_item', projeto_ids: [c.projeto] });
-    expect(linhas(a, 'csv').slice(1).some((l) => l[0] === c.a3 && l[1] === CPF_VALIDO)).toBe(true);
+    expect(linhas(a, 'csv').slice(1).some((l) => l[0] === c.a3 && l[COL.CPF] === CPF_VALIDO)).toBe(true);
   });
 
   // @trace CA-054, DEC-176

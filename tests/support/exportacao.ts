@@ -1,18 +1,21 @@
 // Exportação em formato longo de apoio (IA-TEST do IMP-007), sempre pela API, com o motor de
 // leitura simulado do harness (DEC-123) para chegar às aplicações concluídas. Conteúdo 100%
 // sintético (Q-001): nomes fictícios e CPFs de teste com dígitos verificadores válidos.
+// Ajustado no IA-TEST do IMP-009 (CHG-018, DEC-201): colunas `Arquivo` e `Complemento`; as páginas
+// vão num só PDF, "maria.pdf", para a coluna `Arquivo` ser a mesma em todas as linhas.
 
 import { expect } from 'vitest';
-import { jpeg } from './arquivos.js';
+import { jpeg, pdfDeImagens } from './arquivos.js';
 import { chaveIdempotencia, type Cliente, type Resposta } from './cliente.js';
 import { arquivo, enviar, type Conteudo, type FormularioPublicado, type Pergunta } from './formularios.js';
 import type { Harness, RoteiroLeitura } from './harness.js';
 import { abrir, concluir, type AcaoRevisao, type ItemRevisao } from './leitura.js';
 import { lerCsv, lerXlsx, valores, type Celula } from './planilha.js';
 
-/** Cabeçalho da RN-051, nesta ordem. */
+/** Cabeçalho da RN-051, nesta ordem (com `Arquivo` e `Complemento` desde a REQ v2.8, DEC-201). */
 export const COLUNAS = [
   'ID_Aplicacao',
+  'Arquivo',
   'CPF',
   'Nome',
   'Data_Aplicacao',
@@ -20,6 +23,7 @@ export const COLUNAS = [
   'Codigo_Linha',
   'Codigo_Opcao_Valor',
   'Rotulo_Opcao_Valor',
+  'Complemento',
   'Situacao',
 ] as const;
 
@@ -110,22 +114,25 @@ export function leituraA1(extra: RoteiroLeitura = {}): RoteiroLeitura {
 /** Ações da revisão da A1: a linha `saude` ilegível e FUMA em branco. */
 export const ACOES_A1: Record<string, AcaoRevisao['acao']> = { 'SATISFACAO_COM.saude': 'ilegivel', FUMA: 'em_branco' };
 
-/** As 8 linhas da A1 na tabela do CA-050, a partir de `Codigo_Pergunta`. */
+/** Nome do PDF enviado por `lida`, com as 2 páginas: a coluna `Arquivo` de todas as linhas (DEC-201). */
+export const ARQUIVO = 'maria.pdf';
+
+/** As 8 linhas da A1 na tabela do CA-050, a partir de `Codigo_Pergunta` (Complemento vazio, antes da situação). */
 export const LINHAS_A1: readonly (readonly string[])[] = [
-  ['LOCAL_APLICACAO', '', 'Clínica Centro', '', 'respondida'],
-  ['BENS_POSSUIDOS', '', 'carro', 'Carro', 'respondida'],
-  ['BENS_POSSUIDOS', '', 'geladeira', 'Geladeira', 'respondida'],
-  ['SATISFACAO_COM', 'moradia', 'boa', 'Boa', 'respondida'],
-  ['SATISFACAO_COM', 'saude', '', '', 'ilegivel'],
-  ['PESO', '', '72.5', '', 'respondida'],
-  ['FUMA', '', '', '', 'em_branco'],
-  ['DOENCAS', '', 'nenhuma_das_anteriores', 'Nenhuma das anteriores', 'respondida'],
+  ['LOCAL_APLICACAO', '', 'Clínica Centro', '', '', 'respondida'],
+  ['BENS_POSSUIDOS', '', 'carro', 'Carro', '', 'respondida'],
+  ['BENS_POSSUIDOS', '', 'geladeira', 'Geladeira', '', 'respondida'],
+  ['SATISFACAO_COM', 'moradia', 'boa', 'Boa', '', 'respondida'],
+  ['SATISFACAO_COM', 'saude', '', '', '', 'ilegivel'],
+  ['PESO', '', '72.5', '', '', 'respondida'],
+  ['FUMA', '', '', '', '', 'em_branco'],
+  ['DOENCAS', '', 'nenhuma_das_anteriores', 'Nenhuma das anteriores', '', 'respondida'],
 ];
 
-/** Envia as 2 páginas, programa o motor e roda o worker; devolve o id da aplicação em revisão. */
-export async function lida(h: Harness, dig: Cliente, projetoId: string, f: FormularioPublicado, roteiro: RoteiroLeitura): Promise<string> {
-  const paginas = await Promise.all([1, 2].map(async (n) => arquivo(`p${n}.jpg`, 'image/jpeg', await jpeg(f.paginas[n - 1]))));
-  const r = await enviar(dig, projetoId, paginas);
+/** Envia as 2 páginas num PDF, programa o motor e roda o worker; devolve o id da aplicação em revisão. */
+export async function lida(h: Harness, dig: Cliente, projetoId: string, f: FormularioPublicado, roteiro: RoteiroLeitura, nomeArquivo = ARQUIVO): Promise<string> {
+  const pdf = await pdfDeImagens(await Promise.all([0, 1].map((i) => jpeg(f.paginas[i]))));
+  const r = await enviar(dig, projetoId, [arquivo(nomeArquivo, 'application/pdf', pdf)]);
   expect(r.status, r.texto).toBe(202);
   const id: string = r.corpo.aplicacao_id;
   h.motor.programar(id, roteiro);
@@ -167,8 +174,9 @@ export async function conferida(
   roteiro: RoteiroLeitura,
   acoes: Record<string, AcaoRevisao['acao']> = {},
   assinatura: 'presente' | 'ausente' = 'presente',
+  nomeArquivo = ARQUIVO,
 ): Promise<string> {
-  const id = await lida(h, dig, projetoId, f, roteiro);
+  const id = await lida(h, dig, projetoId, f, roteiro, nomeArquivo);
   await revisada(dig, id, acoes);
   const r = await concluir(dig, id, { assinatura });
   expect(r.status, r.texto).toBe(200);
@@ -222,7 +230,10 @@ export function linhas(a: ArquivoExportado, formato: 'xlsx' | 'csv'): string[][]
   return formato === 'xlsx' ? valores(celulasXlsx(a)) : lerCsv(a.bytes);
 }
 
-/** As linhas sem o cabeçalho, a partir de `Codigo_Pergunta` (as 5 últimas colunas). */
+/** Índices das colunas da RN-051. */
+export const COL = Object.fromEntries(COLUNAS.map((c, i) => [c, i])) as Record<(typeof COLUNAS)[number], number>;
+
+/** As linhas sem o cabeçalho, a partir de `Codigo_Pergunta` (as 6 últimas colunas). */
 export function itens(l: string[][]): string[][] {
-  return l.slice(1).map((x) => x.slice(4));
+  return l.slice(1).map((x) => x.slice(COL.Codigo_Pergunta));
 }

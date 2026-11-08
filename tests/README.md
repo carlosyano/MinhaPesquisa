@@ -1,6 +1,6 @@
 # Testes do MinhaPesquisa
 
-IA-TEST do IMP-001, do IMP-002, do IMP-005, do IMP-003, do IMP-006, do IMP-007 e do IMP-008 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
+IA-TEST do IMP-001, do IMP-002, do IMP-005, do IMP-003, do IMP-006, do IMP-007, do IMP-008 e do IMP-009 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
 implementação (IA-DEV), que não pode alterá-los: o job `testes-congelados` do CI marca de
 vermelho qualquer mudança em teste sem o rótulo `ia-test`, e o responsável só autoriza a
 junção depois de revisar o diff, com as verificações verdes.
@@ -97,6 +97,22 @@ usavam uma só folha sem QR para chegar a `identificacao_pendente` passam a envi
 causa do V-08, a REQ ganhou o exemplo 11 do CA-052 (QR de outro formato) e os exemplos 9 e 10 do
 CA-058 (cópia do `total_paginas`, DEC-189).
 
+No IMP-009 (opção "Outro" com complemento e nome do arquivo, CHG-018, DEC-197 a DEC-212) o motor simulado
+devolve também o complemento de cada opção com complemento (`LeituraOk.complementos`: opção não
+programada = lida em branco com 0,99; `null` = ausente na resposta, pré-regra 1b, c; acima de 2000
+caracteres = saída malformada, DEC-203 (3)), e o extrator simulado ganha `opcoes_com_complemento`
+(RN-049). `inspect.aplicacao` passa a trazer, por item, `opcao_codigo`, `revisor_id` e
+`revisao_reaberta` (DEC-203 (10) e (11)); `inspect.folhas`, a `ordem_envio` e o `nome_arquivo`; e
+entram `inspect.nomesArquivo` (com as folhas expurgadas, DEC-206) e `seed.paginasAntigas` (folhas
+como antes da migração 0010, CA-060 exemplo 5). Os unitários importam do código ainda por escrever:
+`estadoComplemento` em `apps/api/src/regras/leitura.ts` (pré-regra 1b, carregada por especificador
+em variável) e, no adaptador Claude, `CampoLeitura.complementos`, `LeituraCampo.complementos` e
+`OpcoesClaude.maxTokensModelo` (tipos locais no teste, para o typecheck não depender deles). Os testes
+aceitos que mudam com a CHG-018 foram ajustados (PLANO §11.1): o cabeçalho e as linhas do CA-050 e do
+CA-051 ganham `Arquivo` e `Complemento` (DEC-201), com os índices das colunas em `COL`
+(`support/exportacao.ts`), e a leitura de apoio da exportação envia as 2 páginas num só PDF,
+"maria.pdf"; o CA-054 passa a achar a coluna do CPF por `COL`.
+
 ## Cobertura
 
 | Arquivo | Rastreio |
@@ -122,21 +138,26 @@ CA-058 (cópia do `total_paginas`, DEC-189).
 | `integracao/revisao/descarte-reabertura.test.ts` | CA-033, CA-042, DEC-077, DEC-078, RN-014 |
 | `unit/estado-item.test.ts` | FL-002 (regras 1 a 9), DEC-028, DEC-047, CA-006 |
 | `unit/cpf.test.ts` | RN-012, CA-002, REQ §5.4 |
-| `unit/motor-leitura.test.ts` | DEC-007, DEC-043, DEC-122, DEC-123, RN-045 (fronteira do motor e adaptador Claude) |
+| `unit/motor-leitura.test.ts` | DEC-007, DEC-043, DEC-122, DEC-123, RN-045 (fronteira do motor e adaptador Claude), DEC-203 (complemento e teto de tokens) |
 | `integracao/formularios/importacao.test.ts` | RF-011, CA-045, CA-046, CA-047 (exemplos 1 a 8), RN-049, FL-004, DEC-136, DEC-143, DEC-144, DEC-149, T-02 |
 | `integracao/formularios/campos-padrao.test.ts` | CA-048 (exemplos 1 a 9), RN-050, DEC-143, DEC-145, DEC-146, DEC-147 |
 | `integracao/projetos/ciclo-coleta.test.ts` | CA-049, DEC-137, RN-027, RN-028 |
-| `integracao/exportacao/formato-longo.test.ts` | RF-012, CA-050, CA-051 (exemplos 1 a 8), CA-021, RN-051, DEC-153 a DEC-160, DEC-162 a DEC-166 |
+| `integracao/exportacao/formato-longo.test.ts` | RF-012, CA-050, CA-051 (exemplos 1 a 8), CA-021, RN-051, DEC-153 a DEC-160, DEC-162 a DEC-166; colunas da DEC-201 |
 | `integracao/upload/papel-antigo.test.ts` | RF-013, CA-052 (exemplos 1 a 11), CA-057 (exemplos 1 a 13), FL-001 (tabela de criação), DEC-169, DEC-175, DEC-179, DEC-180, DEC-182, DEC-184 a DEC-187, DEC-192 |
 | `integracao/leitura/localizacao.test.ts` | RF-013, CA-053 (exemplos 1 a 9), CA-055 (exemplos 1 a 4), RN-052, DEC-171, DEC-174, DEC-177, DEC-178, DEC-188, RN-036, RN-037, RN-039, RN-045 |
 | `integracao/revisao/papel-antigo.test.ts` | RF-013, CA-054 (exemplos 1 a 13), CA-044 (exemplos 2 e 3), DEC-172, DEC-176, DEC-183, FL-001 (precedência 1a e 3a) |
 | `integracao/formularios/papel-antigo.test.ts` | RF-013, CA-058 (exemplos 1 a 10), ENT-006, DEC-175, DEC-179, DEC-181, DEC-189, DEC-190 |
+| `integracao/revisao/complemento.test.ts` | RF-014, CA-059 (exemplos 1 a 11 e 13), FL-002 (pré-regra 1b), FL-001, RN-047, RN-049, RN-051, DEC-197, DEC-199 a DEC-205, DEC-209, DEC-212, ERR-001, ERR-018, ERR-022 |
+| `integracao/upload/nome-arquivo.test.ts` | RF-014, CA-060 (exemplos 1 a 9), ENT-025, RN-028, RN-051, DEC-198, DEC-201, DEC-203, DEC-206, ERR-029, T-18 |
+| `unit/complemento.test.ts` | FL-002 (pré-regra 1b), DEC-200, DEC-204, DEC-205, DEC-209, DEC-212 |
 | `support/planilha.test.ts` | autoteste da leitura de CSV (DEC-165) e de XLSX |
 | `support/arquivos.test.ts` | autoteste dos geradores de PDF, QR, EXIF e arquivos de limite |
 | `support/apoio.test.ts` | autoteste do apoio (catálogo de erros, sem os erros descontinuados na REQ v2.1) |
 
 Ficam para depois (PLANO §11.1):
-dashboards, relatórios e auditoria de abertura de ficha do CA-011 (IMP-004); CA-056, papel antigo nos
+dashboards, relatórios e auditoria de abertura de ficha do CA-011 (IMP-004); CA-059 exemplo 12 (ficha
+individual) e o apagamento do nome do arquivo na eliminação (DEC-206, DEC-210), no CA-023 e no TS-005
+(IMP-004); CA-056, papel antigo nos
 relatórios e respondente sem CPF nos pedidos do titular (IMP-004);
 E2E com navegador do login (segundo PR de IA-TEST, quando a TL-001 tiver desenho); consulta à
 lista de senhas vazadas (aguarda DEC, item M-20). Do IMP-002: revisão e relatórios de projeto

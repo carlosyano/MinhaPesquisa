@@ -203,3 +203,145 @@ describe('AdaptadorClaude — resposta (RN-045, DEC-047, DEC-051)', () => {
     expect((erro as ErroLeitura).tipo).toBe('tempo_esgotado');
   });
 });
+
+// ── complemento da opção "Outro" (IA-TEST do IMP-009, CHG-018) ──
+
+// O IA-DEV acrescenta à interface do motor (DEC-203 (3)): `CampoLeitura.complementos` (códigos das
+// opções com complemento do campo), `LeituraCampo.complementos` (por código de opção, texto e
+// confiança, só as devolvidas) e `OpcoesClaude.maxTokensModelo` (máximo de saída do modelo). Os
+// tipos locais abaixo descrevem essa interface sem depender dela para o typecheck dos testes.
+type CampoComComplemento = CampoSchema['campos'][number] & { complementos?: string[] };
+type LeituraComComplemento = { complementos?: Record<string, { valor: string | null; confianca: number }> };
+type OpcoesComTeto = ConstructorParameters<typeof AdaptadorClaude>[0] & { maxTokensModelo: number };
+
+/** Escolha única cuja opção `outros` tem complemento, e uma múltipla escolha com `outra` (DEC-197). */
+const SCHEMA_COMPLEMENTO: { campos: CampoComComplemento[] } = {
+  campos: [
+    { chave: 'c1', tipo: 'escolha_unica', opcoes: ['rotina', 'dor', 'outros'], complementos: ['outros'] },
+    { chave: 'c2', tipo: 'multipla_escolha', opcoes: ['diabetes', 'outra', 'nenhuma_das_anteriores'], complementos: ['outra'] },
+  ],
+};
+
+function complemento(campos: Record<string, unknown>[]): string {
+  return JSON.stringify({ campos });
+}
+
+const OK_COMPLEMENTO = complemento([
+  { chave: 'c1', valor: 'outros', confianca: 0.95, regiao: null, complementos: [{ opcao: 'outros', valor: 'Maternidade', confianca: 0.9 }] },
+  { chave: 'c2', valor: 'diabetes;outra', confianca: 0.95, regiao: null, complementos: [{ opcao: 'outra', valor: 'Asma', confianca: 0.85 }] },
+]);
+
+function adaptadorTeto(fetch: typeof globalThis.fetch, maxTokens: number, maxTokensModelo: number) {
+  const opcoes: OpcoesComTeto = { apiKey: 'chave-sintetica-de-teste', modelo: 'claude-opus-5-5', precoUsdPorMTok: { entrada: 4, saida: 20 }, fetch, maxTokens, maxTokensModelo };
+  return new AdaptadorClaude(opcoes);
+}
+
+describe('AdaptadorClaude — complemento da opção (DEC-197, DEC-203 (3))', () => {
+  // @trace DEC-203, DEC-197, RN-037, RN-045
+  it('o schema de saída pede o complemento só das opções com complemento, com no máximo 2000 caracteres', async () => {
+    const t = transporte(() => mensagem(OK_COMPLEMENTO));
+    await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    const schema = JSON.stringify(t.pedidos[0].corpo.output_config.format.schema);
+    expect(schema).toContain('complementos');
+    expect(schema).toContain('"maxLength":2000');
+    expect(schema).toContain('"outros"');
+    expect(schema).toContain('"outra"');
+  });
+
+  // @trace DEC-203, DEC-197, RN-045
+  it('devolve o complemento por opção, com o texto e a confiança bruta, ao lado do valor do campo', async () => {
+    const t = transporte(() => mensagem(OK_COMPLEMENTO));
+    const r = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    expect(r.leituras).toEqual([
+      { chave: 'c1', valor: 'outros', confianca: 0.95, regiao: null, complementos: { outros: { valor: 'Maternidade', confianca: 0.9 } } },
+      { chave: 'c2', valor: 'diabetes;outra', confianca: 0.95, regiao: null, complementos: { outra: { valor: 'Asma', confianca: 0.85 } } },
+    ]);
+  });
+
+  // @trace DEC-203, FL-002
+  it('complemento ausente na resposta não é falha: fica fora de `complementos` (sem leitura, pré-regra 1b, c)', async () => {
+    const t = transporte(() =>
+      mensagem(
+        complemento([
+          { chave: 'c1', valor: 'outros', confianca: 0.95, regiao: null },
+          { chave: 'c2', valor: 'diabetes', confianca: 0.95, regiao: null, complementos: [] },
+        ]),
+      ),
+    );
+    const r = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    for (const l of r.leituras as LeituraComComplemento[]) expect(l.complementos?.outros ?? l.complementos?.outra).toBeUndefined();
+  });
+
+  // @trace DEC-203, FL-002, DEC-199
+  it('complemento lido em branco volta com valor null', async () => {
+    const t = transporte(() =>
+      mensagem(
+        complemento([
+          { chave: 'c1', valor: 'outros', confianca: 0.95, regiao: null, complementos: [{ opcao: 'outros', valor: null, confianca: 0.99 }] },
+          { chave: 'c2', valor: 'diabetes', confianca: 0.95, regiao: null },
+        ]),
+      ),
+    );
+    const r = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    expect((r.leituras[0] as LeituraComComplemento).complementos).toEqual({ outros: { valor: null, confianca: 0.99 } });
+  });
+
+  // @trace DEC-203, RN-037, DEC-129
+  it.each([
+    ['complemento com 2001 caracteres', [{ opcao: 'outros', valor: 'a'.repeat(2001), confianca: 0.9 }]],
+    ['complemento de opção sem complemento', [{ opcao: 'dor', valor: 'joelho', confianca: 0.9 }]],
+    ['complemento de opção de outro campo', [{ opcao: 'outra', valor: 'Asma', confianca: 0.9 }]],
+    ['complemento repetido', [{ opcao: 'outros', valor: 'A', confianca: 0.9 }, { opcao: 'outros', valor: 'B', confianca: 0.9 }]],
+    ['confiança do complemento acima de 1', [{ opcao: 'outros', valor: 'Maternidade', confianca: 1.2 }]],
+  ])('saída malformada (%s) → ErroLeitura "malformada"', async (_n, complementos) => {
+    const t = transporte(() =>
+      mensagem(
+        complemento([
+          { chave: 'c1', valor: 'outros', confianca: 0.95, regiao: null, complementos },
+          { chave: 'c2', valor: 'diabetes', confianca: 0.95, regiao: null },
+        ]),
+      ),
+    );
+    const erro = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA_COMPLEMENTO).catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ErroLeitura);
+    expect((erro as ErroLeitura).tipo).toBe('malformada');
+  });
+
+  // @trace DEC-203, RN-037
+  it('complemento em campo sem opção com complemento → ErroLeitura "malformada"', async () => {
+    const t = transporte(() =>
+      mensagem(complemento([{ ...JSON.parse(OK).campos[0], complementos: [{ opcao: 'sim', valor: 'x', confianca: 0.9 }] }, JSON.parse(OK).campos[1]])),
+    );
+    const erro = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA).catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ErroLeitura);
+    expect((erro as ErroLeitura).tipo).toBe('malformada');
+  });
+
+  // @trace DEC-203, DEC-051
+  it('max_tokens cresce 1.000 por opção com complemento, limitado ao máximo de saída do modelo', async () => {
+    const sem = transporte(() => mensagem(OK));
+    await adaptadorTeto(sem.fetch, 4096, 64000).lerRecorte(recorte(), SCHEMA);
+    expect(sem.pedidos[0].corpo.max_tokens).toBe(4096);
+
+    const com = transporte(() => mensagem(OK_COMPLEMENTO));
+    await adaptadorTeto(com.fetch, 4096, 64000).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    expect(com.pedidos[0].corpo.max_tokens).toBe(4096 + 2 * 1000);
+
+    const limitado = transporte(() => mensagem(OK_COMPLEMENTO));
+    await adaptadorTeto(limitado.fetch, 4096, 5000).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    expect(limitado.pedidos[0].corpo.max_tokens).toBe(5000);
+  });
+
+  // @trace DEC-203, DEC-051
+  it('a estimativa para a reserva cresce com o teto: ao menos 1.000 tokens de saída por opção com complemento, sem passar do modelo', () => {
+    const t = transporte(() => mensagem(OK));
+    const a = adaptadorTeto(t.fetch, 4096, 64000);
+    const semComplemento: CampoSchema = { campos: SCHEMA_COMPLEMENTO.campos.map(({ complementos: _c, ...c }) => c) };
+    const base = a.estimarCustoUsd(recorte(), semComplemento);
+    const com = a.estimarCustoUsd(recorte(), SCHEMA_COMPLEMENTO);
+    expect(com - base).toBeGreaterThanOrEqual((2 * 1000 * 20) / 1e6);
+    const limitado = adaptadorTeto(t.fetch, 4096, 5000).estimarCustoUsd(recorte(), SCHEMA_COMPLEMENTO);
+    expect(limitado).toBeLessThan(com);
+    expect(t.pedidos).toHaveLength(0);
+  });
+});
