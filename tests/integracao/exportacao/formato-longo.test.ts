@@ -3,6 +3,8 @@
 // cenário que precisa de dados próprios tem o seu projeto, porque a exportação recorta por projeto.
 // O relógio do harness começa em 02/11/2026; ele é adiantado para 06/11/2026 antes de tudo, porque a
 // data da aplicação do CA-050 (05/11/2026) não pode ser futura (ENT-010).
+// Ajustado no IA-TEST do IMP-009 (CHG-018, DEC-201, PLANO §11.1): colunas `Arquivo` e `Complemento`
+// no cabeçalho e nas linhas; os índices das colunas vêm de `COL`.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { jpeg } from '../../support/arquivos.js';
@@ -11,6 +13,8 @@ import { Cliente, chaveIdempotencia } from '../../support/cliente.js';
 import { DIA, MINUTO, entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import {
   ACOES_A1,
+  ARQUIVO,
+  COL,
   COLUNAS,
   LINHAS_A1,
   celulasXlsx,
@@ -94,10 +98,10 @@ describe('CA-050 — planilha em formato longo (RN-051)', () => {
     const l = linhas(a, 'xlsx');
     expect(l[0]).toEqual([...COLUNAS]);
     expect(itens(l)).toEqual(LINHAS_A1.map((x) => [...x]));
-    for (const linha of l.slice(1)) expect(linha.slice(0, 4)).toEqual([a1, '52998224725', 'Maria da Silva', '2026-11-05']);
+    for (const linha of l.slice(1)) expect(linha.slice(0, 5)).toEqual([a1, ARQUIVO, '52998224725', 'Maria da Silva', '2026-11-05']);
     const ids = new Set(l.slice(1).map((x) => x[0]));
     for (const fora of [a2, emRevisao, deOutroProjeto]) expect(ids.has(fora)).toBe(false);
-    const perguntas = new Set(l.slice(1).map((x) => x[4]));
+    const perguntas = new Set(l.slice(1).map((x) => x[COL.Codigo_Pergunta]));
     for (const ident of ['NOME', 'DATA_NASCIMENTO', 'CPF', 'DATA_APLICACAO']) expect(perguntas.has(ident)).toBe(false);
   });
 
@@ -108,14 +112,15 @@ describe('CA-050 — planilha em formato longo (RN-051)', () => {
     const celulas = celulasXlsx(a);
     expect(celulas[0].every((x) => x.tipo === 'texto')).toBe(true);
     for (const linha of celulas.slice(1)) {
-      expect(linha[1]).toEqual({ tipo: 'texto', valor: '52998224725' });
-      expect(linha[3]).toEqual({ tipo: 'texto', valor: '2026-11-05' });
+      expect(linha[COL.Arquivo]).toEqual({ tipo: 'texto', valor: ARQUIVO });
+      expect(linha[COL.CPF]).toEqual({ tipo: 'texto', valor: '52998224725' });
+      expect(linha[COL.Data_Aplicacao]).toEqual({ tipo: 'texto', valor: '2026-11-05' });
       expect(linha.some((x) => x.tipo === 'formula')).toBe(false);
     }
-    const peso = celulas.find((x) => x[4].valor === 'PESO')!;
-    expect(peso[6]).toEqual({ tipo: 'numero', valor: '72.5' });
-    const local = celulas.find((x) => x[4].valor === 'LOCAL_APLICACAO')!;
-    expect(local[6]).toEqual({ tipo: 'texto', valor: 'Clínica Centro' });
+    const peso = celulas.find((x) => x[COL.Codigo_Pergunta].valor === 'PESO')!;
+    expect(peso[COL.Codigo_Opcao_Valor]).toEqual({ tipo: 'numero', valor: '72.5' });
+    const local = celulas.find((x) => x[COL.Codigo_Pergunta].valor === 'LOCAL_APLICACAO')!;
+    expect(local[COL.Codigo_Opcao_Valor]).toEqual({ tipo: 'texto', valor: 'Clínica Centro' });
   });
 
   // @trace CA-050, RN-051, RN-028, DEC-072, DEC-165
@@ -134,7 +139,7 @@ describe('CA-050 — planilha em formato longo (RN-051)', () => {
     // Uma aplicação (A1) e as suas 8 linhas.
     expect(Object.values(conclusao[0].detalhes as Record<string, unknown>)).toEqual(expect.arrayContaining([1, 8]));
     const texto = semIdentificadores(JSON.stringify(novos));
-    for (const pessoal of [CPF.joana, '529.982.247-25', 'Maria da Silva', 'Clínica Centro', '72.5', 'geladeira']) {
+    for (const pessoal of [CPF.joana, '529.982.247-25', 'Maria da Silva', 'Clínica Centro', '72.5', 'geladeira', ARQUIVO]) {
       expect(texto).not.toContain(pessoal);
     }
   });
@@ -144,7 +149,7 @@ describe('CA-050 — planilha em formato longo (RN-051)', () => {
     await exportada(h, c, corpo([saude]));
     await exportada(h, c, corpo([saude], { formato: 'csv' }));
     const logs = semIdentificadores(await h.inspect.logs());
-    for (const pessoal of [CPF.joana, '529.982.247-25', 'Maria da Silva', 'Clínica Centro']) expect(logs).not.toContain(pessoal);
+    for (const pessoal of [CPF.joana, '529.982.247-25', 'Maria da Silva', 'Clínica Centro', ARQUIVO]) expect(logs).not.toContain(pessoal);
   });
 
   // @trace RF-012, DEC-165, DEC-069, RNF-007
@@ -218,8 +223,8 @@ describe('CA-050 — planilha em formato longo (RN-051)', () => {
     expect(l).toHaveLength(8 * esperado.length);
     esperado.forEach(({ id, data }, i) => {
       for (const linha of l.slice(8 * i, 8 * (i + 1))) {
-        expect(linha[0]).toBe(id);
-        expect(linha[3]).toBe(data);
+        expect(linha[COL.ID_Aplicacao]).toBe(id);
+        expect(linha[COL.Data_Aplicacao]).toBe(data);
       }
       expect(itens([[], ...l.slice(8 * i, 8 * (i + 1))])).toEqual(LINHAS_A1.map((x) => [...x]));
     });
@@ -246,15 +251,15 @@ describe('CA-050 — planilha em formato longo (RN-051)', () => {
       { 'SATISFACAO_COM.moradia': 'rasurado', PESO: 'nao_se_aplica' },
     );
     expect(itens(linhas(await exportada(h, c, corpo([projeto])), 'xlsx'))).toEqual([
-      ['LOCAL_APLICACAO', '', 'Clínica Centro', '', 'respondida'],
-      ['BENS_POSSUIDOS', '', 'geladeira', 'Geladeira', 'respondida'],
-      ['BENS_POSSUIDOS', '', 'televisao', 'Televisão', 'respondida'],
-      ['SATISFACAO_COM', 'moradia', '', '', 'rasurado'],
-      ['SATISFACAO_COM', 'saude', 'regular', 'Regular', 'respondida'],
-      ['PESO', '', '', '', 'nao_se_aplica'],
-      ['FUMA', '', 'sim', 'Sim', 'respondida'],
-      ['DOENCAS', '', 'diabetes', 'Diabetes', 'respondida'],
-      ['DOENCAS', '', 'hipertensao', 'Hipertensão', 'respondida'],
+      ['LOCAL_APLICACAO', '', 'Clínica Centro', '', '', 'respondida'],
+      ['BENS_POSSUIDOS', '', 'geladeira', 'Geladeira', '', 'respondida'],
+      ['BENS_POSSUIDOS', '', 'televisao', 'Televisão', '', 'respondida'],
+      ['SATISFACAO_COM', 'moradia', '', '', '', 'rasurado'],
+      ['SATISFACAO_COM', 'saude', 'regular', 'Regular', '', 'respondida'],
+      ['PESO', '', '', '', '', 'nao_se_aplica'],
+      ['FUMA', '', 'sim', 'Sim', '', 'respondida'],
+      ['DOENCAS', '', 'diabetes', 'Diabetes', '', 'respondida'],
+      ['DOENCAS', '', 'hipertensao', 'Hipertensão', '', 'respondida'],
     ]);
   });
 });
@@ -302,7 +307,7 @@ describe('CA-051 — recorte, formato, fórmulas e retenção (RN-051)', () => {
     const xlsx = linhas(await exportada(h, c, corpo([saude])), 'xlsx');
     const a = await exportada(h, c, corpo([saude], { formato: 'csv' }));
     expect(a.contentType).toMatch(/^text\/csv/);
-    expect(a.bytes.toString('utf8').startsWith(`${BOM}ID_Aplicacao;CPF;Nome;`)).toBe(true);
+    expect(a.bytes.toString('utf8').startsWith(`${BOM}ID_Aplicacao;Arquivo;CPF;Nome;`)).toBe(true);
     expect(a.bytes.toString('utf8').endsWith('\r\n')).toBe(true);
     expect(linhas(a, 'csv')).toEqual(xlsx);
     expect((await h.inspect.exportacao(a.id)).chave_storage).toBe(`tenant/${T.tenantId}/exportacao/${a.id}.csv`);
@@ -333,9 +338,9 @@ describe('CA-051 — recorte, formato, fórmulas e retenção (RN-051)', () => {
     it('csv: o texto que começa com = ou @ recebe o apóstrofo; o número -3 sai como está', async () => {
       const l = linhas(await exportada(h, c, corpo([projeto], { formato: 'csv' })), 'csv').slice(1);
       expect(l.length).toBeGreaterThan(0);
-      for (const linha of l) expect(linha.slice(0, 3)).toEqual([id, CPF_FORMULAS, "'@Maria"]);
-      expect(l.find((x) => x[4] === 'LOCAL_APLICACAO')![6]).toBe(`'=HYPERLINK("http://exemplo.invalid")`);
-      expect(l.find((x) => x[4] === 'PESO')![6]).toBe('-3');
+      for (const linha of l) expect(linha.slice(0, 4)).toEqual([id, ARQUIVO, CPF_FORMULAS, "'@Maria"]);
+      expect(l.find((x) => x[COL.Codigo_Pergunta] === 'LOCAL_APLICACAO')![COL.Codigo_Opcao_Valor]).toBe(`'=HYPERLINK("http://exemplo.invalid")`);
+      expect(l.find((x) => x[COL.Codigo_Pergunta] === 'PESO')![COL.Codigo_Opcao_Valor]).toBe('-3');
     });
 
     // @trace CA-051, DEC-166, DEC-165, RN-037
@@ -343,11 +348,11 @@ describe('CA-051 — recorte, formato, fórmulas e retenção (RN-051)', () => {
       const celulas = celulasXlsx(await exportada(h, c, corpo([projeto]))).slice(1);
       expect(celulas.length).toBeGreaterThan(0);
       for (const linha of celulas) {
-        expect(linha[0]).toEqual({ tipo: 'texto', valor: id });
-        expect(linha[2]).toEqual({ tipo: 'texto', valor: '@Maria' });
+        expect(linha[COL.ID_Aplicacao]).toEqual({ tipo: 'texto', valor: id });
+        expect(linha[COL.Nome]).toEqual({ tipo: 'texto', valor: '@Maria' });
       }
-      expect(celulas.find((x) => x[4].valor === 'LOCAL_APLICACAO')![6]).toEqual({ tipo: 'texto', valor: '=HYPERLINK("http://exemplo.invalid")' });
-      expect(celulas.find((x) => x[4].valor === 'PESO')![6]).toEqual({ tipo: 'numero', valor: '-3' });
+      expect(celulas.find((x) => x[COL.Codigo_Pergunta].valor === 'LOCAL_APLICACAO')![COL.Codigo_Opcao_Valor]).toEqual({ tipo: 'texto', valor: '=HYPERLINK("http://exemplo.invalid")' });
+      expect(celulas.find((x) => x[COL.Codigo_Pergunta].valor === 'PESO')![COL.Codigo_Opcao_Valor]).toEqual({ tipo: 'numero', valor: '-3' });
       expect(celulas.flat().some((x) => x.tipo === 'formula')).toBe(false);
     });
   });
@@ -357,9 +362,9 @@ describe('CA-051 — recorte, formato, fórmulas e retenção (RN-051)', () => {
     const { projeto, form } = await projetoComFormulario(`Prefixo ${local}`);
     await conferida(h, c, projeto, form, leituraA1({ CPF: { valor: CPF.maria, confianca: 0.97 }, LOCAL_APLICACAO: { valor: local, confianca: 0.97 } }), ACOES_A1);
     const csv = linhas(await exportada(h, c, corpo([projeto], { formato: 'csv' })), 'csv');
-    expect(csv.find((x) => x[4] === 'LOCAL_APLICACAO')![6]).toBe(`'${local}`);
+    expect(csv.find((x) => x[COL.Codigo_Pergunta] === 'LOCAL_APLICACAO')![COL.Codigo_Opcao_Valor]).toBe(`'${local}`);
     const xlsx = celulasXlsx(await exportada(h, c, corpo([projeto])));
-    expect(xlsx.find((x) => x[4].valor === 'LOCAL_APLICACAO')![6]).toEqual({ tipo: 'texto', valor: local });
+    expect(xlsx.find((x) => x[COL.Codigo_Pergunta].valor === 'LOCAL_APLICACAO')![COL.Codigo_Opcao_Valor]).toEqual({ tipo: 'texto', valor: local });
     expect(xlsx.flat().some((x) => x.tipo === 'formula')).toBe(false);
   });
 
