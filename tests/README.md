@@ -6,9 +6,10 @@ vermelho qualquer mudança em teste sem o rótulo `ia-test`, e o responsável s�
 junção depois de revisar o diff, com as verificações verdes.
 
 Regra da `main` (DEC-213, que substitui a DEC-091): com o repositório público, o GitHub aplica
-a regra da `main`, que vale também para o administrador. A junção exige os 6 jobs do CI verdes
-(`consistencia`, `contrato`, `testes`, `testes-congelados`, `seguranca`, `qualidade`), e a
-`main` não aceita force push nem exclusão. A revisão não é obrigatória: com uma só pessoa, o
+a regra da `main`, que vale também para o administrador. A junção exige 5 jobs do CI verdes
+(`consistencia`, `contrato`, `testes-congelados`, `seguranca`, `qualidade`), e a `main` não
+aceita force push nem exclusão. O job `testes` fica fora porque o PR de IA-TEST nasce
+vermelho; no PR de IA-DEV, o responsável só junta com ele verde. A revisão não é obrigatória: com uma só pessoa, o
 `CODEOWNERS` não bloqueia (o autor não aprova o próprio PR), e a junção continua só pelo
 responsável (DEC-092).
 
