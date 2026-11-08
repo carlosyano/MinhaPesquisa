@@ -263,8 +263,16 @@ function mostrarItens(a) {
   for (const i of itens) {
     const tr = document.createElement('tr');
     if (i.estado === 'a_revisar') tr.className = 'baixa';
-    // O complemento aparece logo abaixo da pergunta, com a opção ao lado da qual foi escrito (DEC-197).
-    const campo = celula(i.opcao_codigo ? '↳ texto ao lado de "' + i.opcao_codigo + '"' : i.pergunta_codigo + (i.linha_codigo ? '.' + i.linha_codigo : ''));
+    // O complemento aparece logo abaixo da pergunta, com a pergunta e a opção ao lado da qual foi
+    // escrito (DEC-197): um formulário pode ter várias perguntas com "Outro".
+    const campo = celula(i.opcao_codigo
+      ? i.pergunta_codigo + ' ↳ texto ao lado de "' + i.opcao_codigo + '"'
+      : i.pergunta_codigo + (i.linha_codigo ? '.' + i.linha_codigo : ''));
+    if (i.opcao_codigo && i.estado === 'aguardando_condicao' && editavel) {
+      const nota = document.createElement('small');
+      nota.textContent = 'resolva a pergunta acima e salve; depois este texto fica disponível para revisar';
+      campo.append(document.createElement('br'), nota);
+    }
     let lido = i.valor_ia ?? '—';
     if (i.valor_final !== null && i.valor_final !== i.valor_ia) lido += ' → ' + i.valor_final;
     const acao = document.createElement('td');
@@ -284,9 +292,19 @@ function mostrarItens(a) {
       const sel = document.createElement('select'); sel.dataset.item = i.id;
       const vazio = document.createElement('option'); vazio.value = ''; vazio.textContent = i.estado === 'a_revisar' ? '— escolha —' : '(manter)';
       sel.appendChild(vazio);
-      for (const [v, t] of Object.entries(ACOES)) { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); }
-      // Com confiança de 0,80 ou mais, a ação já vem em "confirmar"; só é gravada ao salvar a revisão.
-      if (i.estado === 'a_revisar' && i.confianca !== null && Number(i.confianca) >= 0.8) sel.value = 'confirmar';
+      // Lido em branco não se confirma (DEC-128): sem "confirmar", a escolha é "em branco" ou "corrigir para…".
+      const lidoEmBranco = i.valor_ia === null || String(i.valor_ia).trim() === '';
+      // Texto ao lado de uma opção não marcada na pergunta: só "não se aplica" (DEC-205).
+      const pergunta = i.opcao_codigo ? itens.find((x) => x.pergunta_codigo === i.pergunta_codigo && !x.opcao_codigo && !x.linha_codigo) : null;
+      const opcaoDesmarcada = pergunta ? !String(pergunta.valor_final ?? pergunta.valor_ia ?? '').split(';').includes(i.opcao_codigo) : false;
+      for (const [v, t] of Object.entries(ACOES)) {
+        if (v === 'confirmar' && lidoEmBranco) continue;
+        if (opcaoDesmarcada && v !== 'nao_se_aplica') continue;
+        const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o);
+      }
+      // Com confiança de 0,80 ou mais, a ação já vem escolhida: "confirmar" o lido, ou "em branco" se a
+      // IA leu em branco; só é gravada ao salvar a revisão.
+      if (i.estado === 'a_revisar' && i.confianca !== null && Number(i.confianca) >= 0.8) sel.value = lidoEmBranco ? 'em_branco' : 'confirmar';
       const valor = document.createElement('input'); valor.type = 'text'; valor.hidden = true; valor.value = i.valor_final ?? i.valor_ia ?? '';
       sel.addEventListener('change', () => { valor.hidden = sel.value !== 'corrigir'; });
       acao.append(sel, valor);
