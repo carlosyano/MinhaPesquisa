@@ -21,6 +21,7 @@ export const PAGINA_DEMO = `<!doctype html>
   #itens input[type=text] { width: 140px; } #itens select { font-size: .9rem; }
   img.recorte { display: block; max-width: 260px; max-height: 160px; margin-top: 6px; border: 1px solid #999; }
   .baixa { background: #fff4d6; } .cota { font-size: .9rem; color: #444; }
+  .invalido { outline: 2px solid #b00020; }
   details.importar { margin-top: 20px; border: 1px solid #ccc; border-radius: 6px; padding: 8px 12px; }
   details.importar summary { font-weight: 600; cursor: pointer; }
 </style>
@@ -169,7 +170,7 @@ async function chamar(metodo, caminho, corpo, idempotente, extra) {
   const dados = texto ? JSON.parse(texto) : undefined;
   if (!r.ok) {
     const p = dados || {};
-    throw new Error((p.errorCode || r.status) + ': ' + (p.detail || p.title || 'falha'));
+    throw new Error((p.errorCode || r.status) + ': ' + (p.detail || p.title || 'falha') + (p.campos && p.campos.length ? ' (campo: ' + p.campos.join(', ') + ')' : ''));
   }
   if (r.headers.get('etag')) etag = r.headers.get('etag');
   return dados;
@@ -275,6 +276,26 @@ function dataValida(v) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
 }
 
+// CPF com os dígitos verificadores corretos, como a API confere (RN-012); sequências repetidas não valem.
+function cpfOk(cpf) {
+  if (!/^[0-9]{11}$/.test(cpf) || cpf.split('').every((c) => c === cpf[0])) return false;
+  const digito = (base) => { let soma = 0; for (let k = 0; k < base.length; k++) soma += Number(base[k]) * (base.length + 1 - k); return ((soma * 10) % 11) % 10; };
+  return digito(cpf.slice(0, 9)) === Number(cpf[9]) && digito(cpf.slice(0, 10)) === Number(cpf[10]);
+}
+
+// Valor digitado em "corrigir para…" no formato da API (REQ §5.4): data DD/MM/AAAA vira AAAA-MM-DD;
+// CPF sem pontos e traço. Devolve null quando não serve, para a página destacar o item antes de enviar.
+function valorCorrigido(tipo, v) {
+  const t = String(v || '').trim();
+  if (tipo === 'data') {
+    const br = t.match(/^([0-9]{1,2})[/.-]([0-9]{1,2})[/.-]([0-9]{4})$/);
+    const iso = br ? br[3] + '-' + br[2].padStart(2, '0') + '-' + br[1].padStart(2, '0') : t;
+    return dataValida(iso) ? iso : null;
+  }
+  if (tipo === 'cpf') { const d = t.replace(/[^0-9]/g, ''); return cpfOk(d) ? d : null; }
+  return t;
+}
+
 function mostrarItens(a) {
   carregarTipos(a);
   const tipos = tiposPorVersao[a.versao_id] || {};
@@ -312,7 +333,8 @@ function mostrarItens(a) {
         } catch (err) { mensagem(err.message); }
       });
       campo.append(document.createElement('br'), b);
-      const sel = document.createElement('select'); sel.dataset.item = i.id;
+      const sel = document.createElement('select'); sel.dataset.item = i.id; sel.dataset.codigo = i.opcao_codigo ? '' : i.pergunta_codigo;
+      sel.dataset.rotulo = i.opcao_codigo ? i.pergunta_codigo + ' (texto ao lado de "' + i.opcao_codigo + '")' : i.pergunta_codigo;
       const vazio = document.createElement('option'); vazio.value = ''; vazio.textContent = i.estado === 'a_revisar' ? '— escolha —' : '(manter)';
       sel.appendChild(vazio);
       // Lido em branco não se confirma (DEC-128): sem "confirmar", a escolha é "em branco" ou "corrigir para…".
@@ -365,12 +387,25 @@ $('abrir').addEventListener('click', async () => {
 $('salvar').addEventListener('click', async () => {
   mensagem();
   const itens = [];
+  const recusados = [];
+  const tipos = tiposPorVersao[aplicacao.versao_id] || {};
   for (const sel of $('itens').querySelectorAll('select')) {
+    const linha = sel.closest('tr'); if (linha) linha.classList.remove('invalido');
     if (!sel.value) continue;
     const item = { item_id: sel.dataset.item, acao: sel.value };
-    if (sel.value === 'corrigir') item.valor_final = sel.nextElementSibling.value;
+    if (sel.value === 'corrigir') {
+      const tipo = tipos[sel.dataset.codigo];
+      const v = valorCorrigido(tipo, sel.nextElementSibling.value);
+      if (v === null || v === '') {
+        recusados.push(sel.dataset.rotulo + (tipo === 'data' ? ' (data: use DD/MM/AAAA ou AAAA-MM-DD)' : tipo === 'cpf' ? ' (CPF com dígito verificador inválido)' : ' (valor vazio)'));
+        if (linha) linha.classList.add('invalido');
+        continue;
+      }
+      item.valor_final = v;
+    }
     itens.push(item);
   }
+  if (recusados.length) { mensagem('Nada foi gravado. Corrija os campos destacados: ' + recusados.join('; ') + '.'); return; }
   if (itens.length === 0) { mensagem('Escolha a ação de pelo menos um item.'); return; }
   try {
     mostrar(await chamar('PATCH', '/applications/' + idDe(aplicacao) + '/review', { itens }, false, { 'if-match': etag || '' }));
