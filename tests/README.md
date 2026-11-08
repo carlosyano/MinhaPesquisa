@@ -19,6 +19,11 @@ npm run typecheck:tests
 npm test
 ```
 
+Para guardar o resultado: `npm run test:relatorio` (aceita os mesmos arquivos e filtros do Vitest depois
+de `--`). Além da saída normal, grava `reports/testes/vitest.json` e `reports/testes/falhas.md`, só com as
+falhas (arquivo, teste e as primeiras linhas do erro, com os erros repetidos agrupados). A pasta
+`reports/` fica fora do repositório.
+
 ## O que o IA-DEV precisa entregar para os testes rodarem
 
 O pacote `@minhapesquisa/api` deve exportar `criarHarness()` em `test-harness`, cumprindo
