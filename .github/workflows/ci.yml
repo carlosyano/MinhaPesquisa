@@ -64,7 +64,7 @@ jobs:
 
   # DEC-053: o PR de implementação (IA-DEV) não altera testes aprovados. Só PR com o rótulo
   # ia-test pode mexer neles. O rótulo e a junção dependem do responsável (ver
-  # tests/README.md sobre o limite do plano gratuito).
+  # tests/README.md sobre a regra da main, DEC-213).
   testes-congelados:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
