@@ -883,9 +883,10 @@ paths:
         de opção não marcada, só `nao_se_aplica` é aceito; outra ação → 400 ERR-001 (DEC-205). Quando a
         usuária resolve a pergunta sem a opção (corrige, marca em branco, ilegível, rasurado ou não se
         aplica), o complemento vai a `nao_se_aplica` (DEC-209). A revisão humana do complemento é mantida
-        enquanto a opção continua marcada (DEC-204). Ação sobre item em `aguardando_condicao`, inclusive
+        enquanto a opção continua marcada (DEC-204), e o `nao_se_aplica` marcado por ela no complemento de
+        opção não marcada, enquanto a opção continua não marcada (DEC-212). Ação sobre item em `aguardando_condicao`, inclusive
         o de complemento enquanto a pergunta não está resolvida → 409 ERR-018 (FL-002).
-      x-trace: [RF-008, RF-014, CA-007, CA-008, CA-020, CA-059, DEC-204, DEC-205, DEC-209]
+      x-trace: [RF-008, RF-014, CA-007, CA-008, CA-020, CA-059, DEC-204, DEC-205, DEC-209, DEC-212]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1064,10 +1065,11 @@ paths:
       description: |
         A partir de `concluida`: se o CPF for corrigido, o vínculo é refeito e o cadastro revertido,
         com auditoria (CA-042). A partir de `sem_assinatura`: corrige a conferência e volta a
-        `em_revisao`, preservando os itens. O item de complemento com a opção marcada vai a `a_revisar`,
+        `em_revisao`, preservando os itens, inclusive os de complemento. Na reabertura a partir de
+        `concluida`, o item de complemento com a opção marcada vai a `a_revisar`,
         com o `valor_final` preservado; sem a opção, vai a `a_revisar` só se tinha texto lido e a pergunta,
         antes da reabertura, vinha da leitura ou da regra de salto (DEC-205, DEC-209).
-      x-trace: [RF-008, RF-014, CA-042, CA-059, DEC-204, DEC-209]
+      x-trace: [RF-008, RF-014, CA-042, CA-059, DEC-204, DEC-209, DEC-212]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1664,7 +1666,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-036', title: Campos obrigatórios ausentes, status: 400, detail: 'Publicação recusada: faltam [lista dos campos].', errorCode: ERR-036, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, campos: [data_aplicacao] }
     FileRejected:
-      description: Arquivo recusado (ERR-029, com motivo; `posicao` só no upload, nunca na importação, que recebe um arquivo só), projeto arquivado, data da aplicação futura no envio (DEC-182) ou, na importação, falta da declaração `sem_dados_reais` (ERR-001)
+      description: Arquivo recusado (ERR-029, com motivo; `posicao` só no envio de imagens — uploadImages, addApplicationPages e attachSignaturePage —, nunca na importação), projeto arquivado, data da aplicação futura no envio (DEC-182) ou, na importação, falta da declaração `sem_dados_reais` (ERR-001)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -1721,7 +1723,7 @@ components:
         motivo:
           type: string
           enum: [excede o limite de 20 MB, excede o limite de 50 páginas, tipo de arquivo não permitido, risco de segurança detectado]
-        posicao: { type: integer, minimum: 1, description: 'ERR-029 no upload: posição do arquivo recusado no envio, a partir de 1; ausente na importação (`importForm`); o nome do arquivo nunca vai na resposta (RN-028, DEC-198)' }
+        posicao: { type: integer, minimum: 1, description: 'ERR-029 no envio de imagens (uploadImages, addApplicationPages, attachSignaturePage): posição do arquivo recusado no envio, a partir de 1; ausente na importação (`importForm`); o nome do arquivo nunca vai na resposta (RN-028, DEC-198)' }
 
     ErrorCode:
       type: string
@@ -2102,7 +2104,7 @@ components:
         tipo: { type: string, enum: [formulario, assinatura] }
         registro_ok: { type: boolean }
         ordem_envio: { type: integer, minimum: 1, description: 'Posição da folha na aplicação, na ordem do envio; o addApplicationPages e o attachSignaturePage continuam a sequência, e folhas descartadas não liberam o número (ENT-025, DEC-198)' }
-        nome_arquivo: { type: string, maxLength: 255, nullable: true, description: 'Nome original do arquivo de onde veio a página, sem a pasta (DEC-198); dado pessoal, nunca em log nem em mensagem de erro (RN-028); nulo nas páginas enviadas antes da REQ v2.8, depois do expurgo da imagem e depois da eliminação do titular (DEC-206)' }
+        nome_arquivo: { type: string, maxLength: 255, nullable: true, description: 'Nome original do arquivo de onde veio a página, sem a pasta (DEC-198); dado pessoal, nunca em log nem em mensagem de erro (RN-028); nulo nas páginas enviadas antes da migração 0010 (IMP-009), depois do expurgo da imagem e depois da eliminação do titular, inclusive nas aplicações descartadas por ela (DEC-206, DEC-210)' }
 
     PageImage:
       type: object

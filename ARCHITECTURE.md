@@ -8,8 +8,8 @@
 
 IMP-001 aceito em 29/10/2026 (Gate 2), com o E2E com navegador pendente; IMP-002 aceito em
 03/11/2026; IMP-005 (aplicação local, CHG-011) aceito em 04/11/2026; IMP-003 e IMP-006 aceitos em 05/11/2026;
-IMP-007 (exportação em formato longo, CHG-015) e IMP-008 (pesquisas sem QR, CHG-017) implementados, com o aceite
-pela demonstração pendente; CHG-018 (texto da opção "Outro" e nome do arquivo) em revisão, com implementação no
+IMP-007 (exportação em formato longo, CHG-015) e IMP-008 (pesquisas sem QR, CHG-017) com o IA-DEV juntado e o
+aceite pela demonstração pendente (no PLANO §11, ainda fora de `aceito`); CHG-018 (texto da opção "Outro" e nome do arquivo) com o ciclo de revisão encerrado (DEC-073), implementação no
 IMP-009; depois, o IMP-004 (DEC-164). Existem `apps/api`
 (com o worker da leitura em `apps/api/src/leitura`, onde também entra o extrator de estrutura da
 DEC-141, e com a exportação em `apps/api/src/exportacao`, DEC-167), `packages/db`, `packages/motor-leitura` e `tests/`; `apps/web`, `apps/worker`,

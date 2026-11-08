@@ -106,9 +106,10 @@ ENT-011 ItemResposta,valor_ia,"valor lido pela IA, no formato canônico (§5.4);
 ENT-011 ItemResposta,confianca,"confiança da IA (valor bruto, sem arredondamento)",decimal,não,"5,4",—,0.0000..1.0000,NULL,não,—,não
 ENT-011 ItemResposta,valor_final,"valor confirmado/corrigido, no formato canônico (§5.4); cifrado (DEC-041) quando a pergunta tem `campo_respondente`",text,não,2000,—,—,NULL,não,—,sensível
 ENT-011 ItemResposta,estado,estado do item,enum,sim,—,—,pendente_leitura; aguardando_condicao; confirmado_automaticamente; a_revisar; confirmado; corrigido; em_branco; ilegivel; rasurado; nao_se_aplica,pendente_leitura,não,—,não
-ENT-011 ItemResposta,revisor_id,usuário que revisou,uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
+ENT-011 ItemResposta,revisor_id,"usuário que aplicou a última ação de revisão ao item; NULL quando a última mudança de estado foi do worker ou da reavaliação de salto (FL-002, DEC-209)",uuid,não,36,UUID v4,—,NULL,não,Usuario.id,não
 ENT-011 ItemResposta,revisado_em,data da revisão,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
 ENT-011 ItemResposta,regiao_imagem,região da imagem (bounding box),jsonb,não,—,JSON,—,NULL,não,—,não
+ENT-011 ItemResposta,revisao_reaberta,item de complemento que foi a `a_revisar` pela reabertura e ainda não foi revisado (FL-002); sempre false nos demais itens,boolean,sim,—,—,true; false,false,não,—,não
 ENT-012 Grupo,id,identificador do grupo,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-012 Grupo,tenant_id,tenant do grupo,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-012 Grupo,projeto_id,projeto do grupo,uuid,sim,36,UUID v4,—,—,não,Projeto.id,não
