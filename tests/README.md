@@ -5,11 +5,12 @@ implementação (IA-DEV), que não pode alterá-los: o job `testes-congelados` d
 vermelho qualquer mudança em teste sem o rótulo `ia-test`, e o responsável só autoriza a
 junção depois de revisar o diff, com as verificações verdes.
 
-Limite conhecido (decisão do responsável em 29/10/2026, opção A): o repositório é privado no
-plano gratuito, então o GitHub não aplica regra de proteção na `main`; e, com uma só pessoa,
-o `CODEOWNERS` não bloqueia (o autor não aprova o próprio PR). A proteção é de processo:
-nenhuma junção sem a autorização do responsável. Com um segundo revisor, reavaliar o
-GitHub Pro para tornar a regra obrigatória.
+Regra da `main` (DEC-213, que substitui a DEC-091): com o repositório público, o GitHub aplica
+a regra da `main`, que vale também para o administrador. A junção exige os 6 jobs do CI verdes
+(`consistencia`, `contrato`, `testes`, `testes-congelados`, `seguranca`, `qualidade`), e a
+`main` não aceita force push nem exclusão. A revisão não é obrigatória: com uma só pessoa, o
+`CODEOWNERS` não bloqueia (o autor não aprova o próprio PR), e a junção continua só pelo
+responsável (DEC-092).
 
 ## Como rodar
 
