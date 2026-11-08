@@ -3,7 +3,7 @@
 # PLANO.md — MinhaPesquisa
 
 **Plano técnico e de incrementos · Fase 3 (cty-arq)**
-**Fontes normativas:** REQ v2.8 (CHG-011 propagada no IMP-005; CHG-012 aceita em 04/11/2026; CHG-013 a CHG-016 aceitas em 05/11/2026; CHG-017 aceita em 06/11/2026; CHG-018 proposta em 07/11/2026) · docs/spec/BLOCO_P.md · Kit v3
+**Fontes normativas:** REQ v2.8 (CHG-011 propagada no IMP-005; CHG-012 aceita em 04/11/2026; CHG-013 a CHG-016 aceitas em 05/11/2026; CHG-017 aceita em 06/11/2026; CHG-018 aceita em 07/11/2026) · docs/spec/BLOCO_P.md · Kit v3
 **Nível de rigor:** Completo
 **Responsável:** Carlos Yano
 **Versão do plano:** 3.19
@@ -549,7 +549,7 @@ validado pelo CI a cada merge.
 | CHG-015 — exportação em formato longo (DEC-153 a DEC-165) | mudança normativa | aceita em 05/11/2026 (REQ v2.5, PLANO v3.13); implementação no IMP-007 |
 | CHG-016 — apóstrofo contra fórmulas só no CSV (DEC-166) | mudança normativa | aceita em 05/11/2026 (REQ v2.6, PLANO v3.14); implementação no IMP-007 |
 | CHG-017 — pesquisas sem QR e localização das perguntas pela IA (DEC-169 a DEC-193) | mudança normativa | aceita em 06/11/2026 (REQ v2.7, PLANO v3.17); Q-063 a Q-081 respondidas (DEC-175 a DEC-193); rodadas 1 a 5 corrigidas (REV-REQ-011 a REV-REQ-015, REV-PLANO-013 a REV-PLANO-017), ciclo encerrado pela DEC-073; implementação no IMP-008 |
-| CHG-018 — texto da opção "Outro" e nome do arquivo enviado (DEC-197 a DEC-203) | mudança normativa | proposta em 07/11/2026 (REQ v2.8, PLANO v3.19); Q-084 a Q-098 respondidas (DEC-197 a DEC-202 e DEC-204 a DEC-212); rodadas 1 a 4 corrigidas (REV-REQ-016 a REV-REQ-019, REV-PLANO-018 a REV-PLANO-021), ciclo encerrado pela DEC-073 na rodada 4; implementação no IMP-009 |
+| CHG-018 — texto da opção "Outro" e nome do arquivo enviado (DEC-197 a DEC-203) | mudança normativa | aceita em 07/11/2026 (REQ v2.8, PLANO v3.19); Q-084 a Q-098 respondidas (DEC-197 a DEC-202 e DEC-204 a DEC-212); rodadas 1 a 4 corrigidas (REV-REQ-016 a REV-REQ-019, REV-PLANO-018 a REV-PLANO-021), ciclo encerrado pela DEC-073 na rodada 4; implementação no IMP-009 |
 
 ### 12.1 Histórico da errata da matriz inline da REQ v1.2
 
