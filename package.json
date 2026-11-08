@@ -12,6 +12,7 @@
     "typecheck:tests": "tsc -p tests",
     "pretest": "npm run build",
     "test": "vitest run",
+    "test:relatorio": "node tools/testes.mjs",
     "demo": "npm run build && node apps/api/dist/demo/main.js",
     "local": "npm run build && node apps/api/dist/scripts/cli.js",
     "iniciar": "npm run build && node apps/api/dist/main.js",
