@@ -15,6 +15,8 @@ export interface ExtrasErro {
   substituir?: string;
   /** Motivo exato da recusa de arquivo (ERR-029, extensão `motivo`). */
   motivo?: string;
+  /** Posição do arquivo recusado no envio de imagens, a partir de 1 (ERR-029, DEC-198); nunca o nome. */
+  posicao?: number;
   /** Evento gravado após o rollback da transação (ERR-002, ERR-023: tentativa auditada). */
   auditar?: AuditoriaDeErro;
 }

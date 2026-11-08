@@ -40,6 +40,14 @@ interface PaginaProcessada {
   /** QR de outro formato na folha: auditado sem o conteúdo (DEC-187). */
   qrOutro: boolean;
   registroOk: boolean;
+  /** Nome original do arquivo de onde veio a página (DEC-198, DEC-203 (5)); dado pessoal (RN-028). */
+  nomeArquivo: string | null;
+}
+
+/** Nome do arquivo como gravado: sem a pasta, em NFC e cortado em 255 caracteres (DEC-203 (5)). */
+export function nomeDoArquivo(filename: string | undefined): string | null {
+  const nome = (filename ?? '').split(/[\\/]/).pop()!.normalize('NFC').slice(0, 255);
+  return nome === '' ? null : nome;
 }
 
 interface LinhaPagina {
@@ -53,6 +61,8 @@ interface LinhaPagina {
   confianca_localizacao: string | null;
   localizada_em: Date | null;
   regiao_assinatura: unknown;
+  ordem_envio: number;
+  nome_arquivo: string | null;
 }
 
 interface Identificar {
@@ -69,7 +79,7 @@ interface Envio {
 
 const CAMPOS_ENVIO = ['versao_id', 'data_aplicacao', 'local_aplicacao'];
 
-const recusa = (motivo: string) => new ErroApi('ERR-029', { motivo, substituir: motivo });
+const recusa = (motivo: string, posicao?: number) => new ErroApi('ERR-029', { motivo, substituir: motivo, posicao });
 
 type ReqMultipart = Requisicao & { isMultipart(): boolean; parts(): AsyncIterableIterator<Multipart> };
 
@@ -108,22 +118,24 @@ export class UploadController {
         if (parte.fieldname !== formato.arquivos) throw new ErroApi('ERR-001', { campos: [parte.fieldname] });
         arquivos++;
         if (formato.maxArquivos && arquivos > formato.maxArquivos) throw new ErroApi('ERR-001', { campos: [formato.arquivos] });
+        const posicao = arquivos;
+        const nomeArquivo = nomeDoArquivo(parte.filename);
         let bytes: Buffer;
         try {
           bytes = await parte.toBuffer();
         } catch (e) {
-          if ((e as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') throw recusa(MOTIVO.tamanho);
+          if ((e as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') throw recusa(MOTIVO.tamanho, posicao);
           throw e;
         }
-        if (bytes.length > LIMITE_BYTES || parte.file.truncated) throw recusa(MOTIVO.tamanho);
-        if (!(await this.n.config.antimalware.limpo(bytes))) throw recusa(MOTIVO.malware);
+        if (bytes.length > LIMITE_BYTES || parte.file.truncated) throw recusa(MOTIVO.tamanho, posicao);
+        if (!(await this.n.config.antimalware.limpo(bytes))) throw recusa(MOTIVO.malware, posicao);
         const tipo = tipoPorConteudo(bytes);
-        if (!tipo) throw recusa(MOTIVO.tipo);
+        if (!tipo) throw recusa(MOTIVO.tipo, posicao);
         let imagens: Buffer[];
         if (tipo === 'pdf') {
           const total = await contarPaginasPdf(bytes);
-          if (total === null) throw recusa(MOTIVO.tipo);
-          if (total > LIMITE_PAGINAS) throw recusa(MOTIVO.paginas);
+          if (total === null) throw recusa(MOTIVO.tipo, posicao);
+          if (total > LIMITE_PAGINAS) throw recusa(MOTIVO.paginas, posicao);
           imagens = await renderizarPdf(bytes);
         } else {
           imagens = [bytes];
@@ -133,7 +145,7 @@ export class UploadController {
           try {
             jpeg = await normalizarImagem(img);
           } catch {
-            throw recusa(MOTIVO.tipo); // imagem corrompida ou grande demais para decodificar
+            throw recusa(MOTIVO.tipo, posicao); // imagem corrompida ou grande demais para decodificar
           }
           const a = await analisarPagina(jpeg);
           const doSistema = a.qr !== null && lerConteudoQr(a.qr) !== null;
@@ -143,12 +155,13 @@ export class UploadController {
             qr: doSistema ? a.qr : null,
             qrOutro: a.qr !== null && !doSistema,
             registroOk: a.registroOk,
+            nomeArquivo,
           });
         }
       }
     } catch (e) {
       const codigo = (e as { code?: string }).code;
-      if (codigo === 'FST_REQ_FILE_TOO_LARGE') throw recusa(MOTIVO.tamanho);
+      if (codigo === 'FST_REQ_FILE_TOO_LARGE') throw recusa(MOTIVO.tamanho, arquivos || undefined);
       if (codigo === 'FST_FILES_LIMIT' || codigo === 'FST_FIELDS_LIMIT' || codigo === 'FST_PARTS_LIMIT') throw new ErroApi('ERR-001', { campos: [formato.arquivos] });
       throw e;
     }
@@ -179,7 +192,7 @@ export class UploadController {
     return linhas<LinhaPagina>(
       tx,
       sql`SELECT id, tipo, numero_pagina, qr_codigo, registro_ok, chave_storage, pagina_localizada,
-                 confianca_localizacao::text AS confianca_localizacao, localizada_em, regiao_assinatura
+                 confianca_localizacao::text AS confianca_localizacao, localizada_em, regiao_assinatura, ordem_envio, nome_arquivo
             FROM pagina_aplicacao WHERE aplicacao_id = ${aplicacaoId} AND expurgada_em IS NULL ORDER BY ordem_envio, id`,
     );
   }
@@ -211,7 +224,7 @@ export class UploadController {
   }
 
   private corpoPagina(p: LinhaPagina) {
-    return { imagem_id: p.id, numero_pagina: p.numero_pagina, tipo: p.tipo, registro_ok: p.registro_ok };
+    return { imagem_id: p.id, numero_pagina: p.numero_pagina, tipo: p.tipo, registro_ok: p.registro_ok, ordem_envio: p.ordem_envio, nome_arquivo: p.nome_arquivo };
   }
 
   private corpoAplicacao(tx: Executor, a: LinhaAplicacao) {
@@ -234,9 +247,9 @@ export class UploadController {
       gravadas.push(chave);
       await tx.execute(sql`
         INSERT INTO pagina_aplicacao (id, tenant_id, aplicacao_id, tipo, numero_pagina, ordem_envio, qr_codigo, chave_storage,
-                                      sha256, registro_ok, criado_em)
+                                      sha256, registro_ok, criado_em, nome_arquivo)
         VALUES (${id}, ${s.tenantId}, ${aplicacaoId}, 'formulario', ${this.paginaDoQr(p.qr, resolvidas, versaoId)}, ${ordem + i + 1},
-                ${p.qr?.slice(0, 200) ?? null}, ${chave}, ${p.sha256}, ${p.registroOk}, ${this.n.agora()})`);
+                ${p.qr?.slice(0, 200) ?? null}, ${chave}, ${p.sha256}, ${p.registroOk}, ${this.n.agora()}, ${p.nomeArquivo})`);
     }
   }
 
@@ -494,9 +507,9 @@ export class UploadController {
           const ordem = (await linha<{ n: number }>(tx, sql`SELECT coalesce(max(ordem_envio), 0)::int AS n FROM pagina_aplicacao WHERE aplicacao_id = ${id}`))!.n;
           await tx.execute(sql`
             INSERT INTO pagina_aplicacao (id, tenant_id, aplicacao_id, tipo, numero_pagina, ordem_envio, qr_codigo, chave_storage,
-                                          sha256, registro_ok, criado_em)
+                                          sha256, registro_ok, criado_em, nome_arquivo)
             VALUES (${imagemId}, ${s.tenantId}, ${id}, 'assinatura', 1, ${ordem + 1}, ${p.qr?.slice(0, 200) ?? null}, ${chaveObjeto},
-                    ${p.sha256}, ${p.registroOk}, ${this.n.agora()})`);
+                    ${p.sha256}, ${p.registroOk}, ${this.n.agora()}, ${p.nomeArquivo})`);
           await anexarAssinatura(this.n, tx, s, a);
           return { status: 200, recursoId: id };
         });

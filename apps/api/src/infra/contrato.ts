@@ -56,6 +56,19 @@ function titulosDosExemplos(no: unknown, acc: Map<string, string>): void {
   }
 }
 
+/**
+ * OpenAPI 3.0: `nullable: true` aceita null mesmo com `enum` (3.0.3); no AJV o null precisa estar no
+ * enum. Sem isso o conteúdo devolvido pelo GET (campo_aplicacao: null) não volta no updateVersion.
+ */
+function nuloNoEnum(no: unknown): void {
+  if (Array.isArray(no)) no.forEach(nuloNoEnum);
+  else if (no && typeof no === 'object') {
+    const o = no as Record<string, unknown>;
+    if (o.nullable === true && Array.isArray(o.enum) && !o.enum.includes(null)) o.enum = [...o.enum, null];
+    Object.values(o).forEach(nuloNoEnum);
+  }
+}
+
 export class Contrato {
   readonly erros = new Map<string, DefErro>();
   private readonly validadores = new Map<string, ValidateFunction>();
@@ -67,6 +80,7 @@ export class Contrato {
     };
 
     // Sem allErrors: um corpo hostil não pode gerar uma lista ilimitada de erros (DoS).
+    nuloNoEnum(doc);
     const ajv = new Ajv({ strict: false, allErrors: false });
     addFormats(ajv);
     ajv.addFormat('password', true);

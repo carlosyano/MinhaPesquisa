@@ -16,9 +16,9 @@ export async function lerConteudo(tx: Executor, versaoId: string): Promise<{ per
                valor_min, valor_max, unidade, nao_consta
           FROM pergunta WHERE versao_id = ${versaoId} ORDER BY ordem, codigo`,
   );
-  const ops = await linhas<{ pergunta_id: string; codigo: string; rotulo: string; ordem: number }>(
+  const ops = await linhas<{ pergunta_id: string; codigo: string; rotulo: string; ordem: number; com_complemento: boolean }>(
     tx,
-    sql`SELECT o.pergunta_id, o.codigo, o.rotulo, o.ordem FROM opcao o JOIN pergunta p ON p.id = o.pergunta_id
+    sql`SELECT o.pergunta_id, o.codigo, o.rotulo, o.ordem, o.com_complemento FROM opcao o JOIN pergunta p ON p.id = o.pergunta_id
          WHERE p.versao_id = ${versaoId} ORDER BY o.ordem, o.codigo`,
   );
   const lms = await linhas<{ pergunta_id: string; codigo: string; rotulo: string; ordem: number }>(
@@ -33,7 +33,10 @@ export async function lerConteudo(tx: Executor, versaoId: string): Promise<{ per
          WHERE r.versao_id = ${versaoId} ORDER BY r.posicao`,
   );
   const perguntas = ps.map((p): Pergunta => {
-    const opcoes = ops.filter((o) => o.pergunta_id === p.id).map(({ codigo, rotulo, ordem }) => ({ codigo, rotulo, ordem }));
+    // A marca só sai quando ligada (DEC-202), como o padrão false do contrato.
+    const opcoes = ops
+      .filter((o) => o.pergunta_id === p.id)
+      .map(({ codigo, rotulo, ordem, com_complemento }) => ({ codigo, rotulo, ordem, ...(com_complemento ? { com_complemento } : {}) }));
     const linhasM = lms.filter((l) => l.pergunta_id === p.id).map(({ codigo, rotulo, ordem }) => ({ codigo, rotulo, ordem }));
     return {
       codigo: p.codigo,
@@ -72,8 +75,8 @@ export async function gravarConteudo(n: Nucleo, tx: Executor, tenantId: string, 
               ${p.valor_min}, ${p.valor_max}, ${p.unidade}, ${p.nao_consta ?? false})`);
     for (const o of p.opcoes ?? []) {
       await tx.execute(sql`
-        INSERT INTO opcao (id, tenant_id, pergunta_id, codigo, rotulo, ordem)
-        VALUES (${n.id()}, ${tenantId}, ${id}, ${o.codigo}, ${o.rotulo}, ${o.ordem})`);
+        INSERT INTO opcao (id, tenant_id, pergunta_id, codigo, rotulo, ordem, com_complemento)
+        VALUES (${n.id()}, ${tenantId}, ${id}, ${o.codigo}, ${o.rotulo}, ${o.ordem}, ${o.com_complemento ?? false})`);
     }
     for (const l of p.linhas ?? []) {
       await tx.execute(sql`

@@ -10,7 +10,23 @@ import { PDFDocument, StandardFonts, rgb, type PDFPage } from 'pdf-lib';
 import QRCode from 'qrcode';
 import type { Pergunta, RegraEntrada } from '../regras/formularios.js';
 import { conteudoQr } from '../regras/upload.js';
-import { A, ALTURA_RESPOSTA, CAIXA_TERMO_TOPO, L, MARGEM_X, posicionar, quebrar, RODAPE, seguro, TAM_ENUNCIADO, TAM_OPCAO, type Bloco } from './layout.js';
+import {
+  A,
+  ALTURA_OPCAO,
+  ALTURA_RESPOSTA,
+  CAIXA_TERMO_TOPO,
+  L,
+  LINHA_COMPLEMENTO,
+  MARGEM_X,
+  posicionar,
+  quebrar,
+  RODAPE,
+  seguro,
+  TAM_ENUNCIADO,
+  TAM_OPCAO,
+  VAO_COMPLEMENTO,
+  type Bloco,
+} from './layout.js';
 
 const MARCADOR = 20;
 const BORDA_MARCADOR = 17;
@@ -128,9 +144,17 @@ export async function gerarPdf(d: DadosPdf): Promise<Buffer> {
         y -= 14;
       }
       if (bloco.opcoes.length) {
-        for (const o of bloco.opcoes) {
-          p.drawText(seguro(fonte, o), { x: MARGEM_X + 12, y: y - 2, size: TAM_OPCAO, font: fonte });
-          y -= 15;
+        for (const [k, o] of bloco.opcoes.entries()) {
+          const texto = seguro(fonte, o);
+          p.drawText(texto, { x: MARGEM_X + 12, y: y - 2, size: TAM_OPCAO, font: fonte });
+          // Linha para escrever ao lado da opção com complemento, dentro do bloco (DEC-202, DEC-203 (6)).
+          const c = bloco.complementos[k];
+          if (c) {
+            if (c.quebra) y -= ALTURA_OPCAO;
+            const x = c.quebra ? MARGEM_X + 24 : MARGEM_X + 12 + fonte.widthOfTextAtSize(texto, TAM_OPCAO) + VAO_COMPLEMENTO;
+            p.drawLine({ start: { x, y: y - 3 }, end: { x: x + LINHA_COMPLEMENTO, y: y - 3 }, thickness: 0.8 });
+          }
+          y -= ALTURA_OPCAO;
         }
       } else {
         const h = ALTURA_RESPOSTA[bloco.pergunta.tipo] ?? 22;

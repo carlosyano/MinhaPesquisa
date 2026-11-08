@@ -15,6 +15,8 @@ export interface PerguntaLida {
   /** Um dos 10 tipos do ENT-007 ou `desconhecido`. */
   tipo: string;
   opcoes?: string[];
+  /** Opções (pelo texto de `opcoes`) impressas com um espaço para escrever ao lado, como "Outros: ____" (DEC-197). */
+  opcoes_com_complemento?: string[];
   linhas?: string[];
   faixa?: { min: number; max: number } | null;
   campo_padrao?: CampoLido | null;
@@ -47,11 +49,12 @@ export function validarEstrutura(bruto: unknown): { perguntas: PerguntaLida[] } 
   const perguntas: PerguntaLida[] = [];
   for (const item of (bruto as { perguntas: unknown[] }).perguntas) {
     if (!item || typeof item !== 'object') return { erro: 'pergunta não é objeto' };
-    const { enunciado, tipo, opcoes, linhas, faixa, campo_padrao, ...extra } = item as Record<string, unknown>;
+    const { enunciado, tipo, opcoes, opcoes_com_complemento, linhas, faixa, campo_padrao, ...extra } = item as Record<string, unknown>;
     if (Object.keys(extra).length) return { erro: 'propriedade fora do formato' };
     if (typeof enunciado !== 'string') return { erro: 'enunciado não é texto' };
     if (typeof tipo !== 'string' || !(tipo === 'desconhecido' || (TIPOS_PERGUNTA as readonly string[]).includes(tipo))) return { erro: 'tipo fora do formato' };
     if (opcoes !== undefined && !ehTextos(opcoes)) return { erro: 'opções fora do formato' };
+    if (opcoes_com_complemento !== undefined && !ehTextos(opcoes_com_complemento)) return { erro: 'opções com complemento fora do formato' };
     if (linhas !== undefined && !ehTextos(linhas)) return { erro: 'linhas fora do formato' };
     if (faixa !== undefined && faixa !== null) {
       const f = faixa as Record<string, unknown>;
@@ -62,6 +65,7 @@ export function validarEstrutura(bruto: unknown): { perguntas: PerguntaLida[] } 
       enunciado,
       tipo,
       ...(opcoes !== undefined ? { opcoes: opcoes as string[] } : {}),
+      ...(opcoes_com_complemento !== undefined ? { opcoes_com_complemento: opcoes_com_complemento as string[] } : {}),
       ...(linhas !== undefined ? { linhas: linhas as string[] } : {}),
       ...(faixa !== undefined ? { faixa: faixa as PerguntaLida['faixa'] } : {}),
       ...(campo_padrao !== undefined ? { campo_padrao: campo_padrao as CampoLido | null } : {}),
@@ -105,6 +109,8 @@ interface Ajustada {
   enunciado: string;
   tipo: string;
   opcoes: string[];
+  /** Rótulos (já limpos) das opções com complemento (DEC-197). */
+  complementos?: string[];
   linhas: string[];
   faixa: { min: number; max: number } | null;
   /** Campo da DEC-149 reconhecido (endereço ou aplicador), que fica entre as comuns. */
@@ -157,10 +163,15 @@ function ajustar(q: PerguntaLida, pagina: number, posicao: number, avisar: (m: M
     tipo = 'texto_curto';
   }
   let opcoes: string[] = [];
+  let complementos: string[] = [];
   let linhas: string[] = [];
   let faixa: Ajustada['faixa'] = null;
   if (tipo === 'escolha_unica' || tipo === 'multipla_escolha') {
-    opcoes = rotulos(q.opcoes);
+    // Opção com complemento: o rótulo sem a linha de escrever e sem os dois-pontos do fim (RN-049, DEC-197).
+    const marcadas = new Set((q.opcoes_com_complemento ?? []).map((r) => r.trim()));
+    const limpar = (r: string) => (marcadas.has(r.trim()) ? r.replace(/[\s:_.…]+$/u, '') : r);
+    opcoes = rotulos(q.opcoes?.map(limpar));
+    complementos = rotulos(q.opcoes?.filter((r) => marcadas.has(r.trim())).map(limpar));
     if (!opcoes.length) avisar('tipo_incerto');
     if (!opcoes.length) tipo = 'texto_curto';
   } else if (tipo === 'matriz') {
@@ -181,13 +192,30 @@ function ajustar(q: PerguntaLida, pagina: number, posicao: number, avisar: (m: M
   } else if (tipo === 'numero') {
     faixa = faixaValida(q.faixa);
   }
-  return { pagina, posicao, enunciado: cortar(enunciado, LIMITE_ENUNCIADO, () => avisar('texto_cortado')), tipo, opcoes, linhas, faixa, campo: null };
+  return {
+    pagina,
+    posicao,
+    enunciado: cortar(enunciado, LIMITE_ENUNCIADO, () => avisar('texto_cortado')),
+    tipo,
+    opcoes,
+    ...(tipo === 'escolha_unica' || tipo === 'multipla_escolha' ? { complementos } : {}),
+    linhas,
+    faixa,
+    campo: null,
+  };
 }
 
-/** Opções ou linhas com códigos pela transformação T, únicos na pergunta (RN-019). */
-function itens(rotulos: string[], prefixo: 'opcao' | 'linha'): OpcaoEntrada[] {
+/**
+ * Opções ou linhas com códigos pela transformação T, únicos na pergunta (RN-019); a opção com
+ * complemento leva a marca, salvo `nenhuma_das_anteriores` (RN-047).
+ */
+function itens(rotulos: string[], prefixo: 'opcao' | 'linha', complementos: readonly string[] = []): OpcaoEntrada[] {
   const usados = new Set<string>();
-  return rotulos.map((rotulo, i) => ({ codigo: semColisao(transformar(rotulo, false).toLowerCase() || `${prefixo}_${i + 1}`, usados), rotulo, ordem: i + 1 }));
+  return rotulos.map((rotulo, i) => {
+    const codigo = semColisao(transformar(rotulo, false).toLowerCase() || `${prefixo}_${i + 1}`, usados);
+    const com = complementos.includes(rotulo) && codigo !== 'nenhuma_das_anteriores';
+    return { codigo, rotulo, ordem: i + 1, ...(com ? { com_complemento: true } : {}) };
+  });
 }
 
 /**
@@ -269,7 +297,7 @@ function comoEntrada(a: Ajustada, ordem: number, pagina: number, comNenhuma = tr
         ordem,
         pagina,
         sensibilidade: 'saude', // DEC-138
-        ...(a.opcoes.length ? { opcoes: itens(a.opcoes, 'opcao') } : {}),
+        ...(a.opcoes.length ? { opcoes: itens(a.opcoes, 'opcao', a.complementos) } : {}),
         ...(a.linhas.length ? { linhas: itens(a.linhas, 'linha') } : {}),
         ...(a.faixa ? { valor_min: a.faixa.min, valor_max: a.faixa.max } : {}),
       };

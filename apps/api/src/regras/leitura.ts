@@ -141,6 +141,69 @@ export function estadoAposLeitura(e: EntradaItem): EstadoItem {
   return e.confianca > e.limite ? 'confirmado_automaticamente' : 'a_revisar'; // regras 8 e 9
 }
 
+/** Tamanho máximo do texto do complemento (regra 7 da FL-002, REQ §5.4). */
+export const MAX_COMPLEMENTO = 200;
+
+/** Entrada da pré-regra 1b, do item de complemento (RN-009, DEC-197). */
+export interface EntradaComplemento {
+  /** Código da opção com complemento. */
+  opcao: string;
+  /** Item da pergunta, depois da mudança que dispara a reavaliação. */
+  pergunta: {
+    estado: EstadoItem;
+    /** Valor efetivo: o final ou, em `confirmado_automaticamente`, o lido; múltipla escolha separada por ";". */
+    valor: string | null;
+    /** `revisor_id` preenchido: a própria usuária aplicou a ação ao item (DEC-203 (11)). */
+    pelaUsuaria: boolean;
+  };
+  /** Complemento lido; null = sem leitura (regra 0, ou ausente na resposta). */
+  lido: { valor: string | null; confianca: number } | null;
+  limite: number;
+  /** Estado atual do complemento; ausente na primeira avaliação, depois da leitura. */
+  atual?: {
+    estado: EstadoItem;
+    pelaUsuaria: boolean;
+    revisaoReaberta: boolean;
+    /**
+     * A opção estava marcada antes da mudança da pergunta. Sem ela, só a correção da pergunta pela
+     * usuária conta como opção que passou a estar marcada.
+     */
+    opcaoMarcadaAntes?: boolean;
+  } | null;
+}
+
+const PELA_USUARIA: ReadonlySet<EstadoItem> = new Set(['confirmado', 'corrigido', 'em_branco', 'ilegivel', 'rasurado', 'nao_se_aplica']);
+
+/** A opção está entre os códigos do valor da pergunta (múltipla escolha separada por ";"). */
+export function opcaoMarcada(valor: string | null, opcao: string): boolean {
+  return (valor ?? '').split(';').includes(opcao);
+}
+
+/**
+ * Pré-regra 1b da FL-002, com a manutenção da revisão humana do complemento (DEC-204, DEC-212) e o
+ * `a_revisar` da reabertura (DEC-203 (10)).
+ */
+export function estadoComplemento(e: EntradaComplemento): EstadoItem {
+  const p = e.pergunta;
+  if (INDETERMINADA.has(p.estado)) return 'aguardando_condicao'; // (a)
+  const atual = e.atual ?? null;
+  const textoLido = e.lido !== null && e.lido.valor !== null && e.lido.valor.trim() !== '';
+  if (!opcaoMarcada(p.valor, e.opcao)) {
+    if (atual?.estado === 'nao_se_aplica' && atual.pelaUsuaria) return 'nao_se_aplica'; // DEC-212
+    const daLeitura = p.estado === 'confirmado_automaticamente' || p.estado === 'confirmado' || (p.estado === 'nao_se_aplica' && !p.pelaUsuaria);
+    return daLeitura && textoLido ? 'a_revisar' : 'nao_se_aplica'; // (b), DEC-205, DEC-209
+  }
+  if (atual) {
+    if (atual.revisaoReaberta && atual.estado === 'a_revisar') return 'a_revisar';
+    const marcadaAntes = atual.opcaoMarcadaAntes ?? !(p.estado === 'corrigido' && p.pelaUsuaria);
+    if (atual.pelaUsuaria && PELA_USUARIA.has(atual.estado) && (marcadaAntes || atual.estado !== 'nao_se_aplica')) return atual.estado; // DEC-204
+  }
+  if (!e.lido) return 'a_revisar'; // (c)
+  if (!textoLido) return 'a_revisar'; // (d) regra 6a
+  if (e.lido.valor!.length > MAX_COMPLEMENTO) return 'a_revisar'; // regra 7
+  return e.lido.confianca > e.limite ? 'confirmado_automaticamente' : 'a_revisar'; // regras 8 e 9
+}
+
 /**
  * Formato canônico do valor lido (REQ §5.4): sem espaços nas pontas, múltipla escolha com os
  * códigos em ordem alfabética e CPF com 11 dígitos quando a máscara é reconhecível. O que não se

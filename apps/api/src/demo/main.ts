@@ -185,7 +185,10 @@ async function prepararBanco(estado: Estado): Promise<{ superUrl: string; parar:
   return { superUrl, parar: async () => void docker('stop', CONTEINER) };
 }
 
-/** Formulário sintético de duas páginas: os 5 campos da RN-017 e duas perguntas sim/não. */
+/**
+ * Formulário sintético de duas páginas: os 5 campos da RN-017, duas perguntas sim/não e uma escolha
+ * única com "Outros: ____" (complemento, DEC-197).
+ */
 function conteudoDemo() {
   let ordem = 0;
   const q = (p: Record<string, unknown>) => ({ ...p, ordem: ++ordem });
@@ -198,6 +201,17 @@ function conteudoDemo() {
       q({ codigo: 'LOCAL_APLICACAO', tipo: 'texto_curto', enunciado: 'Local da aplicação', pagina: 1, campo_aplicacao: 'local_aplicacao' }),
       q({ codigo: 'PRATICA_ATIVIDADE', tipo: 'sim_nao', enunciado: 'Pratica atividade física?', pagina: 2 }),
       q({ codigo: 'DORME_BEM', tipo: 'sim_nao', enunciado: 'Dorme bem à noite?', pagina: 2 }),
+      q({
+        codigo: 'MOTIVO_CONSULTA',
+        tipo: 'escolha_unica',
+        enunciado: 'Motivo da última consulta',
+        pagina: 2,
+        opcoes: [
+          { codigo: 'rotina', rotulo: 'Rotina', ordem: 1 },
+          { codigo: 'dor', rotulo: 'Dor', ordem: 2 },
+          { codigo: 'outros', rotulo: 'Outros', ordem: 3, com_complemento: true },
+        ],
+      }),
     ],
     regras_salto: [],
   };

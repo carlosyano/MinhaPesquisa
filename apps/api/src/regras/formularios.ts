@@ -7,7 +7,12 @@ export interface OpcaoEntrada {
   codigo: string;
   rotulo: string;
   ordem: number;
+  /** A opção pede um texto ao lado, lido num item de complemento (DEC-197, DEC-202). */
+  com_complemento?: boolean;
 }
+
+/** Tipos em que a opção pode ter complemento, nunca em `nenhuma_das_anteriores` (RN-047). */
+const TIPOS_COM_COMPLEMENTO = new Set(['escolha_unica', 'multipla_escolha']);
 
 export interface PerguntaEntrada {
   codigo: string;
@@ -90,9 +95,13 @@ export function normalizarConteudo(perguntas: readonly PerguntaEntrada[], regras
     else if (p.sensibilidade === 'identificacao') throw invalido('sensibilidade'); // DEC-097
     else sensibilidade = (p.sensibilidade as 'saude' | 'outro' | undefined) ?? 'saude';
 
+    // `com_complemento` fora de escolha única e múltipla escolha, ou em nenhuma_das_anteriores (RN-047, DEC-202).
+    const complementoInvalido = (p.opcoes ?? []).some((o) => o.com_complemento && (!TIPOS_COM_COMPLEMENTO.has(p.tipo) || o.codigo === 'nenhuma_das_anteriores'));
+    if (complementoInvalido) throw invalido(p.codigo);
     let opcoes: OpcaoEntrada[] | null = null;
     if (p.tipo === 'sim_nao') opcoes = OPCOES_SIM_NAO.map((o) => ({ ...o }));
-    else if (TIPOS_COM_OPCOES.has(p.tipo)) opcoes = [...(p.opcoes ?? [])].sort((a, b) => a.ordem - b.ordem);
+    else if (TIPOS_COM_OPCOES.has(p.tipo))
+      opcoes = [...(p.opcoes ?? [])].sort((a, b) => a.ordem - b.ordem).map(({ com_complemento, ...o }) => (com_complemento ? { ...o, com_complemento } : o));
     else if (p.opcoes?.length) throw invalido('opcoes');
     if (opcoes) semRepetir(opcoes, (o) => o.codigo, 'opcoes');
 

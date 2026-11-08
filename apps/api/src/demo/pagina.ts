@@ -82,7 +82,7 @@ export const PAGINA_DEMO = `<!doctype html>
   <section id="resultado" hidden>
     <h2>4. Resultado</h2>
     <p>Estado: <strong id="estado"></strong> <span id="aviso"></span></p>
-    <table><thead><tr><th>Imagem</th><th>Tipo</th><th>Página</th><th>QR e registro</th><th></th></tr></thead><tbody id="paginas"></tbody></table>
+    <table><thead><tr><th>Imagem</th><th>Arquivo</th><th>Tipo</th><th>Página</th><th>QR e registro</th><th></th></tr></thead><tbody id="paginas"></tbody></table>
     <form id="f-identificar" hidden>
       <p>Informe o número de cada página do formulário (a identificação automática falhou):</p>
       <div id="campos-identificar"></div>
@@ -218,10 +218,11 @@ function mostrar(a) {
   $('json').textContent = JSON.stringify(a, null, 2);
   const corpo = $('paginas'); corpo.replaceChildren();
   const campos = $('campos-identificar'); campos.replaceChildren();
-  // As páginas vêm na ordem de envio; a numeração 1, 2, 3… não muda quando a página do formulário é identificada.
+  // As páginas vêm na ordem de envio (ordem_envio), com o arquivo de onde vieram (DEC-198); a
+  // numeração não muda quando a página do formulário é identificada.
   for (const [n, p] of (a.paginas || []).entries()) {
     const tr = document.createElement('tr');
-    for (const v of [n + 1, p.tipo, p.numero_pagina ?? '—', p.registro_ok ? 'ok' : 'falhou']) {
+    for (const v of [p.ordem_envio ?? n + 1, p.nome_arquivo ?? '—', p.tipo, p.numero_pagina ?? '—', p.registro_ok ? 'ok' : 'falhou']) {
       const td = document.createElement('td'); td.textContent = String(v); tr.appendChild(td);
     }
     const td = document.createElement('td'); tr.appendChild(td); corpo.appendChild(tr);
@@ -262,7 +263,8 @@ function mostrarItens(a) {
   for (const i of itens) {
     const tr = document.createElement('tr');
     if (i.estado === 'a_revisar') tr.className = 'baixa';
-    const campo = celula(i.pergunta_codigo + (i.linha_codigo ? '.' + i.linha_codigo : ''));
+    // O complemento aparece logo abaixo da pergunta, com a opção ao lado da qual foi escrito (DEC-197).
+    const campo = celula(i.opcao_codigo ? '↳ texto ao lado de "' + i.opcao_codigo + '"' : i.pergunta_codigo + (i.linha_codigo ? '.' + i.linha_codigo : ''));
     let lido = i.valor_ia ?? '—';
     if (i.valor_final !== null && i.valor_final !== i.valor_ia) lido += ' → ' + i.valor_final;
     const acao = document.createElement('td');

@@ -39,8 +39,20 @@ export interface Bloco {
   pergunta: Pergunta;
   linhasTexto: string[];
   opcoes: string[];
+  /**
+   * Por opção, a linha para escrever ao lado da opção com complemento (DEC-202, DEC-203 (6)): null
+   * sem complemento; `quebra` quando rótulo e linha não cabem na largura e a linha vai para baixo.
+   */
+  complementos: ({ quebra: boolean } | null)[];
   altura: number;
 }
+
+/** Linha para escrever depois do rótulo da opção com complemento: 40 mm (DEC-203 (6)). */
+export const LINHA_COMPLEMENTO = 113.4;
+/** Vão entre o rótulo e a linha para escrever. */
+export const VAO_COMPLEMENTO = 6;
+/** Altura de uma linha de opção. */
+export const ALTURA_OPCAO = 15;
 
 /** Troca caracteres fora do WinAnsi (fonte padrão) por "?", sem quebrar a geração. */
 export function seguro(fonte: PDFFont, texto: string): string {
@@ -87,13 +99,20 @@ export function bloco(fonte: PDFFont, p: Pergunta, regras: readonly RegraEntrada
   const linhasTexto = quebrar(fonte, `${p.ordem}. ${p.enunciado}`, TAM_ENUNCIADO, larguraTexto);
   if (instrucao) linhasTexto.push(...quebrar(fonte, instrucao, TAM_OPCAO, larguraTexto));
   let opcoes: string[] = [];
+  let complementos: Bloco['complementos'] = [];
   if (p.tipo === 'matriz') {
     opcoes = (p.linhas ?? []).map((l) => `${l.rotulo}:  ${(p.opcoes ?? []).map((o) => `( ) ${o.rotulo}`).join('   ')}`);
+    complementos = opcoes.map(() => null);
   } else if (p.opcoes?.length) {
     opcoes = p.opcoes.map((o) => `${p.tipo === 'multipla_escolha' ? '[ ]' : '( )'} ${o.rotulo}`);
+    const larguraOpcao = larguraTexto - 12;
+    complementos = p.opcoes.map((o, k) =>
+      o.com_complemento ? { quebra: fonte.widthOfTextAtSize(seguro(fonte, opcoes[k]), TAM_OPCAO) + VAO_COMPLEMENTO + LINHA_COMPLEMENTO > larguraOpcao } : null,
+    );
   }
-  const resposta = opcoes.length ? opcoes.length * 15 : (ALTURA_RESPOSTA[p.tipo] ?? 22);
-  return { pergunta: p, linhasTexto, opcoes, altura: linhasTexto.length * 14 + resposta + 14 };
+  const quebras = complementos.filter((c) => c?.quebra).length;
+  const resposta = opcoes.length ? (opcoes.length + quebras) * ALTURA_OPCAO : (ALTURA_RESPOSTA[p.tipo] ?? 22);
+  return { pergunta: p, linhasTexto, opcoes, complementos, altura: linhasTexto.length * 14 + resposta + 14 };
 }
 
 /** Layout das perguntas por página: topo de cada bloco em pontos (origem no canto inferior esquerdo, como no PDF). */

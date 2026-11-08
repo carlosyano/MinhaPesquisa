@@ -8,7 +8,7 @@ import { linha, linhas, sql, type Executor } from '../infra/banco.js';
 import { ehUuid, type Nucleo } from '../nucleo.js';
 import { cpfValido, mascararCpf } from '../regras/cpf.js';
 import { normalizarNome } from '../regras/papel-antigo.js';
-import { decisaoSalto, estadoAposLeitura, type DecisaoSalto, type EstadoItem, type SaltoItem, type TipoPergunta } from '../regras/leitura.js';
+import { decisaoSalto, estadoAposLeitura, estadoComplemento, opcaoMarcada, type DecisaoSalto, type EstadoItem, type SaltoItem, type TipoPergunta } from '../regras/leitura.js';
 
 export const ESTADOS_REVISAO = new Set(['em_revisao', 'aguardando_cpf', 'sem_assinatura']);
 export const ESTADOS_EDICAO = new Set(['em_revisao', 'aguardando_cpf']);
@@ -124,6 +124,11 @@ export interface Item {
   campo_aplicacao: string | null;
   sensibilidade: string;
   opcoes: string[];
+  /** Códigos das opções com complemento da pergunta (DEC-197). */
+  complementos: string[];
+  /** Opção do item de complemento; null nos demais itens (RN-009, DEC-203 (2)). */
+  opcao_id: string | null;
+  opcao_codigo: string | null;
   valor_min: number | null;
   valor_max: number | null;
   /** Decifrados (DEC-041) quando a pergunta tem campo_respondente ou é do tipo CPF (DEC-131). */
@@ -132,7 +137,14 @@ export interface Item {
   valor_final: string | null;
   estado: EstadoItem;
   regiao: Regiao | null;
+  /** Quem aplicou a última ação de revisão; null nas mudanças do worker e da reavaliação (DEC-203 (11)). */
+  revisor_id: string | null;
+  /** `a_revisar` vindo da reabertura, só no item de complemento (DEC-203 (10)). */
+  revisao_reaberta: boolean;
 }
+
+/** Item de complemento: o texto escrito ao lado de uma opção (RN-009, DEC-197). */
+export const ehComplemento = (i: Pick<Item, 'opcao_id'>) => i.opcao_id !== null;
 
 export interface Regra {
   origem: string;
@@ -140,10 +152,15 @@ export interface Regra {
   opcao: string;
 }
 
-export const chaveItem = (i: Pick<Item, 'codigo' | 'linha_codigo'>) => (i.linha_codigo ? `${i.codigo}.${i.linha_codigo}` : i.codigo);
+/** Chave do item: código da pergunta, `.linha` na matriz e `+opção` no complemento, que nunca vai ao motor. */
+export const chaveItem = (i: Pick<Item, 'codigo' | 'linha_codigo'> & { opcao_codigo?: string | null }) =>
+  i.linha_codigo ? `${i.codigo}.${i.linha_codigo}` : i.opcao_codigo ? `${i.codigo}+${i.opcao_codigo}` : i.codigo;
 
-/** O valor fica cifrado quando a pergunta é campo do respondente (ENT-011) ou do tipo CPF (RN-025, DEC-131). */
-const cifrado = (i: Pick<Item, 'campo_respondente' | 'tipo'>) => i.campo_respondente !== null || i.tipo === 'cpf';
+/**
+ * O valor fica cifrado quando a pergunta é campo do respondente (ENT-011) ou do tipo CPF (RN-025,
+ * DEC-131); o do complemento, nunca (DEC-203 (2)).
+ */
+const cifrado = (i: Pick<Item, 'campo_respondente' | 'tipo' | 'opcao_id'>) => i.opcao_id === null && (i.campo_respondente !== null || i.tipo === 'cpf');
 
 export async function carregarItens(n: Nucleo, tx: Executor, aplicacaoId: string): Promise<Item[]> {
   const r = await linhas<Omit<Item, 'confianca' | 'valor_min' | 'valor_max' | 'regiao'> & {
@@ -156,12 +173,15 @@ export async function carregarItens(n: Nucleo, tx: Executor, aplicacaoId: string
     sql`SELECT i.id, i.pergunta_id, i.linha_id, p.codigo, l.codigo AS linha_codigo, p.tipo, p.pagina, p.ordem,
                p.campo_respondente, p.campo_aplicacao, p.sensibilidade, p.valor_min, p.valor_max,
                coalesce((SELECT array_agg(o.codigo ORDER BY o.ordem) FROM opcao o WHERE o.pergunta_id = p.id), '{}') AS opcoes,
+               coalesce((SELECT array_agg(o.codigo ORDER BY o.ordem) FROM opcao o WHERE o.pergunta_id = p.id AND o.com_complemento), '{}') AS complementos,
+               i.opcao_id, oc.codigo AS opcao_codigo, i.revisor_id, i.revisao_reaberta,
                i.valor_ia, i.confianca, i.valor_final, i.estado, i.regiao_imagem
           FROM item_resposta i
           JOIN pergunta p ON p.id = i.pergunta_id
           LEFT JOIN linha_matriz l ON l.id = i.linha_id
+          LEFT JOIN opcao oc ON oc.id = i.opcao_id
          WHERE i.aplicacao_id = ${aplicacaoId}
-         ORDER BY p.ordem, l.ordem NULLS FIRST, i.id`,
+         ORDER BY p.ordem, l.ordem NULLS FIRST, oc.ordem NULLS FIRST, i.id`,
   );
   return r.map(({ regiao_imagem, ...i }) => ({
     ...i,
@@ -182,15 +202,21 @@ export async function carregarRegras(tx: Executor, versaoId: string): Promise<Re
   );
 }
 
-/** Grava valores e estado do item (cifrando os campos do respondente). */
-export async function gravarItem(n: Nucleo, tx: Executor, i: Item, revisor?: string): Promise<void> {
+/**
+ * Grava valores e estado do item (cifrando os campos do respondente). `revisor`: a usuária que
+ * aplicou a ação ao item; null na mudança do worker ou da reavaliação, que limpa revisor e data
+ * (DEC-203 (11)); ausente, mantém os dois.
+ */
+export async function gravarItem(n: Nucleo, tx: Executor, i: Item, revisor?: string | null): Promise<void> {
   const c = (v: string | null) => (cifrado(i) ? n.cifrar(v) : v);
+  const manter = revisor === undefined;
+  if (!manter) i.revisor_id = revisor;
   await tx.execute(sql`
     UPDATE item_resposta
        SET valor_ia = ${c(i.valor_ia)}, confianca = ${i.confianca}, valor_final = ${c(i.valor_final)}, estado = ${i.estado},
-           regiao_imagem = ${i.regiao ? JSON.stringify(i.regiao) : null}::jsonb,
-           revisor_id = coalesce(${revisor ?? null}::uuid, revisor_id),
-           revisado_em = CASE WHEN ${revisor ?? null}::uuid IS NULL THEN revisado_em ELSE ${n.agora()}::timestamptz END
+           regiao_imagem = ${i.regiao ? JSON.stringify(i.regiao) : null}::jsonb, revisao_reaberta = ${i.revisao_reaberta},
+           revisor_id = CASE WHEN ${manter} THEN revisor_id ELSE ${revisor ?? null}::uuid END,
+           revisado_em = CASE WHEN ${manter} THEN revisado_em WHEN ${revisor ?? null}::uuid IS NULL THEN NULL ELSE ${n.agora()}::timestamptz END
      WHERE id = ${i.id}`);
 }
 
@@ -206,7 +232,9 @@ export function valorEfetivo(i: Pick<Item, 'estado' | 'valor_ia' | 'valor_final'
  * estado em memória; quem chama grava os itens devolvidos em `alterados`.
  */
 export class Avaliacao {
+  /** Itens da pergunta e das linhas da matriz, sem os de complemento. */
   private readonly porPergunta = new Map<string, Item[]>();
+  private readonly complementosDa = new Map<string, Item[]>();
   private readonly regraDoDestino = new Map<string, Regra>();
   private readonly destinosDa = new Map<string, string[]>();
   readonly alterados = new Set<Item>();
@@ -216,7 +244,10 @@ export class Avaliacao {
     regras: Regra[],
     private readonly limite: number,
   ) {
-    for (const i of itens) this.porPergunta.set(i.pergunta_id, [...(this.porPergunta.get(i.pergunta_id) ?? []), i]);
+    for (const i of itens) {
+      const mapa = ehComplemento(i) ? this.complementosDa : this.porPergunta;
+      mapa.set(i.pergunta_id, [...(mapa.get(i.pergunta_id) ?? []), i]);
+    }
     for (const r of regras) {
       this.regraDoDestino.set(r.destino, r);
       this.destinosDa.set(r.origem, [...(this.destinosDa.get(r.origem) ?? []), r.destino]);
@@ -249,12 +280,52 @@ export class Avaliacao {
     });
   }
 
+  /** Mudança feita pelo worker ou pela reavaliação: limpa o revisor (DEC-203 (11)) e reavalia os complementos. */
   private mudar(i: Item, estado: EstadoItem): boolean {
     if (i.estado === estado) return false;
+    const valorAntes = valorEfetivo(i);
     i.estado = estado;
     if (estado === 'confirmado_automaticamente') i.valor_final = i.valor_ia;
+    i.revisor_id = null;
     this.alterados.add(i);
+    this.reavaliarComplementos(i, valorAntes);
     return true;
+  }
+
+  /**
+   * Pré-regra 1b (FL-002) dos itens de complemento da pergunta, depois de uma mudança de estado ou de
+   * valor dela (na leitura, na regra de salto ou no `saveReview`), na mesma transação (DEC-203 (4)).
+   * `valorAntes` é o valor efetivo da pergunta antes da mudança. Complementos em `ignorar` recebem
+   * uma ação da usuária na mesma gravação, que prevalece.
+   */
+  reavaliarComplementos(pergunta: Item, valorAntes: string | null, ignorar: ReadonlySet<string> = new Set()): void {
+    if (ehComplemento(pergunta) || pergunta.linha_id) return;
+    const valor = valorEfetivo(pergunta);
+    for (const c of this.complementosDa.get(pergunta.pergunta_id) ?? []) {
+      if (ignorar.has(c.id)) continue;
+      const opcao = c.opcao_codigo!;
+      const marcada = opcaoMarcada(valor, opcao);
+      const novo = estadoComplemento({
+        opcao,
+        pergunta: { estado: pergunta.estado, valor, pelaUsuaria: pergunta.revisor_id !== null },
+        lido: c.confianca === null ? null : { valor: c.valor_ia, confianca: c.confianca },
+        limite: this.limite,
+        atual:
+          c.estado === 'pendente_leitura'
+            ? null
+            : { estado: c.estado, pelaUsuaria: c.revisor_id !== null, revisaoReaberta: c.revisao_reaberta, opcaoMarcadaAntes: opcaoMarcada(valorAntes, opcao) },
+      });
+      // A marca da reabertura sai quando a opção deixa de estar marcada (DEC-203 (10)).
+      const marca = c.revisao_reaberta && marcada && novo === 'a_revisar';
+      if (novo === c.estado && marca === c.revisao_reaberta) continue;
+      if (novo !== c.estado) {
+        c.estado = novo;
+        c.valor_final = novo === 'confirmado_automaticamente' ? c.valor_ia : null;
+        c.revisor_id = null;
+      }
+      c.revisao_reaberta = marca;
+      this.alterados.add(c);
+    }
   }
 
   private destinos(origem: Item): Item[] {
@@ -387,6 +458,8 @@ interface LinhaPagina {
   tipo: 'formulario' | 'assinatura';
   numero_pagina: number | null;
   registro_ok: boolean;
+  ordem_envio: number;
+  nome_arquivo: string | null;
 }
 
 /** CPF completo só com a revisão aberta e a aplicação ainda em revisão (RN-013, DEC-126). */
@@ -426,7 +499,7 @@ export async function candidatosNome(tx: Executor, a: LinhaAplicacao, itens: Ite
 export async function corpoAplicacao(n: Nucleo, tx: Executor, a: LinhaAplicacao, extra: { cadastro_existente?: Cadastro | null } = {}) {
   const paginas = await linhas<LinhaPagina>(
     tx,
-    sql`SELECT id, tipo, numero_pagina, registro_ok FROM pagina_aplicacao
+    sql`SELECT id, tipo, numero_pagina, registro_ok, ordem_envio, nome_arquivo FROM pagina_aplicacao
          WHERE aplicacao_id = ${a.id} AND expurgada_em IS NULL ORDER BY ordem_envio, id`,
   );
   const itens = await carregarItens(n, tx, a.id);
@@ -448,12 +521,20 @@ export async function corpoAplicacao(n: Nucleo, tx: Executor, a: LinhaAplicacao,
     papel_antigo: papelAntigo,
     ...(candidatos ? { candidatos_nome: candidatos } : {}),
     divergencias_cadastro: div,
-    paginas: paginas.map((p) => ({ imagem_id: p.id, numero_pagina: p.numero_pagina, tipo: p.tipo, registro_ok: p.registro_ok })),
+    paginas: paginas.map((p) => ({
+      imagem_id: p.id,
+      numero_pagina: p.numero_pagina,
+      tipo: p.tipo,
+      registro_ok: p.registro_ok,
+      ordem_envio: p.ordem_envio,
+      nome_arquivo: p.nome_arquivo,
+    })),
     cadastro_existente: c ? { nome: c.nome, data_nascimento: c.data_nascimento, endereco: c.endereco } : null,
     itens: itens.map((i) => ({
       id: i.id,
       pergunta_codigo: i.codigo,
       linha_codigo: i.linha_codigo,
+      opcao_codigo: i.opcao_codigo,
       valor_ia: mascarar(i, i.valor_ia),
       confianca: i.confianca,
       valor_final: mascarar(i, i.valor_final),
