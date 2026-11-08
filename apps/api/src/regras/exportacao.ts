@@ -4,9 +4,10 @@
 
 import type { EstadoItem, TipoPergunta } from './leitura.js';
 
-/** Cabeçalho da RN-051, nesta ordem. */
+/** Cabeçalho da RN-051, nesta ordem (com `Arquivo` e `Complemento`, DEC-201). */
 export const COLUNAS = [
   'ID_Aplicacao',
+  'Arquivo',
   'CPF',
   'Nome',
   'Data_Aplicacao',
@@ -14,6 +15,7 @@ export const COLUNAS = [
   'Codigo_Linha',
   'Codigo_Opcao_Valor',
   'Rotulo_Opcao_Valor',
+  'Complemento',
   'Situacao',
 ] as const;
 
@@ -33,6 +35,11 @@ export interface ItemExportado {
   pergunta_id: string;
   codigo: string;
   linha_codigo: string | null;
+  /** Opção do item de complemento, que não gera linha própria (DEC-201). */
+  opcao_codigo: string | null;
+  pagina: number;
+  /** Pergunta que o papel antigo não tem: sem arquivo (DEC-179, RN-051). */
+  nao_consta: boolean;
   tipo: TipoPergunta;
   campo_respondente: string | null;
   campo_aplicacao: string | null;
@@ -49,7 +56,12 @@ export interface AplicacaoExportada {
   itens: ItemExportado[];
   /** Opções de cada pergunta (código → rótulo), na ordem da versão. */
   opcoes: Map<string, { codigo: string; rotulo: string }[]>;
+  /** Nome do arquivo da folha de formulário de cada página da versão, quando guardado (DEC-198). */
+  arquivos: Map<number, string>;
 }
+
+/** Complemento exportado: o valor final do item resolvido com valor (DEC-199, RN-051). */
+const COM_VALOR = new Set<string>(['confirmado_automaticamente', 'confirmado', 'corrigido']);
 
 const SEM_VALOR = new Set<string>(['em_branco', 'ilegivel', 'rasurado', 'nao_se_aplica']);
 
@@ -71,10 +83,25 @@ export function situacao(i: Pick<ItemExportado, 'estado' | 'valor_final'>): Situ
 export function linhasDaAplicacao(a: AplicacaoExportada): Celula[][] {
   const linhas: Celula[][] = [];
   const t = (texto: string): Celula => ({ texto });
-  const linha = (i: ItemExportado, valor: Celula, rotulo: string, s: Situacao) =>
-    linhas.push([t(a.id), t(a.cpf), t(a.nome), t(a.data_aplicacao), t(i.codigo), t(i.linha_codigo ?? ''), valor, t(rotulo), t(s)]);
+  // O complemento vai na linha da sua opção (DEC-201), pela pergunta e pelo código da opção.
+  const complemento = new Map<string, string>();
+  for (const c of a.itens) if (c.opcao_codigo && COM_VALOR.has(c.estado) && c.valor_final) complemento.set(`${c.pergunta_id}|${c.opcao_codigo}`, c.valor_final);
+  const linha = (i: ItemExportado, valor: Celula, rotulo: string, s: Situacao, opcao: string | null = null) =>
+    linhas.push([
+      t(a.id),
+      t(i.nao_consta ? '' : (a.arquivos.get(i.pagina) ?? '')),
+      t(a.cpf),
+      t(a.nome),
+      t(a.data_aplicacao),
+      t(i.codigo),
+      t(i.linha_codigo ?? ''),
+      valor,
+      t(rotulo),
+      t(opcao === null ? '' : (complemento.get(`${i.pergunta_id}|${opcao}`) ?? '')),
+      t(s),
+    ]);
   for (const i of a.itens) {
-    if (foraDaPlanilha(i)) continue;
+    if (i.opcao_codigo || foraDaPlanilha(i)) continue;
     const s = situacao(i);
     if (s !== 'respondida') {
       linha(i, t(''), '', s);
@@ -85,10 +112,12 @@ export function linhasDaAplicacao(a: AplicacaoExportada): Celula[][] {
     const valor = i.valor_final!;
     if (i.tipo === 'multipla_escolha') {
       const marcadas = new Set(valor.split(';'));
-      for (const o of opcoes) if (marcadas.has(o.codigo)) linha(i, t(o.codigo), o.rotulo, s);
+      for (const o of opcoes) if (marcadas.has(o.codigo)) linha(i, t(o.codigo), o.rotulo, s, o.codigo);
     } else if (i.tipo === 'escala' || i.tipo === 'numero') {
       linha(i, { numero: valor }, '', s);
-    } else if (i.tipo === 'escolha_unica' || i.tipo === 'sim_nao' || i.tipo === 'matriz') {
+    } else if (i.tipo === 'escolha_unica') {
+      linha(i, t(valor), rotulo(valor), s, valor);
+    } else if (i.tipo === 'sim_nao' || i.tipo === 'matriz') {
       linha(i, t(valor), rotulo(valor), s);
     } else {
       linha(i, t(valor), '', s);

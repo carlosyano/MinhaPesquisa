@@ -29,7 +29,7 @@ import { parametro } from '../escopo.js';
 import { linha, linhas, sql, type Executor } from '../infra/banco.js';
 import { MINUTO, SEGUNDO, somar } from '../infra/relogio.js';
 import type { Nucleo } from '../nucleo.js';
-import { canonizar } from '../regras/leitura.js';
+import { canonizar, estadoComplemento, type EstadoItem } from '../regras/leitura.js';
 import { comFolga, conferirPaginas, envoltoria, sobrepostas, type FolhaLocalizada } from '../regras/papel-antigo.js';
 import { lerConteudoQr } from '../regras/upload.js';
 import {
@@ -40,6 +40,7 @@ import {
   chaveItem,
   cotaDoTenant,
   cpfDaAplicacao,
+  ehComplemento,
   gravarItem,
   limiteConfianca,
   reservar,
@@ -53,6 +54,8 @@ import { WorkerImportacao } from './importacao.js';
 export const ESPERAS_MS = [1 * SEGUNDO, 2 * SEGUNDO];
 
 type Grupo = 'identificacao' | 'demais' | 'localizacao';
+/** Item que o motor lê: o de complemento é lido no recorte da sua pergunta, sem chave própria (DEC-203 (3)). */
+const lido = (i: Item) => i.estado === 'pendente_leitura' && !ehComplemento(i);
 const grupoDe = (i: Pick<Item, 'sensibilidade'>): Grupo => (i.sensibilidade === 'identificacao' ? 'identificacao' : 'demais');
 
 interface Tarefa {
@@ -97,6 +100,7 @@ interface Aplicacao {
 interface ItemNovo {
   pergunta_id: string;
   linha_id: string | null;
+  opcao_id: string | null;
   chave: string;
   identificacao: boolean;
   pagina: number;
@@ -236,7 +240,7 @@ export class WorkerLeitura {
       if (faltam.length) return;
       if (!(await this.concluirLocalizacao(tx, tenantId, a, folhas))) return;
     }
-    const pendentes = (await carregarItens(this.n, tx, aplicacaoId)).filter((i) => i.estado === 'pendente_leitura');
+    const pendentes = (await carregarItens(this.n, tx, aplicacaoId)).filter(lido);
     const lotes = new Set(pendentes.map((i) => `${i.pagina}|${grupoDe(i)}`));
     for (const lote of lotes) {
       const [pagina, grupo] = lote.split('|');
@@ -313,7 +317,7 @@ export class WorkerLeitura {
     const novos: ItemNovo[] = [];
     for (const p of perguntas) {
       for (const l of p.linhas.length ? p.linhas : [null]) {
-        const base = { pergunta_id: p.id, linha_id: l?.id ?? null, chave: l ? `${p.codigo}.${l.codigo}` : p.codigo, identificacao: p.sensibilidade === 'identificacao', pagina: p.pagina };
+        const base = { pergunta_id: p.id, linha_id: l?.id ?? null, opcao_id: null, chave: l ? `${p.codigo}.${l.codigo}` : p.codigo, identificacao: p.sensibilidade === 'identificacao', pagina: p.pagina };
         if (p.nao_consta) {
           const valor = p.campo_aplicacao === 'data_aplicacao' ? data : p.campo_aplicacao === 'local_aplicacao' ? local : null;
           const estado = p.campo_aplicacao === null ? 'em_branco' : valor === null ? 'a_revisar' : 'corrigido';
@@ -330,10 +334,24 @@ export class WorkerLeitura {
       const fora = sobrepostas(lidos.map((x) => ({ chave: x.chave, identificacao: x.identificacao, regiao: x.regiao! })));
       for (const x of lidos) if (fora.has(x.chave)) x.estado = 'a_revisar';
     }
+    // Um item de complemento por opção com complemento, com a região da pergunta (RN-045, DEC-203 (2)):
+    // lido com ela; sem leitura da pergunta, já avaliado pela pré-regra 1b, com o complemento sem leitura.
+    const limiteItem = await limiteConfianca(tx, tenantId, a.projeto_id);
+    for (const p of perguntas) {
+      const q = novos.find((x) => x.pergunta_id === p.id && x.linha_id === null);
+      if (!q) continue;
+      for (const o of p.complementos) {
+        const estado: EstadoItem =
+          q.estado === 'pendente_leitura'
+            ? 'pendente_leitura'
+            : estadoComplemento({ opcao: o.codigo, pergunta: { estado: q.estado as EstadoItem, valor: q.valor_final, pelaUsuaria: false }, lido: null, limite: limiteItem });
+        novos.push({ ...q, opcao_id: o.id, chave: `${q.chave}+${o.codigo}`, estado, valor_final: null });
+      }
+    }
     for (const x of novos) {
       await tx.execute(sql`
-        INSERT INTO item_resposta (id, tenant_id, aplicacao_id, pergunta_id, linha_id, estado, valor_final, regiao_imagem)
-        VALUES (${this.n.id()}, ${tenantId}, ${a.id}, ${x.pergunta_id}, ${x.linha_id}, ${x.estado}, ${x.valor_final},
+        INSERT INTO item_resposta (id, tenant_id, aplicacao_id, pergunta_id, linha_id, opcao_id, estado, valor_final, regiao_imagem)
+        VALUES (${this.n.id()}, ${tenantId}, ${a.id}, ${x.pergunta_id}, ${x.linha_id}, ${x.opcao_id}, ${x.estado}, ${x.valor_final},
                 ${x.regiao ? JSON.stringify(x.regiao) : null}::jsonb)
         ON CONFLICT ON CONSTRAINT uq_item DO NOTHING`);
     }
@@ -473,7 +491,7 @@ export class WorkerLeitura {
       await this.encerrarTarefa(tx, t.id, 'cancelada');
       return undefined;
     }
-    const alvo = (await carregarItens(this.n, tx, t.aplicacao_id)).filter((i) => i.estado === 'pendente_leitura' && i.pagina === t.pagina && grupoDe(i) === t.grupo);
+    const alvo = (await carregarItens(this.n, tx, t.aplicacao_id)).filter((i) => lido(i) && i.pagina === t.pagina && grupoDe(i) === t.grupo);
     if (!alvo.length) {
       await this.encerrarTarefa(tx, t.id, 'concluida');
       await this.finalizarSeCompleta(tx, t.tenant_id, t.aplicacao_id);
@@ -522,6 +540,7 @@ export class WorkerLeitura {
         ...(i.opcoes.length ? { opcoes: i.opcoes } : i.tipo === 'sim_nao' ? { opcoes: ['sim', 'nao'] } : {}),
         ...(i.valor_min !== null ? { valor_min: i.valor_min } : {}),
         ...(i.valor_max !== null ? { valor_max: i.valor_max } : {}),
+        ...(i.complementos.length && !i.linha_id ? { complementos: i.complementos } : {}),
       })),
     };
     const estimadoUsd = motor.estimarCustoUsd(recorte, schema);
@@ -532,7 +551,11 @@ export class WorkerLeitura {
     return { motor, recorte, schema, chaves, estimadoUsd, inicio: cota.inicio, cotacao: cota.cotacao };
   }
 
-  private async gravarLeitura(tx: Executor, t: Tarefa, leituras: { chave: string; valor: string | null; confianca: number }[]): Promise<void> {
+  private async gravarLeitura(
+    tx: Executor,
+    t: Tarefa,
+    leituras: { chave: string; valor: string | null; confianca: number; complementos?: Record<string, { valor: string | null; confianca: number }> }[],
+  ): Promise<void> {
     const a = await linha<{ estado: string; versao_id: string; projeto_id: string }>(
       tx,
       sql`SELECT estado, versao_id, projeto_id FROM aplicacao WHERE id = ${t.aplicacao_id} FOR UPDATE`,
@@ -550,10 +573,17 @@ export class WorkerLeitura {
       i.valor_ia = canonizar(i.tipo, l.valor);
       i.confianca = l.confianca;
       lidos.push(i);
+      // Complemento ausente na resposta fica sem leitura (confiança nula, pré-regra 1b, c).
+      for (const c of itens.filter((x) => ehComplemento(x) && x.pergunta_id === i.pergunta_id && x.estado === 'pendente_leitura')) {
+        const comp = l.complementos?.[c.opcao_codigo!];
+        if (!comp) continue;
+        c.valor_ia = comp.valor === null || comp.valor.trim() === '' ? null : comp.valor.trim();
+        c.confianca = comp.confianca;
+      }
     }
     const av = new Avaliacao(itens, await carregarRegras(tx, a.versao_id), await limiteConfianca(tx, t.tenant_id, a.projeto_id));
     av.lidos(lidos);
-    for (const i of av.alterados) await gravarItem(this.n, tx, i);
+    for (const i of av.alterados) await gravarItem(this.n, tx, i, null);
     await tx.execute(sql`UPDATE aplicacao SET versao = versao + 1 WHERE id = ${t.aplicacao_id}`);
     if (a.estado === 'em_leitura') await this.finalizarSeCompleta(tx, t.tenant_id, t.aplicacao_id);
   }
@@ -670,6 +700,8 @@ export interface PerguntaVersao {
   campo_aplicacao: string | null;
   nao_consta: boolean;
   linhas: { id: string; codigo: string }[];
+  /** Opções com complemento, na ordem (DEC-197). */
+  complementos: { id: string; codigo: string }[];
 }
 
 /** Perguntas da versão na ordem, com as linhas da matriz na ordem delas. */
@@ -678,7 +710,9 @@ export async function perguntasDaVersao(tx: Executor, versaoId: string): Promise
     tx,
     sql`SELECT p.id, p.codigo, p.enunciado, p.tipo, p.pagina, p.sensibilidade, p.campo_aplicacao, p.nao_consta,
                coalesce((SELECT json_agg(json_build_object('id', l.id, 'codigo', l.codigo) ORDER BY l.ordem)
-                           FROM linha_matriz l WHERE l.pergunta_id = p.id), '[]'::json) AS linhas
+                           FROM linha_matriz l WHERE l.pergunta_id = p.id), '[]'::json) AS linhas,
+               coalesce((SELECT json_agg(json_build_object('id', o.id, 'codigo', o.codigo) ORDER BY o.ordem)
+                           FROM opcao o WHERE o.pergunta_id = p.id AND o.com_complemento), '[]'::json) AS complementos
           FROM pergunta p WHERE p.versao_id = ${versaoId} ORDER BY p.ordem`,
   );
 }

@@ -26,7 +26,9 @@ const INSTRUCOES =
   'Você lê a estrutura de um formulário de pesquisa em papel a partir da imagem de uma página inteira. ' +
   'Devolva as perguntas impressas, na ordem em que aparecem, de cima para baixo. Para cada pergunta: o enunciado ' +
   'impresso; o tipo (escolha_unica, multipla_escolha, escala, matriz, numero, data, sim_nao, cpf, texto_curto, ' +
-  'texto_livre, ou desconhecido se não for possível saber); os rótulos das opções impressas; as linhas, se for ' +
+  'texto_livre, ou desconhecido se não for possível saber); os rótulos das opções impressas; entre eles, os das ' +
+  'opções impressas com um espaço para escrever ao lado (como "Outros: ______"), repetidos em opcoes_com_complemento; ' +
+  'as linhas, se for ' +
   'matriz; a faixa (min e max), se for escala ou número com faixa impressa, ou null; e campo_padrao: nome, ' +
   'data_nascimento, cpf, data_aplicacao, local_aplicacao, endereco ou aplicador quando a pergunta pede um desses ' +
   'dados (por exemplo, "Nome do entrevistado" é nome), ou null. Leia só o que está impresso: ignore respostas, ' +
@@ -43,11 +45,12 @@ const ESQUEMA_SAIDA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['enunciado', 'tipo', 'opcoes', 'linhas', 'faixa', 'campo_padrao'],
+        required: ['enunciado', 'tipo', 'opcoes', 'opcoes_com_complemento', 'linhas', 'faixa', 'campo_padrao'],
         properties: {
           enunciado: { type: 'string' },
           tipo: { type: 'string', enum: [...TIPOS_PERGUNTA, 'desconhecido'] },
           opcoes: { type: 'array', items: { type: 'string' } },
+          opcoes_com_complemento: { type: 'array', items: { type: 'string' } },
           linhas: { type: 'array', items: { type: 'string' } },
           faixa: {
             anyOf: [

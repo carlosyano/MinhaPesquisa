@@ -25,6 +25,7 @@ import {
   cpfDaAplicacao,
   cpfExibido,
   divergencias,
+  ehComplemento,
   ESTADOS_EDICAO,
   ESTADOS_REVISAO,
   gravarItem,
@@ -41,7 +42,7 @@ import { recortar } from '../leitura/worker.js';
 import { ehUuid, Nucleo, type SessaoAtiva } from '../nucleo.js';
 import { paginacao } from '../regras/autorizacao.js';
 import { cpfValido } from '../regras/cpf.js';
-import { canonizar, RESOLVIDOS, valorNoSchema, type EstadoItem } from '../regras/leitura.js';
+import { canonizar, MAX_COMPLEMENTO, opcaoMarcada, RESOLVIDOS, valorNoSchema, type EstadoItem } from '../regras/leitura.js';
 import { normalizarNome } from '../regras/papel-antigo.js';
 import { anonimizarSemAplicacao, reverterCadastro, versaoDoCadastro, vincular, vincularSemCpf, type ManterCadastro } from './respondentes.js';
 
@@ -78,7 +79,7 @@ const ESTADOS_APLICACAO = new Set([
 const VALIDADE_LISTA = 180 * DIA;
 
 /** Campo afetado de um item na auditoria (CA-008): o atributo do respondente ou da aplicação. */
-const campoDe = (i: Item) => i.campo_respondente ?? i.campo_aplicacao ?? i.codigo.toLowerCase();
+const campoDe = (i: Item) => i.campo_respondente ?? i.campo_aplicacao ?? (i.opcao_codigo ? `${i.codigo}.${i.opcao_codigo}` : i.codigo).toLowerCase();
 
 @Controller()
 export class RevisaoController {
@@ -224,17 +225,32 @@ export class RevisaoController {
       const av = new Avaliacao(itens, await carregarRegras(tx, a.versao_id!), await limiteConfianca(tx, s.tenantId, a.projeto_id));
       const antes = av.decisoes();
       const fixos = new Set(ids);
-      const agidos: { i: Item; acao: Acao }[] = [];
-      for (const x of corpo.itens) {
+      const pedidos = corpo.itens.map((x) => {
         const i = porId.get(x.item_id);
         if (!i) throw naoEncontrado('ItemResposta', x.item_id); // item de outra aplicação (RN-002)
+        return { i, x };
+      });
+      // As perguntas antes dos seus complementos; cada complemento é validado depois da pré-regra 1b (DEC-203 (8)).
+      const agidos: { i: Item; acao: Acao; valorAntes: string | null }[] = [];
+      for (const { i, x } of pedidos.filter((p) => !ehComplemento(p.i))) {
         if (!REVISAVEIS.has(i.estado)) throw new ErroApi('ERR-018');
+        const valorAntes = valorEfetivo(i);
         this.aplicarAcao(i, x);
+        i.revisor_id = s.usuarioId;
         av.alterados.add(i);
-        agidos.push({ i, acao: x.acao });
+        agidos.push({ i, acao: x.acao, valorAntes });
       }
       for (const { i } of agidos) av.propagar(i, antes, fixos);
-      for (const i of av.alterados) await gravarItem(this.n, tx, i, fixos.has(i.id) ? s.usuarioId : undefined);
+      for (const { i, valorAntes } of agidos) av.reavaliarComplementos(i, valorAntes);
+      for (const { i, x } of pedidos.filter((p) => ehComplemento(p.i))) {
+        if (!REVISAVEIS.has(i.estado)) throw new ErroApi('ERR-018'); // complemento com a pergunta não resolvida (FL-002)
+        const pergunta = itens.find((p) => p.pergunta_id === i.pergunta_id && !ehComplemento(p) && !p.linha_id)!;
+        this.aplicarAcaoComplemento(i, x, opcaoMarcada(valorEfetivo(pergunta), i.opcao_codigo!));
+        i.revisao_reaberta = false;
+        av.alterados.add(i);
+        agidos.push({ i, acao: x.acao, valorAntes: null });
+      }
+      for (const i of av.alterados) await gravarItem(this.n, tx, i, fixos.has(i.id) ? s.usuarioId : null);
       for (const { i, acao } of agidos) {
         if (acao === 'corrigir') await this.n.auditar(tx, s, 'CORRECAO_CAMPO', 'ItemResposta', i.id, undefined, campoDe(i));
         else await this.n.auditar(tx, s, 'REVISAO_ITEM', 'ItemResposta', i.id, { acao }, campoDe(i));
@@ -273,6 +289,38 @@ export class RevisaoController {
       }
       default:
         if (x.acao === 'nao_se_aplica' && i.tipo === 'cpf') throw new ErroApi('ERR-001', { campos: ['acao'] }); // FL-001
+        i.valor_final = null;
+        i.estado = ESTADO_DA_ACAO[x.acao];
+    }
+  }
+
+  /**
+   * Ação sobre o item de complemento (FL-002, DEC-203 (8)): texto de até 200 caracteres (regra 7);
+   * com a opção não marcada, só `nao_se_aplica` (DEC-205).
+   */
+  private aplicarAcaoComplemento(i: Item, x: RevisaoPatch['itens'][number], marcada: boolean): void {
+    const recusar = () => new ErroApi('ERR-001', { campos: ['item_id'] });
+    if (!marcada && x.acao !== 'nao_se_aplica') throw recusar();
+    const texto = (v: string | null | undefined) => {
+      const t = v?.trim() ?? '';
+      return t === '' ? null : t;
+    };
+    switch (x.acao) {
+      case 'confirmar': {
+        const v = texto(i.valor_ia);
+        if (v === null || v.length > MAX_COMPLEMENTO) throw recusar();
+        i.valor_final = v;
+        i.estado = 'confirmado';
+        return;
+      }
+      case 'corrigir': {
+        const v = texto(x.valor_final);
+        if (v === null || v.length > MAX_COMPLEMENTO) throw recusar();
+        i.valor_final = v;
+        i.estado = 'corrigido';
+        return;
+      }
+      default:
         i.valor_final = null;
         i.estado = ESTADO_DA_ACAO[x.acao];
     }
@@ -411,9 +459,10 @@ export class RevisaoController {
       await this.n.idempotente(tx, s, 'discardApplication', chave, { id, ...corpo }, async () => {
         if (a.estado === 'concluida' || a.estado === 'descartada') throw new ErroApi('ERR-018');
         const agora = this.n.agora();
+        // O nome do arquivo sai junto com a imagem (DEC-203 (5), DEC-206).
         const paginas = await linhas<{ chave_storage: string }>(
           tx,
-          sql`UPDATE pagina_aplicacao SET expurgada_em = ${agora} WHERE aplicacao_id = ${id} AND expurgada_em IS NULL RETURNING chave_storage`,
+          sql`UPDATE pagina_aplicacao SET expurgada_em = ${agora}, nome_arquivo = NULL WHERE aplicacao_id = ${id} AND expurgada_em IS NULL RETURNING chave_storage`,
         );
         const itens = await linhas<{ id: string }>(
           tx,
@@ -459,7 +508,13 @@ export class RevisaoController {
         if (a.estado !== 'concluida' && a.estado !== 'sem_assinatura') throw new ErroApi('ERR-018');
         if (a.estado === 'concluida') {
           const itens = await carregarItens(this.n, tx, id);
+          // Os complementos são avaliados com a pergunta como estava antes da reabertura (DEC-203 (10)).
+          const perguntas = new Map(itens.filter((i) => !ehComplemento(i) && !i.linha_id).map((i) => [i.pergunta_id, { ...i }]));
           for (const i of itens) {
+            if (ehComplemento(i)) {
+              if (this.reabrirComplemento(i, perguntas.get(i.pergunta_id)!)) await gravarItem(this.n, tx, i);
+              continue;
+            }
             if (!REABRIR.has(i.estado)) continue;
             i.valor_final = valorEfetivo(i);
             i.estado = 'a_revisar';
@@ -479,5 +534,23 @@ export class RevisaoController {
       });
       return (await this.corpo(tx, id)).corpo;
     });
+  }
+
+  /**
+   * Linhas de reabertura do item de complemento (FL-002), no lugar da pré-regra 1b: com a opção
+   * marcada no valor final preservado da pergunta, `a_revisar` com a marca `revisao_reaberta`; sem
+   * ela, volta a `a_revisar` só o que tinha texto lido com a pergunta vinda da leitura ou do worker
+   * (DEC-205, DEC-209). Devolve se o item mudou.
+   */
+  private reabrirComplemento(c: Item, pergunta: Item): boolean {
+    const marcada = opcaoMarcada(valorEfetivo(pergunta), c.opcao_codigo!);
+    const daLeitura =
+      pergunta.estado === 'confirmado_automaticamente' || pergunta.estado === 'confirmado' || (pergunta.estado === 'nao_se_aplica' && pergunta.revisor_id === null);
+    const textoLido = c.valor_ia !== null && c.valor_ia.trim() !== '';
+    if (!marcada && !(daLeitura && textoLido)) return false;
+    c.valor_final = valorEfetivo(c);
+    c.estado = 'a_revisar';
+    c.revisao_reaberta = true;
+    return true;
   }
 }

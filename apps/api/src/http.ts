@@ -135,6 +135,7 @@ export class FiltroErros implements ExceptionFilter {
     };
     if (api.extras.campos?.length) corpo.campos = api.extras.campos;
     if (api.extras.motivo) corpo.motivo = api.extras.motivo;
+    if (api.extras.posicao) corpo.posicao = api.extras.posicao;
     if (api.extras.retryAfter !== undefined) res.header('Retry-After', String(api.extras.retryAfter));
     res.status(def.status).header('Content-Type', 'application/problem+json; charset=utf-8').send(JSON.stringify(corpo));
   }

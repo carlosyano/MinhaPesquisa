@@ -127,8 +127,23 @@ export class WorkerExportacao {
         opcoesDaVersao.set(a.versao_id, opcoes);
       }
       // Ordem da versão: página, ordem da pergunta e linha da matriz (carregarItens já ordena a linha).
-      const itens = (await carregarItens(this.n, tx, a.id)).map((i, k) => ({ i, k })).sort((x, y) => x.i.pagina - y.i.pagina || x.i.ordem - y.i.ordem || x.k - y.k).map((x) => x.i);
-      todas.push(...linhasDaAplicacao({ id: a.id, cpf: this.n.decifrar(a.cpf_cifrado) ?? '', nome: a.nome ?? '', data_aplicacao: a.data_aplicacao, itens, opcoes }));
+      const naoConsta = new Set(
+        (await linhas<{ id: string }>(tx, sql`SELECT id FROM pergunta WHERE versao_id = ${a.versao_id} AND nao_consta`)).map((x) => x.id),
+      );
+      const itens = (await carregarItens(this.n, tx, a.id))
+        .map((i, k) => ({ i, k }))
+        .sort((x, y) => x.i.pagina - y.i.pagina || x.i.ordem - y.i.ordem || x.k - y.k)
+        .map(({ i }) => ({ ...i, nao_consta: naoConsta.has(i.pergunta_id) }));
+      // Arquivo da folha de formulário de cada página, a primeira na ordem do envio (DEC-201).
+      const arquivos = new Map<number, string>();
+      const folhas = await linhas<{ numero_pagina: number; nome_arquivo: string }>(
+        tx,
+        sql`SELECT numero_pagina, nome_arquivo FROM pagina_aplicacao
+             WHERE aplicacao_id = ${a.id} AND tipo = 'formulario' AND numero_pagina IS NOT NULL AND expurgada_em IS NULL AND nome_arquivo IS NOT NULL
+             ORDER BY ordem_envio`,
+      );
+      for (const f of folhas) if (!arquivos.has(f.numero_pagina)) arquivos.set(f.numero_pagina, f.nome_arquivo);
+      todas.push(...linhasDaAplicacao({ id: a.id, cpf: this.n.decifrar(a.cpf_cifrado) ?? '', nome: a.nome ?? '', data_aplicacao: a.data_aplicacao, itens, opcoes, arquivos }));
     }
     const arquivo = p.formato === 'csv' ? gerarCsv(COLUNAS, todas) : gerarXlsx(COLUNAS, todas, this.n.agora());
     return { arquivo, aplicacoes: aplicacoes.length, total: todas.length };

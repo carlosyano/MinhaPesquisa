@@ -17,6 +17,7 @@ import { aplicarMigracoes, criarPapeis } from '@minhapesquisa/db';
 import {
   dimensoes,
   ErroLeitura,
+  MAX_COMPLEMENTO,
   validarLocalizacao,
   type CampoSchema,
   type EntradaLocalizacao,
@@ -71,7 +72,13 @@ async function prepararBanco(): Promise<{ superUrl: string; parar: () => Promise
   return { superUrl: conteiner.getConnectionUri(), parar: async () => void (await conteiner.stop()) };
 }
 
-type Leitura = { valor: string | null; confianca: number; regiao?: { x: number; y: number; largura: number; altura: number } };
+type Leitura = {
+  valor: string | null;
+  confianca: number;
+  regiao?: { x: number; y: number; largura: number; altura: number };
+  /** Complemento por código de opção (DEC-203 (3)): ausente = em branco (0,99); null = fora da resposta. */
+  complementos?: Record<string, { valor: string | null; confianca: number } | null>;
+};
 type LeituraSimulada = Leitura | { falha: { tipo: TipoFalha; vezes: number }; depois?: Leitura };
 
 interface ChamadaMotor {
@@ -87,7 +94,9 @@ interface ChamadaMotor {
 /**
  * Motor simulado (DEC-123): devolve o que o teste programou para cada campo e registra a chamada
  * como o motor real a receberia. Um campo com `falha` faz falhar a chamada que o contém nas
- * primeiras `vezes` tentativas.
+ * primeiras `vezes` tentativas. Devolve também o complemento das opções com complemento do campo
+ * e aplica o schema fechado como o adaptador real: complemento acima de 2000 caracteres faz a
+ * chamada falhar como `malformada` (DEC-203 (3)).
  */
 class MotorSimulado {
   private readonly roteiros = new Map<string, Record<string, LeituraSimulada>>();
@@ -117,6 +126,10 @@ class MotorSimulado {
         const roteiro = this.roteiros.get(contexto.aplicacaoId) ?? {};
         const campos = schema.campos.map((c, k) => contexto.campos[k] ?? c.chave);
         let falha: TipoFalha | undefined;
+        const lidoDe = (codigo: string): Leitura => {
+          const l = roteiro[codigo];
+          return !l ? { valor: null, confianca: 0.99 } : 'falha' in l ? (l.depois ?? { valor: null, confianca: 0.99 }) : l;
+        };
         for (const c of campos) {
           const chave = `${contexto.aplicacaoId}|${c}`;
           const n = (this.tentativas.get(chave) ?? 0) + 1;
@@ -124,6 +137,7 @@ class MotorSimulado {
           const l = roteiro[c];
           if (!falha && l && 'falha' in l && n <= l.falha.vezes) falha = l.falha.tipo;
         }
+        if (!falha && campos.some((c) => Object.values(lidoDe(c).complementos ?? {}).some((x) => (x?.valor?.length ?? 0) > MAX_COMPLEMENTO))) falha = 'malformada';
         const { largura, altura } = dimensoes(img);
         const chamada: ChamadaMotor = { campos, pagina: contexto.pagina, largura, altura, schema: JSON.stringify(schema), resultado: falha ?? 'ok', em: this.agora() };
         this.registro.set(contexto.aplicacaoId, [...(this.registro.get(contexto.aplicacaoId) ?? []), chamada]);
@@ -131,10 +145,20 @@ class MotorSimulado {
         return {
           custoUsd: this.custo.realUsd,
           leituras: campos.map((codigo, k) => {
-            const chave = schema.campos[k].chave;
-            const l = roteiro[codigo];
-            const lido: Leitura = !l ? { valor: null, confianca: 0.99 } : 'falha' in l ? (l.depois ?? { valor: null, confianca: 0.99 }) : l;
-            return { chave, valor: lido.valor, confianca: lido.confianca, regiao: lido.regiao ?? { x: 0, y: 0, largura: 1, altura: 1 } };
+            const campo = schema.campos[k];
+            const lido = lidoDe(codigo);
+            const complementos: Record<string, { valor: string | null; confianca: number }> = {};
+            for (const o of campo.complementos ?? []) {
+              const x = lido.complementos?.[o];
+              if (x !== null) complementos[o] = x ?? { valor: null, confianca: 0.99 };
+            }
+            return {
+              chave: campo.chave,
+              valor: lido.valor,
+              confianca: lido.confianca,
+              regiao: lido.regiao ?? { x: 0, y: 0, largura: 1, altura: 1 },
+              ...(campo.complementos?.length ? { complementos } : {}),
+            };
           }),
         };
       },
@@ -452,6 +476,11 @@ export async function criarHarness() {
         });
       },
 
+      /** Folhas sem o nome do arquivo, como as enviadas antes da migração 0010 (CA-060, exemplo 5). */
+      async paginasAntigas(aplicacaoId: string) {
+        await n.banco.manutencao((tx) => tx.execute(sql`UPDATE pagina_aplicacao SET nome_arquivo = NULL WHERE aplicacao_id = ${aplicacaoId}`));
+      },
+
       /** Arquivo de onde sai a página da importação trocado por bytes que não são imagem (FL-004). */
       async corromperPaginaImportacao(importacaoId: string, numeroPagina: number) {
         const i = await n.banco.manutencao((tx) => linha<{ tenant_id: string }>(tx, sql`SELECT tenant_id FROM importacao_formulario WHERE id = ${importacaoId}`));
@@ -614,16 +643,32 @@ export async function criarHarness() {
             local_aplicacao: n.decifrar(a.local_aplicacao),
             motivo_descarte: n.decifrar(a.motivo_descarte),
             motivo_reabertura: n.decifrar(a.motivo_reabertura),
-            itens: itens.map((i) => ({ pergunta_codigo: i.codigo, linha_codigo: i.linha_codigo, valor_ia: i.valor_ia, valor_final: i.valor_final, estado: i.estado })),
+            itens: itens.map((i) => ({
+              pergunta_codigo: i.codigo,
+              linha_codigo: i.linha_codigo,
+              opcao_codigo: i.opcao_codigo,
+              valor_ia: i.valor_ia,
+              valor_final: i.valor_final,
+              estado: i.estado,
+              revisor_id: i.revisor_id,
+              revisao_reaberta: i.revisao_reaberta,
+            })),
           };
         });
       },
 
       async folhas(aplicacaoId: string) {
         return n.banco.manutencao(async (tx) => {
-          const fs = await linhas<{ imagem_id: string; tipo: 'formulario' | 'assinatura'; numero_pagina: number | null; regioes: RegiaoPergunta[] | null }>(
+          const fs = await linhas<{
+            imagem_id: string;
+            tipo: 'formulario' | 'assinatura';
+            numero_pagina: number | null;
+            regioes: RegiaoPergunta[] | null;
+            ordem_envio: number;
+            nome_arquivo: string | null;
+          }>(
             tx,
-            sql`SELECT id AS imagem_id, tipo, numero_pagina, regioes FROM pagina_aplicacao
+            sql`SELECT id AS imagem_id, tipo, numero_pagina, regioes, ordem_envio, nome_arquivo FROM pagina_aplicacao
                  WHERE aplicacao_id = ${aplicacaoId} AND expurgada_em IS NULL ORDER BY ordem_envio, id`,
           );
           return fs.map((f) => ({
@@ -631,6 +676,13 @@ export async function criarHarness() {
             regioes: f.regioes?.map((r) => ({ codigo: r.codigo, linha: r.linha ?? null, x: r.x, y: r.y, largura: r.largura, altura: r.altura })) ?? null,
           }));
         });
+      },
+
+      async nomesArquivo(aplicacaoId: string) {
+        const r = await n.banco.manutencao((tx) =>
+          linhas<{ nome_arquivo: string | null }>(tx, sql`SELECT nome_arquivo FROM pagina_aplicacao WHERE aplicacao_id = ${aplicacaoId} ORDER BY ordem_envio, id`),
+        );
+        return r.map((x) => x.nome_arquivo);
       },
 
       async listaEliminacoes(tenantId: string) {
