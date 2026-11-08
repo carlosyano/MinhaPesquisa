@@ -6,7 +6,7 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { EICAR, jpeg, pdfDeImagens } from '../../support/arquivos.js';
-import { esperarErro } from '../../support/catalogo.js';
+import { esperarErroCom } from '../../support/catalogo.js';
 import { chaveIdempotencia, type Arquivo, type Cliente, type Resposta } from '../../support/cliente.js';
 import { DIA, MINUTO, entrar, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import { ACOES_A1, COL, celulasXlsx, conferida, conteudoSaude, exportada, leituraA1, linhas, revisada } from '../../support/exportacao.js';
@@ -204,7 +204,7 @@ describe('CA-060 — nome do arquivo e ordem do envio (DEC-198)', () => {
   it('exemplo 7: "ok.jpg" e "virus.pdf" recusado pela varredura → ERR-029 com `posicao` 2 e o motivo, sem o nome na resposta nem no log; nada é gravado', async () => {
     const antes = await h.inspect.contagemUpload(T.tenantId);
     const r = await enviar(c, saude, [await jpg('ok.jpg', 1), arquivo('virus.pdf', 'application/pdf', EICAR)]);
-    esperarErro(r, 'ERR-029');
+    esperarErroCom(r, 'ERR-029', 'risco de segurança detectado');
     expect(r.corpo.posicao).toBe(2);
     expect(r.corpo.motivo).toBeTruthy();
     for (const nome of ['virus.pdf', 'ok.jpg', 'virus']) expect(r.texto).not.toContain(nome);

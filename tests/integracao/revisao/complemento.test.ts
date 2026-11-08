@@ -527,7 +527,11 @@ describe('CA-059 — leitura do complemento (pré-regra 1b)', () => {
 
   // @trace CA-059, RN-051, DEC-201
   it('exemplo 8: DOENCAS `diabetes;outra` e "Asma" → complemento de `outra` confirmado_automaticamente; duas linhas de DOENCAS, Complemento só na de `outra`', async () => {
-    const id = await lerAplicacao({ DOENCAS: { valor: 'diabetes;outra', confianca: 0.95, complementos: { outra: { valor: 'Asma', confianca: 0.95 } } } });
+    // MOTIVO_CONSULTA lida (não fica em branco, que iria a a_revisar pela regra 6a e impediria a conclusão).
+    const id = await lerAplicacao({
+      ...motivo('rotina', 0.95),
+      DOENCAS: { valor: 'diabetes;outra', confianca: 0.95, complementos: { outra: { valor: 'Asma', confianca: 0.95 } } },
+    });
     expect(doComplemento(await itens(id), 'DOENCAS', 'outra')).toMatchObject({ estado: 'confirmado_automaticamente', valor_ia: 'Asma' });
     await concluida(id);
     expect(linhasDe(await exportadas(id), 'DOENCAS')).toEqual([
