@@ -1,9 +1,9 @@
 REQ.md — MinhaPesquisa
 Especificação funcional (fonte da verdade para as IAs)
 
-Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005) · CHG-013 aceita na v2.3 · CHG-014 aceita na v2.4 · CHG-015 aceita na v2.5 · CHG-016 aceita na v2.6 · CHG-017 aceita na v2.7 (Q-063 a Q-071 respondidas; REV-REQ-011 a REV-REQ-015; Q-072 a Q-081 respondidas; ciclo de revisão encerrado pela DEC-073 na rodada 5; Q-082 e Q-083, do IA-DEV do IMP-008, respondidas) · CHG-018 proposta na v2.8 (Q-084 a Q-098 respondidas; rodadas 1 a 4 corrigidas, REV-REQ-016 a REV-REQ-019; ciclo de revisão encerrado pela DEC-073 na rodada 4)
+Status: APROVADO (Gate 1) · CHG-002 a CHG-011 aceitas (CHG-011 propagada na v2.1, IMP-005) · CHG-013 aceita na v2.3 · CHG-014 aceita na v2.4 · CHG-015 aceita na v2.5 · CHG-016 aceita na v2.6 · CHG-017 aceita na v2.7 (Q-063 a Q-071 respondidas; REV-REQ-011 a REV-REQ-015; Q-072 a Q-081 respondidas; ciclo de revisão encerrado pela DEC-073 na rodada 5; Q-082 e Q-083, do IA-DEV do IMP-008, respondidas) · CHG-018 aceita na v2.8 em 07/11/2026 (Q-084 a Q-098 respondidas; rodadas 1 a 4 corrigidas, REV-REQ-016 a REV-REQ-019; ciclo de revisão encerrado pela DEC-073 na rodada 4)
 Versão: 2.8
-Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011) · 05/11/2026 (v2.3, CHG-013; v2.4, CHG-014; v2.5, CHG-015; v2.6, CHG-016) · 06/11/2026 (v2.7, CHG-017) · 07/11/2026 (v2.8, CHG-018, proposta)
+Data de aprovação: 24/10/2026 (v1.2) · 27/10/2026 (v1.3, CHG-002; v1.4, CHG-003) · 28/10/2026 (v1.5 e v1.6, CHG-004; v1.7, CHG-005; v1.8, CHG-006) · 29/10/2026 (v1.9, CHG-007; v1.10, CHG-008) · 03/11/2026 (v1.11, CHG-009; v1.12, CHG-010; v2.0 e v2.1, CHG-011) · 05/11/2026 (v2.3, CHG-013; v2.4, CHG-014; v2.5, CHG-015; v2.6, CHG-016) · 06/11/2026 (v2.7, CHG-017) · 07/11/2026 (v2.8, CHG-018)
 Nível de rigor: Completo (DEC-001)
 Perfil de plataforma: Bloco P — Web SaaS com dados pessoais (confirmado), aplicado no que couber à aplicação local da DEC-107
 Responsável: Carlos Yano
