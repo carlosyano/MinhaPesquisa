@@ -881,9 +881,11 @@ paths:
         com `corrigir` limitado a 200 caracteres (REQ §5.4; acima → 400 ERR-001). As perguntas do patch são aplicadas
         antes dos seus complementos, e cada complemento é validado depois da pré-regra 1b. No complemento
         de opção não marcada, só `nao_se_aplica` é aceito; outra ação → 400 ERR-001 (DEC-205). Quando a
-        usuária tira a opção da pergunta, o complemento vai a `nao_se_aplica` (DEC-208). A revisão humana
-        do complemento é mantida enquanto a opção continua marcada (DEC-204).
-      x-trace: [RF-008, RF-014, CA-007, CA-008, CA-020, CA-059]
+        usuária resolve a pergunta sem a opção (corrige, marca em branco, ilegível, rasurado ou não se
+        aplica), o complemento vai a `nao_se_aplica` (DEC-209). A revisão humana do complemento é mantida
+        enquanto a opção continua marcada (DEC-204). Ação sobre item em `aguardando_condicao`, inclusive
+        o de complemento enquanto a pergunta não está resolvida → 409 ERR-018 (FL-002).
+      x-trace: [RF-008, RF-014, CA-007, CA-008, CA-020, CA-059, DEC-204, DEC-205, DEC-209]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -921,14 +923,15 @@ paths:
         Precedência (REQ FL-001): item não resolvido → 400 ERR-022; CPF ausente ou inválido →
         200 com `aviso: ERR-006` e estado `aguardando_cpf`; nome, nascimento, data ou local
         ausentes, ilegíveis, rasurados ou marcados como não se aplica → 400 ERR-006 (CA-032, DEC-079). Assinatura ausente → `sem_assinatura`, sem vincular
-        o respondente (DEC-064).
+        o respondente (DEC-064). Os itens de complemento contam na conferência de itens não resolvidos
+        (ERR-022, CA-059).
         Vínculo por CPF: existente vincula, novo cria (CA-002, CA-014b); divergência de cadastro
         resolvida pelo digitalizador (CA-014).
         Versão de papel antigo: CPF, data de nascimento e assinatura não são exigidos e a aplicação
         vai a `concluida`; sem CPF válido, `respondente_id` escolhe entre os `candidatos_nome` da
         aplicação ou, nulo, cria um respondente novo; havendo candidatos, ausente ou fora da lista
         → 400 ERR-001 (DEC-172, DEC-176, CA-054).
-      x-trace: [RF-008, RF-013, CA-002, CA-014, CA-014b, CA-021, CA-032, CA-054, RN-016, RN-044, DEC-020, DEC-172, DEC-176]
+      x-trace: [RF-008, RF-013, RF-014, CA-002, CA-014, CA-014b, CA-021, CA-032, CA-054, CA-059, RN-016, RN-044, DEC-020, DEC-172, DEC-176]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1061,8 +1064,10 @@ paths:
       description: |
         A partir de `concluida`: se o CPF for corrigido, o vínculo é refeito e o cadastro revertido,
         com auditoria (CA-042). A partir de `sem_assinatura`: corrige a conferência e volta a
-        `em_revisao`, preservando os itens.
-      x-trace: [RF-008, RF-014, CA-042, CA-059, DEC-204]
+        `em_revisao`, preservando os itens. O item de complemento com a opção marcada vai a `a_revisar`,
+        com o `valor_final` preservado; sem a opção, vai a `a_revisar` só se tinha texto lido e a pergunta,
+        antes da reabertura, vinha da leitura ou da regra de salto (DEC-205, DEC-209).
+      x-trace: [RF-008, RF-014, CA-042, CA-059, DEC-204, DEC-209]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1238,7 +1243,8 @@ paths:
       summary: Ficha individual (evolução no tempo)
       description: |
         Todos os projetos (DEC-109, CA-011). CPF sempre mascarado. Cada abertura é auditada.
-      x-trace: [RF-009, CA-011, DEC-109]
+        Traz o complemento das opções com complemento, sem o nome do arquivo (DEC-211).
+      x-trace: [RF-009, RF-014, CA-011, CA-059, DEC-109, DEC-211]
       parameters:
         - $ref: '#/components/parameters/RespondentId'
       responses:
@@ -1404,8 +1410,9 @@ paths:
         novo; já concluído ou cancelado → ERR-018. Na eliminação de respondente sem CPF, as aplicações
         de papel antigo em andamento de mesmo nome não são descartadas sozinhas: ficam listadas em
         `aplicacoes_mesmo_nome` para a usuária decidir, e a lista fica gravada no pedido (DEC-191, DEC-193).
-        Na eliminação, o `nome_arquivo` das páginas do titular é apagado no ato (DEC-206).
-      x-trace: [RF-010, RF-014, CA-023, CA-024, CA-056, DEC-026, DEC-191, DEC-193, DEC-206]
+        Na eliminação, o `nome_arquivo` das páginas do titular, inclusive das aplicações descartadas
+        por ela, é apagado no ato (DEC-206, DEC-210).
+      x-trace: [RF-010, RF-014, CA-023, CA-024, CA-056, DEC-026, DEC-191, DEC-193, DEC-206, DEC-210]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1657,7 +1664,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-036', title: Campos obrigatórios ausentes, status: 400, detail: 'Publicação recusada: faltam [lista dos campos].', errorCode: ERR-036, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, campos: [data_aplicacao] }
     FileRejected:
-      description: Arquivo recusado (ERR-029, com motivo), projeto arquivado, data da aplicação futura no envio (DEC-182) ou, na importação, falta da declaração `sem_dados_reais` (ERR-001)
+      description: Arquivo recusado (ERR-029, com motivo; `posicao` só no upload, nunca na importação, que recebe um arquivo só), projeto arquivado, data da aplicação futura no envio (DEC-182) ou, na importação, falta da declaração `sem_dados_reais` (ERR-001)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -1714,7 +1721,7 @@ components:
         motivo:
           type: string
           enum: [excede o limite de 20 MB, excede o limite de 50 páginas, tipo de arquivo não permitido, risco de segurança detectado]
-        posicao: { type: integer, minimum: 1, description: 'ERR-029 no upload: posição do arquivo recusado no envio, a partir de 1; o nome do arquivo nunca vai na resposta (RN-028, DEC-198)' }
+        posicao: { type: integer, minimum: 1, description: 'ERR-029 no upload: posição do arquivo recusado no envio, a partir de 1; ausente na importação (`importForm`); o nome do arquivo nunca vai na resposta (RN-028, DEC-198)' }
 
     ErrorCode:
       type: string
@@ -2347,6 +2354,10 @@ components:
               pergunta_codigo: { type: string }
               data_aplicacao: { type: string, format: date }
               valor: { type: string, nullable: true }
+              complementos:
+                type: object
+                description: 'Por código de opção com complemento marcada, o `valor_final` do item de complemento em `confirmado_automaticamente`, `confirmado` ou `corrigido` (DEC-211, RN-051); ausente quando não há'
+                additionalProperties: { type: string, maxLength: 200 }
               projeto_id: { type: string, format: uuid }
 
     ExportRequest:

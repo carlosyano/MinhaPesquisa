@@ -219,7 +219,7 @@ ENT-025 PaginaAplicacao,numero_pagina,"página da versão: a do QR ou, sem QR, a
 ENT-025 PaginaAplicacao,chave_storage,chave do objeto no bucket privado,varchar,sim,500,—,—,—,sim,—,não
 ENT-025 PaginaAplicacao,sha256,hash do arquivo sem metadados,bytea,sim,32,SHA-256,—,—,não,—,não
 ENT-025 PaginaAplicacao,ordem_envio,"posição da folha na aplicação, na ordem do envio, a partir de 1; as folhas do `addApplicationPages` e do `attachSignaturePage` continuam a sequência, e as descartadas no `identifyApplication` não liberam o número (DEC-198)",int,sim,—,—,≥ 1,—,sim (por aplicação),—,não
-ENT-025 PaginaAplicacao,nome_arquivo,"nome original do arquivo enviado de onde veio a página, sem a pasta, cortado em 255 caracteres (DEC-198); apagado (NULL) no expurgo da imagem e no ato da eliminação do titular (DEC-206); NULL nas páginas enviadas antes da v2.8",varchar,não,255,—,—,NULL,não,—,pessoal
+ENT-025 PaginaAplicacao,nome_arquivo,"nome original do arquivo enviado de onde veio a página, sem a pasta, cortado em 255 caracteres (DEC-198); apagado (NULL) no expurgo da imagem e no ato da eliminação do titular, inclusive nas aplicações descartadas por ela (DEC-206, DEC-210); NULL nas páginas enviadas antes da migração 0010 (IMP-009)",varchar,não,255,—,—,NULL,não,—,pessoal
 ENT-025 PaginaAplicacao,registro_ok,"marcadores dos cantos encontrados (DEC-048); desde a DEC-169 só informativo, não impede a leitura",boolean,sim,—,—,true/false,false,não,—,não
 ENT-025 PaginaAplicacao,regioes,"regiões das perguntas da página (e, na página 1, a da assinatura) devolvidas pela localização, em coordenadas normalizadas da imagem, com a confiança (RN-052)",jsonb,não,—,JSON,—,NULL,não,—,não
 ENT-025 PaginaAplicacao,criado_em,data do upload,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
