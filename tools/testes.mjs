@@ -6,8 +6,10 @@
 // Sai com o mesmo código do Vitest. A pasta reports/ não vai para o repositório (.gitignore).
 
 import { spawnSync } from 'node:child_process';
+import console from 'node:console';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { relative } from 'node:path';
+import process from 'node:process';
 
 const PASTA = 'reports/testes';
 const JSON_SAIDA = `${PASTA}/vitest.json`;
@@ -21,7 +23,8 @@ const r = spawnSync('npx', ['vitest', 'run', '--reporter=default', '--reporter=j
   shell: process.platform === 'win32',
 });
 
-const semCor = (t) => t.replace(/\u001b\[[0-9;]*m/g, '');
+const ESC = String.fromCharCode(27);
+const semCor = (t) => t.replaceAll(new RegExp(`${ESC}\\[[0-9;]*m`, 'g'), '');
 const curto = (t) =>
   semCor(t)
     .split('\n')
