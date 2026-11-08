@@ -66,6 +66,18 @@
 //   (`support/arquivos` `comQr`);
 // - inspeção das folhas (página e regiões gravadas, ENT-025) e, em `inspect.aplicacao`, a versão, a
 //   `origem_qr` e a data e o local guardados do envio, que a API não expõe na pendência (V-11).
+//
+// Acrescentado no IA-TEST do IMP-009 (CHG-018, DEC-197 a DEC-212):
+// - o motor simulado devolve também o complemento de cada opção com complemento da pergunta
+//   (DEC-203 (3)): opção não programada = lida em branco com confiança 0,99; `null` = ausente na
+//   resposta (pré-regra 1b, c). Ele aplica o schema fechado como o adaptador real: complemento acima
+//   de 2000 caracteres faz a chamada falhar como saída malformada, com as retentativas da DEC-129;
+// - em `inspect.aplicacao`, cada item traz a opção do item de complemento, o `revisor_id` (nulo nas
+//   mudanças do worker e da reavaliação, DEC-203 (11)) e a marca `revisao_reaberta` (DEC-203 (10));
+// - em `inspect.folhas`, a `ordem_envio` e o `nome_arquivo` de cada folha (ENT-025, DEC-198), e
+//   `inspect.nomesArquivo`, com as folhas expurgadas, para provar o apagamento no expurgo (DEC-206);
+// - `seed.paginasAntigas`, que apaga o `nome_arquivo` das folhas como nas enviadas antes da migração
+//   0010 (CA-060, exemplo 5).
 
 /** Resultado de um script local: código de saída e tudo o que ele escreveu no terminal. */
 export interface SaidaScript {
@@ -127,8 +139,22 @@ export interface MapaLayoutGravado {
  * malformada (DEC-123), sempre como falha da chamada inteira.
  */
 export type LeituraSimulada =
-  | { valor: string | null; confianca: number; regiao?: RegiaoNormalizada }
-  | { falha: { tipo: 'tempo_esgotado' | 'erro' | 'malformada'; vezes: number }; depois?: { valor: string | null; confianca: number } };
+  | LeituraOk
+  | { falha: { tipo: 'tempo_esgotado' | 'erro' | 'malformada'; vezes: number }; depois?: LeituraOk };
+
+/** Leitura simulada com sucesso de um campo. */
+export interface LeituraOk {
+  valor: string | null;
+  confianca: number;
+  regiao?: RegiaoNormalizada;
+  /**
+   * Complemento de cada opção com complemento da pergunta, pelo código da opção (DEC-197, DEC-203 (3)).
+   * Opção não programada: lida em branco com confiança 0,99. `null`: ausente na resposta (pré-regra
+   * 1b, c). Texto acima de 2000 caracteres: a chamada falha como saída malformada (schema fechado).
+   * Acrescentado no IA-TEST do IMP-009.
+   */
+  complementos?: Record<string, { valor: string | null; confianca: number } | null>;
+}
 
 /**
  * Leituras por pergunta de uma aplicação: chave `CODIGO` ou, na matriz, `CODIGO.linha`.
@@ -166,6 +192,11 @@ export interface PerguntaExtraida {
   linhas?: string[];
   faixa?: { min: number; max: number } | null;
   campo_padrao?: CampoPadrao | null;
+  /**
+   * Opções (pelo texto de `opcoes`) impressas com um espaço para escrever ao lado, como
+   * "Outros: ______" (RN-049, DEC-197, DEC-203 (3)). Acrescentado no IA-TEST do IMP-009.
+   */
+  opcoes_com_complemento?: string[];
 }
 
 /**
@@ -283,6 +314,10 @@ export interface FolhaGravada {
   numero_pagina: number | null;
   /** Regiões gravadas pela localização; null antes dela e na folha de página sem perguntas (RN-052, item 3c). */
   regioes: RegiaoLocalizada[] | null;
+  /** Posição da folha na aplicação, na ordem do envio (ENT-025, DEC-198). Acrescentado no IA-TEST do IMP-009. */
+  ordem_envio: number;
+  /** Nome original do arquivo, decifrado se cifrado; null antes da migração 0010 e depois do expurgo. Acrescentado no IA-TEST do IMP-009. */
+  nome_arquivo: string | null;
 }
 
 export interface RespondenteGravado {
@@ -307,7 +342,19 @@ export interface AplicacaoGravada {
   motivo_descarte: string | null;
   motivo_reabertura: string | null;
   /** Valores de cada item como estão no banco, decifrados (DEC-077: apagados no descarte). */
-  itens: { pergunta_codigo: string; linha_codigo: string | null; valor_ia: string | null; valor_final: string | null; estado: string }[];
+  itens: {
+    pergunta_codigo: string;
+    linha_codigo: string | null;
+    /** Opção do item de complemento; null nos demais itens (RN-009, DEC-197). Acrescentado no IA-TEST do IMP-009. */
+    opcao_codigo: string | null;
+    valor_ia: string | null;
+    valor_final: string | null;
+    estado: string;
+    /** Quem aplicou a última ação de revisão ao item; null nas mudanças do worker e da reavaliação (DEC-203 (11)). Acrescentado no IA-TEST do IMP-009. */
+    revisor_id: string | null;
+    /** `a_revisar` vindo da reabertura, só no item de complemento (DEC-203 (10)). Acrescentado no IA-TEST do IMP-009. */
+    revisao_reaberta: boolean;
+  }[];
 }
 
 export interface EliminacaoGravada {
@@ -383,6 +430,11 @@ export interface Harness {
      * únicos, sensibilidade da RN-047). Acrescentado no IA-TEST do IMP-006.
      */
     rascunhoAntigo(dados: { tenantId: string; projetoId: string; nome: string; conteudo: unknown }): Promise<{ formId: string; versaoId: string }>;
+    /**
+     * Apaga o `nome_arquivo` de todas as folhas da aplicação, como nas folhas enviadas antes da
+     * migração 0010 (CA-060, exemplo 5). Acrescentado no IA-TEST do IMP-009.
+     */
+    paginasAntigas(aplicacaoId: string): Promise<void>;
   };
 
   /** Motor de leitura simulado (DEC-123), no lugar do adaptador Claude. */
@@ -455,6 +507,12 @@ export interface Harness {
     contagemExportacao(tenantId: string): Promise<ContagemExportacao>;
     /** Folhas da aplicação na ordem do envio, inclusive as do `addApplicationPages`. Acrescentado no IA-TEST do IMP-008. */
     folhas(aplicacaoId: string): Promise<FolhaGravada[]>;
+    /**
+     * `nome_arquivo` de todas as folhas da aplicação na ordem do envio, inclusive as expurgadas, como
+     * está no banco (decifrado se cifrado), para provar o apagamento no expurgo (DEC-206). Acrescentado
+     * no IA-TEST do IMP-009.
+     */
+    nomesArquivo(aplicacaoId: string): Promise<(string | null)[]>;
   };
 
   /** Gravação direta no banco, como um caminho futuro que não passe pela API (DEC-131). */
