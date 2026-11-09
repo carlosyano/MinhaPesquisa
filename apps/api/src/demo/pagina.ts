@@ -21,6 +21,7 @@ export const PAGINA_DEMO = `<!doctype html>
   #itens input[type=text] { width: 140px; } #itens select { font-size: .9rem; }
   img.recorte { display: block; max-width: 260px; max-height: 160px; margin-top: 6px; border: 1px solid #999; }
   .baixa { background: #fff4d6; } .cota { font-size: .9rem; color: #444; }
+  .invalido { outline: 2px solid #b00020; }
   details.importar { margin-top: 20px; border: 1px solid #ccc; border-radius: 6px; padding: 8px 12px; }
   details.importar summary { font-weight: 600; cursor: pointer; }
 </style>
@@ -169,7 +170,7 @@ async function chamar(metodo, caminho, corpo, idempotente, extra) {
   const dados = texto ? JSON.parse(texto) : undefined;
   if (!r.ok) {
     const p = dados || {};
-    throw new Error((p.errorCode || r.status) + ': ' + (p.detail || p.title || 'falha'));
+    throw new Error((p.errorCode || r.status) + ': ' + (p.detail || p.title || 'falha') + (p.campos && p.campos.length ? ' (campo: ' + p.campos.join(', ') + ')' : ''));
   }
   if (r.headers.get('etag')) etag = r.headers.get('etag');
   return dados;
@@ -254,7 +255,50 @@ const revisavel = (i) => i.estado !== 'pendente_leitura' && i.estado !== 'aguard
 
 function celula(texto) { const td = document.createElement('td'); td.textContent = texto; return td; }
 
+// Tipo de cada pergunta por versão: a resposta da aplicação não traz o tipo, e a página precisa dele
+// para não oferecer "confirmar" num valor lido fora do formato (DEC-128).
+const tiposPorVersao = {};
+async function carregarTipos(a) {
+  if (!a.versao_id || tiposPorVersao[a.versao_id]) return;
+  const opcao = document.querySelector('option[value="' + a.versao_id + '"]');
+  if (!opcao || !opcao.dataset.form) return;
+  const etagAplicacao = etag; // o GET da versão traz o ETag dela; o da aplicação continua valendo
+  try {
+    const v = await chamar('GET', '/forms/' + opcao.dataset.form + '/versions/' + a.versao_id);
+    tiposPorVersao[a.versao_id] = Object.fromEntries(((v.conteudo && v.conteudo.perguntas) || []).map((p) => [p.codigo, p.tipo]));
+  } catch { return; } finally { etag = etagAplicacao; }
+  if (aplicacao && idDe(aplicacao) === idDe(a)) mostrarItens(aplicacao);
+}
+
+function dataValida(v) {
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v)) return false;
+  const d = new Date(v + 'T00:00:00Z');
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
+// CPF com os dígitos verificadores corretos, como a API confere (RN-012); sequências repetidas não valem.
+function cpfOk(cpf) {
+  if (!/^[0-9]{11}$/.test(cpf) || cpf.split('').every((c) => c === cpf[0])) return false;
+  const digito = (base) => { let soma = 0; for (let k = 0; k < base.length; k++) soma += Number(base[k]) * (base.length + 1 - k); return ((soma * 10) % 11) % 10; };
+  return digito(cpf.slice(0, 9)) === Number(cpf[9]) && digito(cpf.slice(0, 10)) === Number(cpf[10]);
+}
+
+// Valor digitado em "corrigir para…" no formato da API (REQ §5.4): data DD/MM/AAAA vira AAAA-MM-DD;
+// CPF sem pontos e traço. Devolve null quando não serve, para a página destacar o item antes de enviar.
+function valorCorrigido(tipo, v) {
+  const t = String(v || '').trim();
+  if (tipo === 'data') {
+    const br = t.match(/^([0-9]{1,2})[/.-]([0-9]{1,2})[/.-]([0-9]{4})$/);
+    const iso = br ? br[3] + '-' + br[2].padStart(2, '0') + '-' + br[1].padStart(2, '0') : t;
+    return dataValida(iso) ? iso : null;
+  }
+  if (tipo === 'cpf') { const d = t.replace(/[^0-9]/g, ''); return cpfOk(d) ? d : null; }
+  return t;
+}
+
 function mostrarItens(a) {
+  carregarTipos(a);
+  const tipos = tiposPorVersao[a.versao_id] || {};
   const corpo = $('itens'); corpo.replaceChildren();
   const itens = a.itens || [];
   $('revisao').hidden = itens.length === 0 || a.estado === 'em_leitura';
@@ -263,8 +307,16 @@ function mostrarItens(a) {
   for (const i of itens) {
     const tr = document.createElement('tr');
     if (i.estado === 'a_revisar') tr.className = 'baixa';
-    // O complemento aparece logo abaixo da pergunta, com a opção ao lado da qual foi escrito (DEC-197).
-    const campo = celula(i.opcao_codigo ? '↳ texto ao lado de "' + i.opcao_codigo + '"' : i.pergunta_codigo + (i.linha_codigo ? '.' + i.linha_codigo : ''));
+    // O complemento aparece logo abaixo da pergunta, com a pergunta e a opção ao lado da qual foi
+    // escrito (DEC-197): um formulário pode ter várias perguntas com "Outro".
+    const campo = celula(i.opcao_codigo
+      ? i.pergunta_codigo + ' ↳ texto ao lado de "' + i.opcao_codigo + '"'
+      : i.pergunta_codigo + (i.linha_codigo ? '.' + i.linha_codigo : ''));
+    if (i.opcao_codigo && i.estado === 'aguardando_condicao' && editavel) {
+      const nota = document.createElement('small');
+      nota.textContent = 'resolva a pergunta acima e salve; depois este texto fica disponível para revisar';
+      campo.append(document.createElement('br'), nota);
+    }
     let lido = i.valor_ia ?? '—';
     if (i.valor_final !== null && i.valor_final !== i.valor_ia) lido += ' → ' + i.valor_final;
     const acao = document.createElement('td');
@@ -281,12 +333,30 @@ function mostrarItens(a) {
         } catch (err) { mensagem(err.message); }
       });
       campo.append(document.createElement('br'), b);
-      const sel = document.createElement('select'); sel.dataset.item = i.id;
+      const sel = document.createElement('select'); sel.dataset.item = i.id; sel.dataset.codigo = i.opcao_codigo ? '' : i.pergunta_codigo;
+      sel.dataset.rotulo = i.opcao_codigo ? i.pergunta_codigo + ' (texto ao lado de "' + i.opcao_codigo + '")' : i.pergunta_codigo;
       const vazio = document.createElement('option'); vazio.value = ''; vazio.textContent = i.estado === 'a_revisar' ? '— escolha —' : '(manter)';
       sel.appendChild(vazio);
-      for (const [v, t] of Object.entries(ACOES)) { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); }
-      // Com confiança de 0,80 ou mais, a ação já vem em "confirmar"; só é gravada ao salvar a revisão.
-      if (i.estado === 'a_revisar' && i.confianca !== null && Number(i.confianca) >= 0.8) sel.value = 'confirmar';
+      // Lido em branco não se confirma (DEC-128): sem "confirmar", a escolha é "em branco" ou "corrigir para…".
+      const lidoEmBranco = i.valor_ia === null || String(i.valor_ia).trim() === '';
+      // Data lida fora do formato AAAA-MM-DD: não se confirma; corrige-se (DEC-128).
+      const foraDoFormato = !lidoEmBranco && !i.opcao_codigo && tipos[i.pergunta_codigo] === 'data' && !dataValida(String(i.valor_ia));
+      if (foraDoFormato) {
+        const nota = document.createElement('small');
+        nota.textContent = 'o valor lido não é uma data válida; use "corrigir para…" (AAAA-MM-DD)';
+        campo.append(document.createElement('br'), nota);
+      }
+      // Texto ao lado de uma opção não marcada na pergunta: só "não se aplica" (DEC-205).
+      const pergunta = i.opcao_codigo ? itens.find((x) => x.pergunta_codigo === i.pergunta_codigo && !x.opcao_codigo && !x.linha_codigo) : null;
+      const opcaoDesmarcada = pergunta ? !String(pergunta.valor_final ?? pergunta.valor_ia ?? '').split(';').includes(i.opcao_codigo) : false;
+      for (const [v, t] of Object.entries(ACOES)) {
+        if (v === 'confirmar' && (lidoEmBranco || foraDoFormato)) continue;
+        if (opcaoDesmarcada && v !== 'nao_se_aplica') continue;
+        const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o);
+      }
+      // Com confiança de 0,80 ou mais, a ação já vem escolhida: "confirmar" o lido, ou "em branco" se a
+      // IA leu em branco; só é gravada ao salvar a revisão.
+      if (i.estado === 'a_revisar' && i.confianca !== null && Number(i.confianca) >= 0.8 && !foraDoFormato) sel.value = lidoEmBranco ? 'em_branco' : 'confirmar';
       const valor = document.createElement('input'); valor.type = 'text'; valor.hidden = true; valor.value = i.valor_final ?? i.valor_ia ?? '';
       sel.addEventListener('change', () => { valor.hidden = sel.value !== 'corrigir'; });
       acao.append(sel, valor);
@@ -317,18 +387,34 @@ $('abrir').addEventListener('click', async () => {
 $('salvar').addEventListener('click', async () => {
   mensagem();
   const itens = [];
+  const recusados = [];
+  const tipos = tiposPorVersao[aplicacao.versao_id] || {};
   for (const sel of $('itens').querySelectorAll('select')) {
+    const linha = sel.closest('tr'); if (linha) linha.classList.remove('invalido');
     if (!sel.value) continue;
     const item = { item_id: sel.dataset.item, acao: sel.value };
-    if (sel.value === 'corrigir') item.valor_final = sel.nextElementSibling.value;
+    if (sel.value === 'corrigir') {
+      const tipo = tipos[sel.dataset.codigo];
+      const v = valorCorrigido(tipo, sel.nextElementSibling.value);
+      if (v === null || v === '') {
+        recusados.push(sel.dataset.rotulo + (tipo === 'data' ? ' (data: use DD/MM/AAAA ou AAAA-MM-DD)' : tipo === 'cpf' ? ' (CPF com dígito verificador inválido)' : ' (valor vazio)'));
+        if (linha) linha.classList.add('invalido');
+        continue;
+      }
+      item.valor_final = v;
+    }
     itens.push(item);
   }
+  if (recusados.length) { mensagem('Nada foi gravado. Corrija os campos destacados: ' + recusados.join('; ') + '.'); return; }
   if (itens.length === 0) { mensagem('Escolha a ação de pelo menos um item.'); return; }
   try {
     mostrar(await chamar('PATCH', '/applications/' + idDe(aplicacao) + '/review', { itens }, false, { 'if-match': etag || '' }));
     mensagem('Formulário salvo.', true);
   }
-  catch (err) { mensagem(err.message); }
+  catch (err) {
+    // A API não diz qual item (ERR-001): a causa comum é "confirmar" num valor lido fora do tipo.
+    mensagem(err.message + (err.message.startsWith('ERR-001') ? ' Nada foi gravado. Veja os itens com "confirmar": se o valor lido não estiver no formato do campo (data, CPF, opção), use "corrigir para…".' : ''));
+  }
 });
 
 $('concluir').addEventListener('click', async () => {
