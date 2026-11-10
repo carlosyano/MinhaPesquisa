@@ -1,12 +1,12 @@
 openapi: 3.0.3
 info:
   title: MinhaPesquisa API
-  version: 0.8.0
+  version: 0.9.0
   description: |
     API da aplicação local MinhaPesquisa (DEC-107) — digitalização de pesquisas em papel com
     leitura por IA, revisão humana e dashboards, em conformidade com a LGPD. Uma única usuária,
     com todas as permissões (DEC-109); servida só em 127.0.0.1 (DEC-113).
-    Fonte normativa: REQ v2.8 e PLANO.md v3.21. Contract-first — este arquivo valida
+    Fonte normativa: REQ v2.9 e PLANO.md v3.22. Contract-first — este arquivo valida
     requisição e resposta (DEC-049). Erros seguem RFC 9457 (Problem Details) com catálogo ERR fechado.
     Segurança: a única rota pública (`login`) declara `security: []`; sem MFA (DEC-108);
     demais rotas exigem sessão, e toda mutação exige também o token CSRF (os dois esquemas no
@@ -594,15 +594,17 @@ paths:
       summary: Upload de uma aplicação (um envio = uma pessoa, DEC-008)
       description: |
         Valida tipo, tamanho e páginas (DEC-029) e varre malware; recusa → 400 ERR-029 com o
-        motivo; projeto arquivado → 400 ERR-001 (CA-027). Remove metadados (RN-040) e valida o
-        QR; sem QR legível, vale a `versao_id` escolhida (DEC-169), e a página de cada folha vem
-        da localização pela IA (RN-052, DEC-171). O estado inicial segue a tabela de criação da
+        motivo; projeto arquivado, ou `formulario_id` ausente ou de outro projeto → 400 ERR-001
+        (CA-027, DEC-215). Remove metadados (RN-040) e valida o QR `PPPPP.FFF.VV.X/Y` (DEC-218): QR
+        legível de projeto ou formulário diferente do escolhido → 409 ERR-045, nada é gravado
+        (DEC-215, CA-061); o QR `MP1.` anterior à 0.9.0 conta como ausente. Sem QR legível, vale a `versao_id` escolhida (DEC-169), e a página de cada folha vem
+        da identificação pela IA (RN-052, DEC-171); a leitura é da página inteira (DEC-216). O estado inicial segue a tabela de criação da
         FL-001; o campo `aviso` traz ERR-004, ERR-039 ou ERR-003 quando aplicável (CA-004,
         CA-039, CA-030, CA-052). Com QR legível, a versão é a do QR em todas as folhas (DEC-180).
         No papel antigo, `data_aplicacao` e `local_aplicacao` viram o padrão do projeto no próprio
         envio (DEC-192) e preenchem as perguntas `nao_consta` quando a localização confirma a versão
         e as páginas (DEC-179, DEC-186, CA-057). Só conta o QR no formato do MinhaPesquisa (DEC-187).
-      x-trace: [RF-006, RF-013, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040, CA-052, CA-053, CA-055, CA-057, RN-040, DEC-029, DEC-169, DEC-179, DEC-180, DEC-182, DEC-185, DEC-186, DEC-187, DEC-192, RF-014, CA-060, DEC-198]
+      x-trace: [RF-006, RF-013, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040, CA-052, CA-053, CA-055, CA-057, RN-040, DEC-029, DEC-169, DEC-179, DEC-180, DEC-182, DEC-185, DEC-186, DEC-187, DEC-192, RF-014, CA-060, DEC-198, RF-015, CA-061, CA-062, DEC-215, DEC-216, DEC-218]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -626,7 +628,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '409': { $ref: '#/components/responses/UploadConflict' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
@@ -1609,6 +1611,15 @@ components:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-018', title: Estado inválido, status: 409, detail: Esta ação não é permitida no estado atual., errorCode: ERR-018, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+    UploadConflict:
+      description: QR de projeto ou formulário diferente do escolhido no envio (ERR-045, DEC-215), com os códigos lidos em `projeto_qr` e `formulario_qr`; ou chave de idempotência reutilizada com outro conteúdo (ERR-019)
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-045', title: Projeto ou formulário diferente do QR, status: 409, detail: 'O QR desta digitalização é de outro projeto ou formulário. Selecione o projeto e o formulário corretos e envie de novo.', errorCode: ERR-045, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, projeto_qr: '00001', formulario_qr: '003' }
     IdempotencyConflict:
       description: Chave de idempotência reutilizada com outro conteúdo (ERR-019)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
@@ -1709,7 +1720,8 @@ components:
       type: object
       description: |
         Problem Details (RFC 9457). Nunca expõe stack trace nem detalhe interno. Extensões
-        permitidas: `campos` (ERR-001, ERR-006, ERR-036), `motivo` e `posicao` (ERR-029).
+        permitidas: `campos` (ERR-001, ERR-006, ERR-036), `motivo` e `posicao` (ERR-029),
+        `projeto_qr` e `formulario_qr` (ERR-045).
       required: [type, title, status, detail, errorCode, correlationId]
       properties:
         type: { type: string, format: uri }
@@ -1724,11 +1736,13 @@ components:
           type: string
           enum: [excede o limite de 20 MB, excede o limite de 50 páginas, tipo de arquivo não permitido, risco de segurança detectado]
         posicao: { type: integer, minimum: 1, description: 'ERR-029 no envio de imagens (uploadImages, addApplicationPages, attachSignaturePage): posição do arquivo recusado no envio, a partir de 1; ausente na importação (`importForm`); o nome do arquivo nunca vai na resposta (RN-028, DEC-198)' }
+        projeto_qr: { type: string, pattern: '^[0-9]{5}$', description: 'ERR-045: código do projeto lido no QR (DEC-215)' }
+        formulario_qr: { type: string, pattern: '^[0-9]{3}$', description: 'ERR-045: código do formulário lido no QR (DEC-215)' }
 
     ErrorCode:
       type: string
       description: Catálogo fechado de erros ativos (REQ §8.2)
-      enum: [ERR-001, ERR-002, ERR-003, ERR-004, ERR-006, ERR-009, ERR-010, ERR-013, ERR-014, ERR-015, ERR-016, ERR-017, ERR-018, ERR-019, ERR-020, ERR-021, ERR-022, ERR-029, ERR-036, ERR-039, ERR-041, ERR-044]
+      enum: [ERR-001, ERR-002, ERR-003, ERR-004, ERR-006, ERR-009, ERR-010, ERR-013, ERR-014, ERR-015, ERR-016, ERR-017, ERR-018, ERR-019, ERR-020, ERR-021, ERR-022, ERR-029, ERR-036, ERR-039, ERR-041, ERR-044, ERR-045]
 
     ApplicationState:
       type: string
@@ -1794,9 +1808,10 @@ components:
     Project:
       type: object
       additionalProperties: false
-      required: [id, nome, status, criado_em]
+      required: [id, codigo, nome, status, criado_em]
       properties:
         id: { type: string, format: uuid }
+        codigo: { type: string, pattern: '^[0-9]{5}$', description: 'Código sequencial do projeto, com 5 dígitos, do QR e do rodapé do PDF; só leitura (DEC-217)' }
         nome: { type: string }
         descricao: { type: string, nullable: true }
         objetivo: { type: string, nullable: true }
@@ -1828,9 +1843,10 @@ components:
     FormSummary:
       type: object
       additionalProperties: false
-      required: [id, nome, projeto_id, criado_em, versoes]
+      required: [id, codigo, nome, projeto_id, criado_em, versoes]
       properties:
         id: { type: string, format: uuid }
+        codigo: { type: string, pattern: '^[0-9]{3}$', description: 'Código sequencial do formulário no projeto, com 3 dígitos, do QR e do rodapé do PDF; só leitura (DEC-217)' }
         nome: { type: string }
         projeto_id: { type: string, format: uuid }
         criado_em: { type: string, format: date-time }
@@ -1991,7 +2007,7 @@ components:
     UploadRequest:
       type: object
       additionalProperties: false
-      required: [arquivos]
+      required: [arquivos, formulario_id]
       properties:
         arquivos:
           type: array
@@ -1999,10 +2015,14 @@ components:
           maxItems: 50
           items: { type: string, format: binary }
           description: JPEG/PNG/PDF, até 20 MB e 50 páginas por arquivo, de scanner ou foto; todos da mesma pessoa (DEC-008); o total de páginas deve ser o da versão (CA-040, CA-052)
+        formulario_id:
+          type: string
+          format: uuid
+          description: Formulário do projeto, escolhido antes do envio (DEC-215). Ausente ou de outro projeto → 400 ERR-001; QR legível de outro projeto ou formulário → 409 ERR-045 (CA-061)
         versao_id:
           type: string
           format: uuid
-          description: Versão publicada do projeto, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180); a de papel antigo não vale se alguma folha tiver QR legível, válido ou não (DEC-184). Sem QR legível de versão válida em nenhuma folha, versão escolhida inexistente, não publicada ou de outro projeto → `aviso` ERR-039. No `addApplicationPages`, substitui a escolhida no envio
+          description: Versão publicada do formulário escolhido, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180); a de papel antigo não vale se alguma folha tiver QR legível, válido ou não (DEC-184). Sem QR legível de versão válida em nenhuma folha, versão escolhida inexistente, não publicada ou de outro formulário → `aviso` ERR-039. No `addApplicationPages`, substitui a escolhida no envio
         data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação da pergunta `nao_consta`; vira o padrão do projeto no próprio envio (DEC-179, DEC-192). Guardada até a localização confirmar a versão e as páginas (DEC-186) e só vale se a versão final for de papel antigo com essa pergunta `nao_consta`; senão é apagada (DEC-182, DEC-185). No addApplicationPages, substitui a gravada. Futura → 400 ERR-001' }
         local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: local da aplicação da pergunta `nao_consta`; vira o padrão do projeto no próprio envio (DEC-179, DEC-192). Mesmas regras de `data_aplicacao` (DEC-182, DEC-185)' }
 

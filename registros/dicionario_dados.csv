@@ -20,6 +20,7 @@ ENT-003 Perfil,tenant_id,tenant do perfil,uuid,sim,36,UUID v4,—,—,não,Tenan
 ENT-003 Perfil,codigo,código do perfil,varchar,sim,50,^[a-z_]+$,admin_tenant; digitalizador; analista; analista_individual,—,sim (por tenant),—,não
 ENT-003 Perfil,nome,nome do perfil,varchar,sim,100,—,—,—,não,—,não
 ENT-004 Projeto,id,identificador do projeto,uuid,sim,36,UUID v4,—,—,sim,—,não
+ENT-004 Projeto,codigo,"código do projeto no QR e no rodapé do PDF, sequencial na instalação, atribuído na criação e imutável (DEC-217); mostrado com 5 dígitos (`00001`)",int,sim,—,—,1 a 99999,auto,sim,—,não
 ENT-004 Projeto,tenant_id,tenant do projeto,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-004 Projeto,nome,nome do projeto,varchar,sim,200,—,—,—,não,—,não
 ENT-004 Projeto,descricao,descrição,text,não,5000,—,—,NULL,não,—,não
@@ -34,12 +35,13 @@ ENT-004 Projeto,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,n
 ENT-005 Formulario,id,identificador do formulário,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-005 Formulario,tenant_id,tenant do formulário,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-005 Formulario,projeto_id,projeto do formulário,uuid,sim,36,UUID v4,—,—,não,Projeto.id,não
-ENT-005 Formulario,nome,nome do formulário,varchar,sim,200,—,—,—,não,—,não
+ENT-005 Formulario,codigo,"código do formulário no QR e no rodapé do PDF, sequencial dentro do projeto, atribuído na criação e imutável (DEC-217); mostrado com 3 dígitos (`002`)",int,sim,—,—,1 a 999,auto,sim (por projeto),—,não
+ENT-005 Formulario,nome,"nome do formulário, impresso no cabeçalho do PDF (DEC-219)",varchar,sim,200,—,—,—,não,—,não
 ENT-005 Formulario,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-006 Versao,id,identificador da versão,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-006 Versao,tenant_id,tenant da versão,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-006 Versao,formulario_id,formulário da versão,uuid,sim,36,UUID v4,—,—,não,Formulario.id,não
-ENT-006 Versao,numero,número da versão,int,sim,—,—,≥ 1,auto,sim (por form),—,não
+ENT-006 Versao,numero,"número da versão; no QR e no rodapé com 2 dígitos (`01`, DEC-218)",int,sim,—,—,1 a 99,auto,sim (por form),—,não
 ENT-006 Versao,status,status da versão,enum,sim,—,—,rascunho; publicada,rascunho,não,—,não
 ENT-006 Versao,publicada_em,data de publicação,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
 ENT-006 Versao,mapa_layout,"coordenadas normalizadas de cada campo por página, gravadas na publicação (DEC-048); desde a DEC-170 servem só ao PDF imprimível, e os recortes saem da localização; NULL na versão de papel antigo (DEC-181)",jsonb,não,—,JSON,—,NULL,não,—,não
