@@ -132,8 +132,8 @@ paths:
       description: |
         Projeto inicia `ativo`; criação registrada no histórico e na auditoria (CA-027). Objetivo,
         coordenador e período de coleta são opcionais; `coleta_fim` antes de `coleta_inicio` → ERR-001
-        (DEC-137, CA-049).
-      x-trace: [RF-003, RF-011, CA-027, CA-049, DEC-137]
+        (DEC-137, CA-049). Recebe o próximo `codigo` sequencial; acima de 99999 → ERR-001 (DEC-217).
+      x-trace: [RF-003, RF-011, CA-027, CA-049, DEC-137, RF-015, DEC-217]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -302,8 +302,9 @@ paths:
       description: |
         Cria formulário com a versão 1 em rascunho, já com os 5 campos obrigatórios da RN-050
         (DEC-135, CA-048). Projeto arquivado → ERR-001 (`campos`: `projeto`, DEC-146). `papel_antigo`
-        marca a versão 1 como de papel antigo (DEC-175).
-      x-trace: [RF-004, RF-011, RF-013, RN-050, CA-048, DEC-135, DEC-146, DEC-175]
+        marca a versão 1 como de papel antigo (DEC-175). Recebe o próximo `codigo` sequencial do projeto;
+        acima de 999 → ERR-001 (DEC-217).
+      x-trace: [RF-004, RF-011, RF-013, RN-050, CA-048, DEC-135, DEC-146, DEC-175, RF-015, DEC-217]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -341,8 +342,8 @@ paths:
         da origem, padroniza as dos 5 campos, injeta as que faltarem e dá sufixo a código reservado
         em pergunta comum (RN-050, DEC-145, DEC-147, CA-048). Quando a versão nova não é de papel
         antigo, a marca `nao_consta` é retirada das perguntas copiadas (DEC-179) e o `total_paginas`
-        informado é apagado; quando é, ele é copiado (DEC-189).
-      x-trace: [RF-004, RF-011, RF-013, CA-001, RN-042, RN-050, CA-048, DEC-147, DEC-179, DEC-189, RF-014, DEC-202]
+        informado é apagado; quando é, ele é copiado (DEC-189). Versão acima da 99 → ERR-001 (DEC-218).
+      x-trace: [RF-004, RF-011, RF-013, CA-001, RN-042, RN-050, CA-048, DEC-147, DEC-179, DEC-189, RF-014, DEC-202, RF-015, DEC-218]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -477,12 +478,13 @@ paths:
       tags: [forms]
       summary: Gera PDF imprimível com QR e marcadores por página
       description: |
-        Cada página traz QR com identificador opaco da versão e número da página, e marcadores
-        fiduciais (DEC-048). A página 1 traz o termo de consentimento do tenant
+        Cada página traz no cabeçalho o nome do projeto e o do formulário; no rodapé, o texto
+        "Projeto: PPPPP · Formulário: FFF · Versão: VV · Página X/Y" e, no canto, o QR `PPPPP.FFF.VV.X/Y`
+        (DEC-218, DEC-219); marcadores fiduciais nos cantos (DEC-048) e 18 pt entre os blocos. A página 1 traz o termo de consentimento do tenant
         (`termo_consentimento`, DEC-094) com campo de assinatura.
         Versão em rascunho ou de papel antigo não gera PDF → ERR-018 (CA-028, CA-052, DEC-175).
         Depois do rótulo de cada opção com `com_complemento`, uma linha para escrever (DEC-202).
-      x-trace: [RF-004, RF-013, CA-028, CA-052, DEC-005, DEC-048, DEC-094, DEC-175, RF-014, CA-059, DEC-202]
+      x-trace: [RF-004, RF-013, CA-028, CA-052, DEC-005, DEC-048, DEC-094, DEC-175, RF-014, CA-059, DEC-202, RF-015, DEC-218, DEC-219]
       parameters:
         - $ref: '#/components/parameters/FormId'
         - $ref: '#/components/parameters/VersionId'
@@ -638,18 +640,18 @@ paths:
       tags: [upload]
       summary: Identificação manual de versão e páginas (aplicação em identificacao_pendente)
       description: |
-        O digitalizador informa a versão e o número de cada página, ou corrige as páginas; a
-        página informada prevalece e só as folhas alteradas são localizadas de novo, só para as
-        regiões (RN-052, item 3a). `origem_qr` passa a false, exceto quando a versão informada é a do
+        O digitalizador informa a versão (do formulário da aplicação; de outro formulário → 400
+        ERR-039, DEC-221) e o número de cada página, ou corrige as páginas; a página informada
+        prevalece, sem nova identificação, e todas as folhas mantidas são lidas (RN-052, item 3a). `origem_qr` passa a false, exceto quando a versão informada é a do
         QR. Versão diferente da do QR legível e válido de alguma folha → 400 ERR-039, auditado; QR
         de versão inválida (CA-039) não decide a versão (DEC-180), mas versão de papel antigo em
         aplicação com alguma folha de QR legível, válido ou não → 400 ERR-039, auditado (DEC-184).
         A conferência com o QR considera só as folhas mantidas (sem `descartar`), e só conta o QR no
         formato do MinhaPesquisa (DEC-187). Data e local gravados no envio são aplicados ou apagados
-        ao fim da localização que segue (DEC-182, DEC-185, DEC-186).
+        na hora, porque a identificação conta como concluída (DEC-182, DEC-185, DEC-186).
         Continua inválido → 400 ERR-004 ou ERR-039. Versão de outro tenant, de outro projeto ou
         inexistente → 400 ERR-039, auditado (DEC-100). Próximo estado conforme FL-001.
-      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, CA-057, DEC-100, DEC-171, DEC-180, DEC-184, DEC-185, DEC-186, DEC-187]
+      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, CA-057, DEC-100, DEC-171, DEC-180, DEC-184, DEC-185, DEC-186, DEC-187, RF-015, DEC-221]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -684,11 +686,12 @@ paths:
       description: |
         Corrige página faltante: mesmas validações do upload (ERR-029, RN-040, DEC-042) e
         reavaliação da tabela de criação da FL-001. Permitido também em projeto arquivado (DEC-098).
-        `versao_id` substitui a escolhida no envio (DEC-169, DEC-180), mas versão de papel antigo não vale
+        Folha com QR legível de outro projeto ou formulário → 409 ERR-045, nada é gravado (DEC-222).
+        `versao_id` (do formulário da aplicação; de outro → ERR-039, DEC-221) substitui a escolhida no envio (DEC-169, DEC-180), mas versão de papel antigo não vale
         com folha de QR legível (DEC-184); `data_aplicacao` e `local_aplicacao`, quando vierem, substituem
-        os gravados no envio, só o que vier, e são aplicados ou apagados ao fim da localização (DEC-182,
+        os gravados no envio, só o que vier, e são aplicados ou apagados ao fim da identificação (DEC-182,
         DEC-185, DEC-186).
-      x-trace: [RF-006, RF-013, CA-013, CA-040, CA-057, RN-040, DEC-098, DEC-169, DEC-180, DEC-182, DEC-184, DEC-185, DEC-186, RF-014, CA-060, DEC-198]
+      x-trace: [RF-006, RF-013, CA-013, CA-040, CA-057, RN-040, DEC-098, DEC-169, DEC-180, DEC-182, DEC-184, DEC-185, DEC-186, RF-014, CA-060, DEC-198, RF-015, DEC-221, DEC-222]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -699,7 +702,7 @@ paths:
         required: true
         content:
           multipart/form-data:
-            schema: { $ref: '#/components/schemas/UploadRequest' }
+            schema: { $ref: '#/components/schemas/AddPagesRequest' }
       responses:
         '200':
           description: Páginas acrescentadas
@@ -712,7 +715,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/InvalidState' }
+        '409': { $ref: '#/components/responses/PagesConflict' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
@@ -723,8 +726,8 @@ paths:
       summary: Link assinado (5 min) da imagem de uma página, para identificação e conferência de assinatura
       description: |
         Usada para identificar páginas em `identificacao_pendente` e para conferir a assinatura
-        (RN-044). Na página 1 devolve a região da assinatura indicada pela localização, nula
-        quando não achada (DEC-174).
+        (RN-044). Na página 1 devolve a região da assinatura indicada pela leitura da página inteira,
+        nula quando não achada (RN-045, DEC-216).
         Permitida em `identificacao_pendente` e nos estados de revisão (FL-001); nos demais →
         ERR-018. Acesso auditado (DEC-099, DEC-112).
       x-trace: [RF-006, CA-004, CA-013, CA-044, RN-044, DEC-099, DEC-112]
@@ -971,8 +974,9 @@ paths:
       description: |
         Confere QR da versão e da página (sem QR legível, a folha não vai à IA e a usuária confirma
         na conferência que é a página 1, DEC-183) sem reler os outros campos; exige a confirmação humana
-        da assinatura (RN-044); vincula o respondente com o `manter_cadastro` gravado (CA-044).
-      x-trace: [RF-008, RF-013, CA-044, RN-044, DEC-183, RF-014, CA-060, DEC-198]
+        da assinatura (RN-044); vincula o respondente com o `manter_cadastro` gravado (CA-044). QR legível
+        de outro projeto ou formulário → 409 ERR-045, nada é gravado (DEC-222).
+      x-trace: [RF-008, RF-013, CA-044, RN-044, DEC-183, RF-014, CA-060, DEC-198, RF-015, DEC-222]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -996,7 +1000,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/InvalidState' }
+        '409': { $ref: '#/components/responses/PagesConflict' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /applications/{applicationId}/retry:
@@ -1611,6 +1615,15 @@ components:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-018', title: Estado inválido, status: 409, detail: Esta ação não é permitida no estado atual., errorCode: ERR-018, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
+    PagesConflict:
+      description: Ação não permitida no estado atual (ERR-018) ou QR de projeto ou formulário diferente do da aplicação (ERR-045, DEC-222), com os códigos lidos em `projeto_qr` e `formulario_qr`
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-018', title: Estado inválido, status: 409, detail: Esta ação não é permitida no estado atual., errorCode: ERR-018, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     UploadConflict:
       description: QR de projeto ou formulário diferente do escolhido no envio (ERR-045, DEC-215), com os códigos lidos em `projeto_qr` e `formulario_qr`; ou chave de idempotência reutilizada com outro conteúdo (ERR-019)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
@@ -2022,9 +2035,25 @@ components:
         versao_id:
           type: string
           format: uuid
-          description: Versão publicada do formulário escolhido, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180); a de papel antigo não vale se alguma folha tiver QR legível, válido ou não (DEC-184). Sem QR legível de versão válida em nenhuma folha, versão escolhida inexistente, não publicada ou de outro formulário → `aviso` ERR-039. No `addApplicationPages`, substitui a escolhida no envio
+          description: Versão publicada do formulário escolhido, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180); a de papel antigo não vale se alguma folha tiver QR legível, válido ou não (DEC-184). Sem QR legível de versão válida em nenhuma folha, versão escolhida inexistente, não publicada ou de outro formulário → `aviso` ERR-039. 
         data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação da pergunta `nao_consta`; vira o padrão do projeto no próprio envio (DEC-179, DEC-192). Guardada até a localização confirmar a versão e as páginas (DEC-186) e só vale se a versão final for de papel antigo com essa pergunta `nao_consta`; senão é apagada (DEC-182, DEC-185). No addApplicationPages, substitui a gravada. Futura → 400 ERR-001' }
         local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: local da aplicação da pergunta `nao_consta`; vira o padrão do projeto no próprio envio (DEC-179, DEC-192). Mesmas regras de `data_aplicacao` (DEC-182, DEC-185)' }
+
+    AddPagesRequest:
+      type: object
+      additionalProperties: false
+      required: [arquivos]
+      description: Pedido do addApplicationPages; o formulário é o da aplicação (DEC-221), sem `formulario_id`
+      properties:
+        arquivos:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { type: string, format: binary }
+          description: JPEG/PNG/PDF, até 20 MB e 50 páginas por arquivo; QR legível de outro projeto ou formulário → 409 ERR-045 (DEC-222)
+        versao_id: { type: string, format: uuid, description: 'Versão publicada do formulário da aplicação; substitui a escolhida no envio (DEC-169, DEC-180); de outro formulário → ERR-039 (DEC-221)' }
+        data_aplicacao: { type: string, format: date, description: 'Papel antigo: substitui a gravada no envio (DEC-182, DEC-185); futura → 400 ERR-001' }
+        local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: substitui o gravado no envio (DEC-182, DEC-185)' }
 
     UploadResponse:
       type: object
@@ -2057,7 +2086,7 @@ components:
             properties:
               imagem_id: { type: string, format: uuid }
               numero_pagina: { type: integer, minimum: 1, description: Obrigatório quando descartar = false }
-              descartar: { type: boolean, default: false, description: Remove a imagem (página repetida ou de outro formulário) }
+              descartar: { type: boolean, default: false, description: Remove a imagem (página repetida ou que não é desta aplicação) }
 
     QuotaStatus:
       type: object
@@ -2074,10 +2103,11 @@ components:
     Application:
       type: object
       additionalProperties: false
-      required: [id, projeto_id, estado, assinatura, itens]
+      required: [id, projeto_id, formulario_id, estado, assinatura, itens]
       properties:
         id: { type: string, format: uuid }
         projeto_id: { type: string, format: uuid }
+        formulario_id: { type: string, format: uuid, nullable: true, description: 'Formulário escolhido no envio, fixo na aplicação (DEC-215, DEC-221); nulo só em aplicação anterior à 0.9.0 sem versão' }
         versao_id: { type: string, format: uuid, nullable: true }
         origem_qr: { type: boolean, description: 'true quando a versão veio do QR, inclusive quando a versão informada no identifyApplication é a do QR (DEC-180); false quando veio da escolha no envio ou de outra versão informada no identifyApplication (DEC-169)' }
         papel_antigo: { type: boolean, description: 'Herdado da versão, só leitura (DEC-173, DEC-175)' }

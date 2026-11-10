@@ -20,7 +20,7 @@ ENT-003 Perfil,tenant_id,tenant do perfil,uuid,sim,36,UUID v4,—,—,não,Tenan
 ENT-003 Perfil,codigo,código do perfil,varchar,sim,50,^[a-z_]+$,admin_tenant; digitalizador; analista; analista_individual,—,sim (por tenant),—,não
 ENT-003 Perfil,nome,nome do perfil,varchar,sim,100,—,—,—,não,—,não
 ENT-004 Projeto,id,identificador do projeto,uuid,sim,36,UUID v4,—,—,sim,—,não
-ENT-004 Projeto,codigo,"código do projeto no QR e no rodapé do PDF, sequencial na instalação, atribuído na criação e imutável (DEC-217); mostrado com 5 dígitos (`00001`)",int,sim,—,—,1 a 99999,auto,sim,—,não
+ENT-004 Projeto,codigo,"código do projeto no QR e no rodapé do PDF, sequencial na instalação, atribuído na criação e imutável (DEC-217); mostrado com 5 dígitos (`00001`)",int,sim,—,—,1 a 99999,auto,sim (por tenant),—,não
 ENT-004 Projeto,tenant_id,tenant do projeto,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-004 Projeto,nome,nome do projeto,varchar,sim,200,—,—,—,não,—,não
 ENT-004 Projeto,descricao,descrição,text,não,5000,—,—,NULL,não,—,não
@@ -44,7 +44,7 @@ ENT-006 Versao,formulario_id,formulário da versão,uuid,sim,36,UUID v4,—,—,
 ENT-006 Versao,numero,"número da versão; no QR e no rodapé com 2 dígitos (`01`, DEC-218)",int,sim,—,—,1 a 99,auto,sim (por form),—,não
 ENT-006 Versao,status,status da versão,enum,sim,—,—,rascunho; publicada,rascunho,não,—,não
 ENT-006 Versao,publicada_em,data de publicação,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
-ENT-006 Versao,mapa_layout,"coordenadas normalizadas de cada campo por página, gravadas na publicação (DEC-048); desde a DEC-170 servem só ao PDF imprimível, e os recortes saem da localização; NULL na versão de papel antigo (DEC-181)",jsonb,não,—,JSON,—,NULL,não,—,não
+ENT-006 Versao,mapa_layout,"coordenadas normalizadas de cada campo por página, gravadas na publicação (DEC-048); desde a DEC-170 servem só ao PDF imprimível; desde a DEC-216 não há recorte, e as regiões saem da leitura; NULL na versão de papel antigo (DEC-181)",jsonb,não,—,JSON,—,NULL,não,—,não
 ENT-006 Versao,total_paginas,"número de folhas da versão, usado na conferência de páginas (RN-052, CA-013), gravado na publicação: na versão oficial, a maior página das perguntas (as páginas do PDF); na de papel antigo, o informado no rascunho (`updateVersion`; a importação grava as páginas do original, DEC-181) ou, sem ele, a maior página das perguntas; informado fora do papel antigo ou menor que a maior página das perguntas → ERR-001; desmarcar `papel_antigo` apaga o informado; a cópia de versão o leva quando a versão nova é de papel antigo e o apaga quando não é (DEC-189)",int,não,—,—,1..50,NULL,não,—,não
 ENT-006 Versao,papel_antigo,"versão de pesquisa antiga, sem QR nem marcadores: dispensa CPF, data de nascimento e assinatura na conclusão (DEC-172, DEC-175, DEC-176); imutável depois da publicação (RN-042)",boolean,sim,—,—,true/false,false,não,—,não
 ENT-006 Versao,criada_em,data de criação,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
@@ -60,7 +60,7 @@ ENT-007 Pergunta,obrigatorio,campo obrigatório,boolean,sim,—,—,true/false,f
 ENT-007 Pergunta,campo_respondente,alimenta atributo do respondente,varchar,não,50,—,nome; data_nascimento; cpf; endereco,NULL,não,—,não
 ENT-007 Pergunta,campo_aplicacao,"marca a pergunta de data, local ou aplicador da aplicação (RN-016, RN-017)",varchar,não,50,—,data_aplicacao; local_aplicacao; aplicador,NULL,não,—,não
 ENT-007 Pergunta,nao_consta,"pergunta que o papel antigo não tem: não é localizada nem lida (DEC-179); só em versão de papel antigo, e só nas perguntas de CPF, data de nascimento, data e local",boolean,sim,—,—,true/false,false,não,—,não
-ENT-007 Pergunta,sensibilidade,grupo de envio à IA (RN-039): identificação nunca vai junto com saúde/outro; `identificacao` só nas perguntas da RN-047 (DEC-097),enum,sim,—,—,identificacao; saude; outro,saude,não,—,não
+ENT-007 Pergunta,sensibilidade,"classificação da pergunta, no gabarito e na auditoria (RN-047); desde a DEC-216 não separa as chamadas à IA (RN-039 revogada); `identificacao` só nas perguntas da RN-047 (DEC-097)",enum,sim,—,—,identificacao; saude; outro,saude,não,—,não
 ENT-007 Pergunta,valor_min,valor mínimo (escala/número),decimal,não,"10,2",—,—,NULL,não,—,não
 ENT-007 Pergunta,valor_max,valor máximo (escala/número),decimal,não,"10,2",—,—,NULL,não,—,não
 ENT-007 Pergunta,unidade,unidade (número),varchar,não,20,—,—,NULL,não,—,não
@@ -85,6 +85,7 @@ ENT-010 Aplicacao,id,identificador da aplicação,uuid,sim,36,UUID v4,—,—,si
 ENT-010 Aplicacao,tenant_id,tenant da aplicação,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-010 Aplicacao,projeto_id,projeto da aplicação,uuid,sim,36,UUID v4,—,—,não,Projeto.id,não
 ENT-010 Aplicacao,versao_id,"versão do formulário: a do QR legível ou, sem QR legível, a escolhida no envio ou no `identifyApplication` (DEC-169, DEC-180); pode ficar NULL só em identificacao_pendente",uuid,não,36,UUID v4,—,NULL,não,Versao.id,não
+ENT-010 Aplicacao,formulario_id,"formulário escolhido no envio, fixo na aplicação (DEC-215, DEC-221); a `versao_id`, quando existe, é dele",uuid,sim,36,UUID v4,—,—,não,Formulario.id,não
 ENT-010 Aplicacao,origem_qr,a versão veio do QR (true) ou da escolha da usuária no envio ou no `identifyApplication` (false) (DEC-169); continua true quando a versão informada é a do QR (DEC-180),boolean,sim,—,—,true/false,true,não,—,não
 ENT-010 Aplicacao,respondente_id,respondente (só na conclusão),uuid,não,36,UUID v4,—,NULL,não,Respondente.id,pessoal (indireto)
 ENT-010 Aplicacao,data_aplicacao,"data da aplicação (obrigatória em sem_assinatura e concluida); no papel antigo, pode vir do envio, guardada até a localização confirmar a versão e as páginas (DEC-182, DEC-185, DEC-186)",date,não,—,YYYY-MM-DD,não futura,NULL,não,—,pessoal
@@ -128,7 +129,7 @@ ENT-013 Auditoria,registro_id,ID do registro afetado,uuid,não,36,UUID v4,—,NU
 ENT-013 Auditoria,campo,campo afetado,varchar,não,100,—,—,NULL,não,—,não
 ENT-013 Auditoria,ip,IP de origem,inet,não,—,IPv4/IPv6,—,NULL,não,—,pessoal
 ENT-013 Auditoria,canal,canal (web; api; script),enum,não,—,—,web; api; script,NULL,não,—,não
-ENT-013 Auditoria,detalhes,referências adicionais em lista fechada por ação (ex.: filtro_aplicado com códigos de pergunta e opção); nunca valores pessoais nem texto livre,jsonb,não,—,JSON,—,NULL,não,—,não
+ENT-013 Auditoria,detalhes,"referências adicionais em lista fechada por ação (ex.: filtro_aplicado com códigos de pergunta e opção; `form_selection_mismatch` com `projeto_qr` e `formulario_qr`, DEC-215); nunca valores pessoais nem texto livre",jsonb,não,—,JSON,—,NULL,não,—,não
 ENT-013 Auditoria,criado_em,data do evento,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-014 VinculoUsuarioProjeto,id,identificador do vínculo,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-014 VinculoUsuarioProjeto,tenant_id,tenant do vínculo,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
@@ -224,7 +225,7 @@ ENT-025 PaginaAplicacao,sha256,hash do arquivo sem metadados,bytea,sim,32,SHA-25
 ENT-025 PaginaAplicacao,ordem_envio,"posição da folha na aplicação, na ordem do envio, a partir de 1; as folhas do `addApplicationPages` e do `attachSignaturePage` continuam a sequência, e as descartadas no `identifyApplication` não liberam o número (DEC-198)",int,sim,—,—,≥ 1,—,sim (por aplicação),—,não
 ENT-025 PaginaAplicacao,nome_arquivo,"nome original do arquivo enviado de onde veio a página, sem a pasta, cortado em 255 caracteres (DEC-198); apagado (NULL) no expurgo da imagem e no ato da eliminação do titular, inclusive nas aplicações descartadas por ela (DEC-206, DEC-210); NULL nas páginas enviadas antes da migração 0010 (IMP-009)",varchar,não,255,—,—,NULL,não,—,pessoal
 ENT-025 PaginaAplicacao,registro_ok,"marcadores dos cantos encontrados (DEC-048); desde a DEC-169 só informativo, não impede a leitura",boolean,sim,—,—,true/false,false,não,—,não
-ENT-025 PaginaAplicacao,regioes,"regiões das perguntas da página (e, na página 1, a da assinatura) devolvidas pela localização, em coordenadas normalizadas da imagem, com a confiança (RN-052)",jsonb,não,—,JSON,—,NULL,não,—,não
+ENT-025 PaginaAplicacao,regioes,"regiões dos campos da página (e, na página 1, a da assinatura) devolvidas pela leitura da página inteira (DEC-216), em coordenadas normalizadas da imagem, com a confiança (RN-052)",jsonb,não,—,JSON,—,NULL,não,—,não
 ENT-025 PaginaAplicacao,criado_em,data do upload,timestamp,sim,—,ISO 8601 UTC,—,now(),não,—,não
 ENT-025 PaginaAplicacao,expurgada_em,data do expurgo físico,timestamp,não,—,ISO 8601 UTC,—,NULL,não,—,não
 ENT-026 Exportacao,id,identificador da exportação,uuid,sim,36,UUID v4,—,—,sim,—,não

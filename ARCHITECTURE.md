@@ -71,8 +71,8 @@ packages/contratos <── apps/api, apps/web (tipos)
 
 ## 6. Fluxos críticos (detalhe no PLANO §4)
 
-1. Upload → validação, antimalware, remoção de metadados → QR ou versão escolhida no envio (DEC-169) → estado inicial (FL-001).
-2. Worker → reserva de orçamento (DEC-051) → localização da página inteira (DEC-174) → recortes das regiões → ReadEngine → estado dos itens (FL-002).
+1. Upload com projeto e formulário escolhidos (DEC-215) → validação, antimalware, remoção de metadados → QR `PPPPP.FFF.VV.X/Y` (divergente → ERR-045) ou versão escolhida no envio (DEC-169, DEC-218) → estado inicial (FL-001).
+2. Worker → reserva de orçamento (DEC-051) → identificação da página inteira → leitura da página inteira com o gabarito (DEC-216, DEC-220) → estado dos itens (FL-002).
 3. Revisão sem reserva, com If-Match (DEC-112) → conclusão com vínculo por CPF ou, no papel antigo sem CPF, pelo nome (DEC-176).
 4. Eliminação LGPD → anonimização, expurgo e lista de eliminações reaplicada após restore.
 5. Login com senha local → sessão plena, sem MFA (DEC-108).
