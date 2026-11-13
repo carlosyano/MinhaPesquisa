@@ -9,7 +9,7 @@ import { jpeg } from '../../support/arquivos.js';
 import { chaveIdempotencia, type Cliente } from '../../support/cliente.js';
 import { entrar, MINUTO, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import { arquivo, formularioPublicado, projetoCriado, type FormularioPublicado } from '../../support/formularios.js';
-import { criarHarness, type Harness, type RegiaoNormalizada } from '../../support/harness.js';
+import { criarHarness, type Harness } from '../../support/harness.js';
 import { abrir, consultar, item, prepararCotacao, type ItemRevisao } from '../../support/leitura.js';
 import {
   conteudoCondicoes,
