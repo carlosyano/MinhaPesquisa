@@ -649,9 +649,10 @@ paths:
         A conferência com o QR considera só as folhas mantidas (sem `descartar`), e só conta o QR no
         formato do MinhaPesquisa (DEC-187). Data e local gravados no envio são aplicados ou apagados
         na hora, porque a identificação conta como concluída (DEC-182, DEC-185, DEC-186).
-        Continua inválido → 400 ERR-004 ou ERR-039. Versão de outro tenant, de outro projeto ou
+        Continua inválido → 400 ERR-004 ou ERR-039; em aplicação antiga sem formulário, com versão válida
+        do projeto e páginas incompletas, o 400 ERR-004 grava o `formulario_id` da versão, uma única vez, e nada mais (DEC-229). Versão de outro tenant, de outro projeto ou
         inexistente → 400 ERR-039, auditado (DEC-100). Próximo estado conforme FL-001.
-      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, CA-057, DEC-100, DEC-171, DEC-180, DEC-184, DEC-185, DEC-186, DEC-187, RF-015, DEC-221, DEC-223, DEC-226]
+      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, CA-057, DEC-100, DEC-171, DEC-180, DEC-184, DEC-185, DEC-186, DEC-187, RF-015, DEC-221, DEC-223, DEC-226, DEC-229]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -687,11 +688,13 @@ paths:
         Corrige página faltante: mesmas validações do upload (ERR-029, RN-040, DEC-042) e
         reavaliação da tabela de criação da FL-001. Permitido também em projeto arquivado (DEC-098).
         Folha com QR legível de outro projeto ou formulário → 409 ERR-045, nada é gravado (DEC-222).
-        `versao_id` (do formulário da aplicação; de outro → ERR-039, DEC-221) substitui a escolhida no envio (DEC-169, DEC-180), mas versão de papel antigo não vale
+        Aplicação antiga sem formulário → 409 ERR-018 até o identifyApplication definir o formulário (DEC-226).
+        `versao_id` (do formulário da aplicação; de outro → 400 ERR-039, nada gravado, DEC-221, DEC-225; as outras
+        causas de ERR-039 → 200, folhas gravadas e aviso, DEC-230) substitui a escolhida no envio (DEC-169, DEC-180), mas versão de papel antigo não vale
         com folha de QR legível (DEC-184); `data_aplicacao` e `local_aplicacao`, quando vierem, substituem
         os gravados no envio, só o que vier, e são aplicados ou apagados ao fim da identificação (DEC-182,
         DEC-185, DEC-186).
-      x-trace: [RF-006, RF-013, CA-013, CA-040, CA-057, RN-040, DEC-098, DEC-169, DEC-180, DEC-182, DEC-184, DEC-185, DEC-186, RF-014, CA-060, DEC-198, RF-015, CA-061, DEC-221, DEC-222, DEC-225, DEC-226]
+      x-trace: [RF-006, RF-013, CA-013, CA-040, CA-057, RN-040, DEC-098, DEC-169, DEC-180, DEC-182, DEC-184, DEC-185, DEC-186, RF-014, CA-060, DEC-198, RF-015, CA-061, DEC-221, DEC-222, DEC-225, DEC-226, DEC-230]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1699,7 +1702,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-029', title: Arquivo recusado, status: 400, detail: 'Arquivo recusado: [motivo].', errorCode: ERR-029, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, motivo: excede o limite de 20 MB, posicao: 2 }
     FileOrQrRejected:
-      description: 'Recusa do pedido, sem gravar nada e sem mudar a aplicação: arquivo recusado (ERR-029, com motivo e `posicao`); data da aplicação futura (ERR-001, DEC-182); no addApplicationPages, `versao_id` inexistente, não publicada, de outro tenant, projeto ou formulário, ou de papel antigo em aplicação com folha de QR legível (ERR-039, DEC-100, DEC-184, DEC-221, DEC-225); no attachSignaturePage, QR legível de página diferente de 1 (ERR-004) ou de outra versão do formulário ou com total de páginas diferente (ERR-039, DEC-227)'
+      description: 'Recusa do pedido, sem gravar nada e sem mudar a aplicação: arquivo recusado (ERR-029, com motivo e `posicao`); no addApplicationPages, `data_aplicacao` futura (ERR-001, DEC-182) e `versao_id` de outro formulário (ERR-039, DEC-221, DEC-225; as outras causas de ERR-039 voltam 200 com aviso, DEC-230); no attachSignaturePage, QR legível de página diferente de 1 (ERR-004) ou de outra versão do formulário ou com total de páginas diferente (ERR-039, DEC-227)'
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:

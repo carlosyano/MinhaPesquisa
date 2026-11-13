@@ -48,6 +48,7 @@ minhapesquisa/
 │   └── contratos/           # Tipos gerados de contracts/openapi.yaml
 ├── infra/                   # Scripts locais: instalação, redefinição de senha e backup (IMP-005)
 ├── contracts/openapi.yaml   # Contrato (fonte de verdade)
+├── contracts/oasdiff-erros-aceitos.txt  # Quebras de contrato aceitas no CI (PLANO DEC-228)
 ├── docs/spec/               # REQ e Bloco P
 ├── docs/architecture/       # PLANO
 ├── registros/               # CSVs gerados + controle de mudanças
