@@ -84,8 +84,8 @@ ENT-009 Respondente,criado_em,data de criação,timestamp,sim,—,ISO 8601 UTC,�
 ENT-010 Aplicacao,id,identificador da aplicação,uuid,sim,36,UUID v4,—,—,sim,—,não
 ENT-010 Aplicacao,tenant_id,tenant da aplicação,uuid,sim,36,UUID v4,—,—,não,Tenant.id,não
 ENT-010 Aplicacao,projeto_id,projeto da aplicação,uuid,sim,36,UUID v4,—,—,não,Projeto.id,não
-ENT-010 Aplicacao,versao_id,"versão do formulário: a do QR legível ou, sem QR legível, a escolhida no envio ou no `identifyApplication` (DEC-169, DEC-180); pode ficar NULL só em identificacao_pendente",uuid,não,36,UUID v4,—,NULL,não,Versao.id,não
-ENT-010 Aplicacao,formulario_id,"formulário escolhido no envio, fixo na aplicação (DEC-215, DEC-221); a `versao_id`, quando existe, é dele; nulo só em aplicação anterior à v2.9 sem versão ou com versão de outro projeto (DEC-223, DEC-231)",uuid,"sim, exceto DEC-223",36,UUID v4,—,—,não,Formulario.id,não
+ENT-010 Aplicacao,versao_id,"versão do formulário: a do QR legível ou, sem QR legível, a escolhida no envio ou no `identifyApplication` (DEC-169, DEC-180); pode ficar NULL só em identificacao_pendente (ou em descartada, na aplicação antiga, DEC-231)",uuid,não,36,UUID v4,—,NULL,não,Versao.id,não
+ENT-010 Aplicacao,formulario_id,"formulário escolhido no envio, fixo na aplicação (DEC-215, DEC-221); a `versao_id`, quando existe, é dele; nulo só em aplicação anterior à v2.9 sem versão, em `identificacao_pendente` ou `descartada` (DEC-223, DEC-231, DEC-234)",uuid,"sim, exceto DEC-223",36,UUID v4,—,—,não,Formulario.id,não
 ENT-010 Aplicacao,origem_qr,a versão veio do QR (true) ou da escolha da usuária no envio ou no `identifyApplication` (false) (DEC-169); continua true quando a versão informada é a do QR (DEC-180),boolean,sim,—,—,true/false,true,não,—,não
 ENT-010 Aplicacao,respondente_id,respondente (só na conclusão),uuid,não,36,UUID v4,—,NULL,não,Respondente.id,pessoal (indireto)
 ENT-010 Aplicacao,data_aplicacao,"data da aplicação (obrigatória em sem_assinatura e concluida); no papel antigo, pode vir do envio, guardada até a localização confirmar a versão e as páginas (DEC-182, DEC-185, DEC-186)",date,não,—,YYYY-MM-DD,não futura,NULL,não,—,pessoal

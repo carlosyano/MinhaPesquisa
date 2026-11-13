@@ -599,7 +599,7 @@ paths:
         motivo; projeto arquivado, ou `formulario_id` ausente ou de outro projeto → 400 ERR-001
         (CA-027, DEC-215). Remove metadados (RN-040) e valida o QR `PPPPP.FFF.VV.X/Y` (DEC-218): QR
         legível de projeto ou formulário diferente do escolhido → 409 ERR-045, nada é gravado
-        (DEC-215, CA-061); o QR `MP1.` anterior à 0.9.0 conta como ausente. Sem QR legível, vale a `versao_id` escolhida (DEC-169), e a página de cada folha vem
+        (DEC-215, CA-061); o QR `MP1.` anterior à 0.9.0 conta como ausente. Sem QR legível, vale a `versao_id` escolhida (DEC-169), se válida; a inválida ou de outro tenant não é gravada e volta o aviso ERR-039 (DEC-232, DEC-233), e a página de cada folha vem
         da identificação pela IA (RN-052, DEC-171); a leitura é da página inteira (DEC-216). O estado inicial segue a tabela de criação da
         FL-001; o campo `aviso` traz ERR-004, ERR-039 ou ERR-003 quando aplicável (CA-004,
         CA-039, CA-030, CA-052). Com QR legível, a versão é a do QR em todas as folhas (DEC-180).
@@ -690,7 +690,7 @@ paths:
         Folha com QR legível de outro projeto ou formulário → 409 ERR-045, nada é gravado (DEC-222).
         Aplicação antiga sem formulário → 409 ERR-018 até o identifyApplication definir o formulário (DEC-226).
         `versao_id` (do formulário da aplicação; de outro → 400 ERR-039, nada gravado, DEC-221, DEC-225; as outras
-        causas de ERR-039 → 200, folhas gravadas e aviso, DEC-230) substitui a escolhida no envio (DEC-169, DEC-180), mas versão de papel antigo não vale
+        causas de ERR-039 → 200, folhas gravadas e aviso, DEC-230; a versão inválida não é gravada, DEC-232; a de outro tenant vale como inexistente e é auditada, DEC-233) substitui a escolhida no envio (DEC-169, DEC-180), mas versão de papel antigo não vale
         com folha de QR legível (DEC-184); `data_aplicacao` e `local_aplicacao`, quando vierem, substituem
         os gravados no envio, só o que vier, e são aplicados ou apagados ao fim da identificação (DEC-182,
         DEC-185, DEC-186).
@@ -2063,7 +2063,7 @@ components:
           maxItems: 50
           items: { type: string, format: binary }
           description: JPEG/PNG/PDF, até 20 MB e 50 páginas por arquivo; QR legível de outro projeto ou formulário → 409 ERR-045 (DEC-222)
-        versao_id: { type: string, format: uuid, description: 'Versão publicada do formulário da aplicação; substitui a escolhida no envio (DEC-169, DEC-180); de outro formulário → ERR-039 (DEC-221)' }
+        versao_id: { type: string, format: uuid, description: 'Versão publicada do formulário da aplicação; substitui a escolhida no envio (DEC-169, DEC-180); de outro formulário → 400 ERR-039, nada gravado (DEC-221, DEC-225); inexistente, não publicada, de outro tenant ou projeto → 200 com aviso ERR-039 e a versão não é gravada (DEC-230, DEC-232, DEC-233)' }
         data_aplicacao: { type: string, format: date, description: 'Papel antigo: substitui a gravada no envio (DEC-182, DEC-185); futura → 400 ERR-001' }
         local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: substitui o gravado no envio (DEC-182, DEC-185)' }
 
@@ -2126,6 +2126,7 @@ components:
         estado: { $ref: '#/components/schemas/ApplicationState' }
         assinatura: { type: string, enum: [presente, ausente, nao_conferida] }
         aviso:
+          description: 'Aviso da identificação ou da leitura: ERR-003, ERR-004, ERR-006, ERR-039 (inclusive versão inválida não gravada no uploadImages e no addApplicationPages, DEC-230, DEC-232) ou ERR-018'
           allOf:
             - $ref: '#/components/schemas/ErrorCode'
           nullable: true
