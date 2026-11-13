@@ -13,25 +13,24 @@
 //   MP_TEST_PG_IMAGE      imagem do contêiner (padrão postgres:17-alpine)
 
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { aplicarMigracoes, criarPapeis } from '@minhapesquisa/db';
+import { aplicarMigracoes, criarPapeis, reverterUltima } from '@minhapesquisa/db';
 import {
   dimensoes,
   ErroLeitura,
-  MAX_COMPLEMENTO,
-  validarLocalizacao,
-  type CampoSchema,
-  type EntradaLocalizacao,
-  type Localizador,
-  type PerguntaLocalizar,
+  TOKENS_POR_CAMPO,
+  TOKENS_POR_COMPLEMENTO,
+  validarIdentificacao,
+  validarSaida,
+  type GabaritoPagina,
+  type PerguntasPorPagina,
   type ReadEngine,
-  type RegiaoPergunta,
   type TipoFalha,
 } from '@minhapesquisa/motor-leitura';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { criarApi } from './app.js';
-import type { Config, ContextoLocalizacao } from './config.js';
+import type { Config, ContextoIdentificacao } from './config.js';
 import { linha, linhas, sql } from './infra/banco.js';
 import { AntimalwareEicar } from './infra/antimalware.js';
 import { ArmazenamentoEmMemoria } from './infra/armazenamento.js';
@@ -72,42 +71,66 @@ async function prepararBanco(): Promise<{ superUrl: string; parar: () => Promise
   return { superUrl: conteiner.getConnectionUri(), parar: async () => void (await conteiner.stop()) };
 }
 
+type Regiao = { x: number; y: number; largura: number; altura: number };
 type Leitura = {
   valor: string | null;
   confianca: number;
-  regiao?: { x: number; y: number; largura: number; altura: number };
+  /** Ausente = a região padrão do campo; `null` = o campo volta sem região (DEC-177, DEC-216). */
+  regiao?: Regiao | null;
   /** Complemento por código de opção (DEC-203 (3)): ausente = em branco (0,99); null = fora da resposta. */
   complementos?: Record<string, { valor: string | null; confianca: number } | null>;
 };
 type LeituraSimulada = Leitura | { falha: { tipo: TipoFalha; vezes: number }; depois?: Leitura };
 
+interface OpcoesMotor {
+  /** Região da assinatura que a leitura da página 1 devolve (padrão: a do `mapa_layout`); `null` = não achada. */
+  assinatura?: Regiao | null;
+  /** Campos a mais, fora do gabarito, que a leitura da página 1 devolve; o schema fechado os recusa. */
+  camposExtras?: Record<string, Leitura>;
+}
+
 interface ChamadaMotor {
   campos: string[];
   pagina: number;
+  procurar_assinatura: boolean;
   largura: number;
   altura: number;
+  gabarito: string;
   schema: string;
+  maxTokens: number;
   resultado: 'ok' | TipoFalha;
   em: Date;
 }
 
+/** Região da assinatura quando a versão não tem mapa (papel antigo): a faixa de baixo da folha. */
+const ASSINATURA_PADRAO: Regiao = { x: 0.05, y: 0.88, largura: 0.9, altura: 0.08 };
+
+/** Regiões padrão da página (campo → região) e a da assinatura, do mapa da versão ou em faixas iguais. */
+type Padrao = (aplicacaoId: string, pagina: number) => Promise<{ regioes: Map<string, Regiao>; assinatura: Regiao }>;
+
 /**
  * Motor simulado (DEC-123): devolve o que o teste programou para cada campo e registra a chamada
  * como o motor real a receberia. Um campo com `falha` faz falhar a chamada que o contém nas
- * primeiras `vezes` tentativas. Devolve também o complemento das opções com complemento do campo
- * e aplica o schema fechado como o adaptador real: complemento acima de 2000 caracteres faz a
- * chamada falhar como `malformada` (DEC-203 (3)).
+ * primeiras `vezes` tentativas. A resposta passa pelo mesmo `validarSaida` do adaptador, de modo
+ * que um campo a mais, uma região fora de 0..1 ou um complemento acima de 2000 caracteres é falha
+ * `malformada`, como seria com o provedor (DEC-203 (3), DEC-220 (4)).
  */
 class MotorSimulado {
   private readonly roteiros = new Map<string, Record<string, LeituraSimulada>>();
+  private readonly opcoes = new Map<string, OpcoesMotor>();
   private readonly tentativas = new Map<string, number>();
   private readonly registro = new Map<string, ChamadaMotor[]>();
   private custo = { estimadoUsd: 0, realUsd: 0 };
 
-  constructor(private readonly agora: () => Date) {}
+  constructor(
+    private readonly agora: () => Date,
+    private readonly padrao: Padrao,
+  ) {}
 
-  programar(aplicacaoId: string, roteiro: Record<string, LeituraSimulada>): void {
+  programar(aplicacaoId: string, roteiro: Record<string, LeituraSimulada>, opcoes?: OpcoesMotor): void {
     this.roteiros.set(aplicacaoId, roteiro);
+    if (opcoes) this.opcoes.set(aplicacaoId, opcoes);
+    else this.opcoes.delete(aplicacaoId);
   }
 
   definirCusto(c: { estimadoUsd: number; realUsd: number }): void {
@@ -118,13 +141,14 @@ class MotorSimulado {
     return [...(this.registro.get(aplicacaoId) ?? [])];
   }
 
-  /** `contexto.campos` traduz as chaves opacas do schema (c1, c2…) para as chaves do roteiro. */
-  para(contexto: { aplicacaoId: string; pagina: number; campos: string[] }): ReadEngine {
+  /** `contexto.campos` traduz as chaves opacas do gabarito (c1, c2…) para as chaves do roteiro. */
+  para(contexto: { aplicacaoId: string; pagina: number; campos: string[] }): Pick<ReadEngine, 'estimarCustoUsd' | 'lerPagina'> {
     return {
       estimarCustoUsd: () => this.custo.estimadoUsd,
-      lerRecorte: async (img: Buffer, schema: CampoSchema) => {
+      lerPagina: async (img: Buffer, gabarito: GabaritoPagina) => {
         const roteiro = this.roteiros.get(contexto.aplicacaoId) ?? {};
-        const campos = schema.campos.map((c, k) => contexto.campos[k] ?? c.chave);
+        const opcoes = this.opcoes.get(contexto.aplicacaoId) ?? {};
+        const campos = gabarito.campos.map((c, k) => contexto.campos[k] ?? c.chave);
         let falha: TipoFalha | undefined;
         const lidoDe = (codigo: string): Leitura => {
           const l = roteiro[codigo];
@@ -137,49 +161,68 @@ class MotorSimulado {
           const l = roteiro[c];
           if (!falha && l && 'falha' in l && n <= l.falha.vezes) falha = l.falha.tipo;
         }
-        if (!falha && campos.some((c) => Object.values(lidoDe(c).complementos ?? {}).some((x) => (x?.valor?.length ?? 0) > MAX_COMPLEMENTO))) falha = 'malformada';
         const { largura, altura } = dimensoes(img);
-        const chamada: ChamadaMotor = { campos, pagina: contexto.pagina, largura, altura, schema: JSON.stringify(schema), resultado: falha ?? 'ok', em: this.agora() };
-        this.registro.set(contexto.aplicacaoId, [...(this.registro.get(contexto.aplicacaoId) ?? []), chamada]);
-        if (falha) throw new ErroLeitura(falha);
-        return {
-          custoUsd: this.custo.realUsd,
-          leituras: campos.map((codigo, k) => {
-            const campo = schema.campos[k];
-            const lido = lidoDe(codigo);
-            const complementos: Record<string, { valor: string | null; confianca: number }> = {};
-            for (const o of campo.complementos ?? []) {
-              const x = lido.complementos?.[o];
-              if (x !== null) complementos[o] = x ?? { valor: null, confianca: 0.99 };
-            }
-            return {
-              chave: campo.chave,
-              valor: lido.valor,
-              confianca: lido.confianca,
-              regiao: lido.regiao ?? { x: 0, y: 0, largura: 1, altura: 1 },
-              ...(campo.complementos?.length ? { complementos } : {}),
-            };
-          }),
+        const complementos = gabarito.campos.reduce((t, c) => t + (c.complementos?.length ?? 0), 0);
+        const chamada: ChamadaMotor = {
+          campos,
+          pagina: contexto.pagina,
+          procurar_assinatura: gabarito.procurar_assinatura,
+          largura,
+          altura,
+          gabarito: JSON.stringify(gabarito),
+          schema: JSON.stringify({ campos: gabarito.campos }),
+          maxTokens: TOKENS_POR_CAMPO * gabarito.campos.length + TOKENS_POR_COMPLEMENTO * complementos,
+          resultado: falha ?? 'ok',
+          em: this.agora(),
         };
+        const registrar = (resultado: ChamadaMotor['resultado']) =>
+          this.registro.set(contexto.aplicacaoId, [...(this.registro.get(contexto.aplicacaoId) ?? []), { ...chamada, resultado }]);
+        if (falha) {
+          registrar(falha);
+          throw new ErroLeitura(falha);
+        }
+
+        const padrao = await this.padrao(contexto.aplicacaoId, contexto.pagina);
+        const bruto = {
+          campos: [
+            ...gabarito.campos.map((campo, k) => {
+              const lido = lidoDe(campos[k]);
+              const comps: { opcao: string; valor: string | null; confianca: number }[] = [];
+              for (const o of campo.complementos ?? []) {
+                const x = lido.complementos?.[o];
+                if (x !== null) comps.push({ opcao: o, ...(x ?? { valor: null, confianca: 0.99 }) });
+              }
+              return {
+                chave: campo.chave,
+                valor: lido.valor,
+                confianca: lido.confianca,
+                regiao: lido.regiao !== undefined ? lido.regiao : (padrao.regioes.get(campos[k].split('.')[0]) ?? null),
+                ...(campo.complementos?.length ? { complementos: comps } : {}),
+              };
+            }),
+            ...(contexto.pagina === 1 ? Object.entries(opcoes.camposExtras ?? {}).map(([chave, l]) => ({ chave, valor: l.valor, confianca: l.confianca, regiao: l.regiao ?? null })) : []),
+          ],
+          ...(gabarito.procurar_assinatura ? { regiao_assinatura: opcoes.assinatura !== undefined ? opcoes.assinatura : padrao.assinatura } : {}),
+        };
+        try {
+          const r = validarSaida(bruto, gabarito);
+          registrar('ok');
+          return { ...r, custoUsd: this.custo.realUsd };
+        } catch (e) {
+          registrar('malformada');
+          throw e;
+        }
       },
     };
   }
 }
 
-type Regiao = { x: number; y: number; largura: number; altura: number };
-type LocalizacaoOk = {
-  pagina?: number | null;
-  confianca?: number;
-  regioes?: Record<string, Regiao | null>;
-  regiao_assinatura?: Regiao | null;
-  extra?: Record<string, unknown>;
-};
-type LocalizacaoSimulada = LocalizacaoOk | { falha: { tipo: TipoFalha; vezes: number }; depois?: LocalizacaoOk };
+type IdentificacaoOk = { pagina?: number | null; confianca?: number; extra?: Record<string, unknown> };
+type IdentificacaoSimulada = IdentificacaoOk | { falha: { tipo: TipoFalha; vezes: number }; depois?: IdentificacaoOk };
 
-interface ChamadaLocalizador {
+interface ChamadaIdentificador {
   imagem_id: string;
-  pagina_informada: number | null;
-  perguntas: Record<number, string[]>;
+  perguntas: PerguntasPorPagina;
   entrada: string;
   largura: number;
   altura: number;
@@ -187,24 +230,21 @@ interface ChamadaLocalizador {
   em: Date;
 }
 
-/** Região da assinatura quando a versão não tem mapa (papel antigo): a faixa de baixo da folha. */
-const ASSINATURA_PADRAO: Regiao = { x: 0.05, y: 0.88, largura: 0.9, altura: 0.08 };
-
 /**
- * Localizador simulado (DEC-174): devolve, por folha, o padrão da DEC-174 (6) com o que o teste
- * programou por cima e registra a chamada como o localizador real a receberia. A resposta passa pelo
- * mesmo `validarLocalizacao` do adaptador, de modo que um campo a mais ou um código fora da versão
- * é falha `malformada`, como seria com o provedor.
+ * Identificador simulado (DEC-216): devolve, por folha, a página do QR legível ou a posição da folha
+ * (confiança 0,99) com o que o teste programou por cima, e registra a chamada como o identificador
+ * real a receberia. A resposta passa pelo mesmo `validarIdentificacao` do adaptador, de modo que um
+ * campo a mais ou uma página fora da versão é falha `malformada`.
  */
-class LocalizadorSimulado {
-  private readonly roteiros = new Map<string, Record<string, LocalizacaoSimulada>>();
+class IdentificadorSimulado {
+  private readonly roteiros = new Map<string, Record<string, IdentificacaoSimulada>>();
   private readonly tentativas = new Map<string, number>();
-  private readonly registro = new Map<string, ChamadaLocalizador[]>();
+  private readonly registro = new Map<string, ChamadaIdentificador[]>();
   private custo = { estimadoUsd: 0, realUsd: 0 };
 
   constructor(private readonly agora: () => Date) {}
 
-  programar(aplicacaoId: string, roteiro: Record<string, LocalizacaoSimulada>): void {
+  programar(aplicacaoId: string, roteiro: Record<string, IdentificacaoSimulada>): void {
     this.roteiros.set(aplicacaoId, roteiro);
   }
 
@@ -212,80 +252,34 @@ class LocalizadorSimulado {
     this.custo = { ...c };
   }
 
-  chamadas(aplicacaoId: string): ChamadaLocalizador[] {
+  chamadas(aplicacaoId: string): ChamadaIdentificador[] {
     return [...(this.registro.get(aplicacaoId) ?? [])];
   }
 
-  /** Regiões padrão da página: as do mapa da versão ou, sem mapa, uma faixa horizontal por pergunta. */
-  private padrao(ctx: ContextoLocalizacao, perguntas: PerguntaLocalizar[]): RegiaoPergunta[] {
-    const linhasDe = (p: PerguntaLocalizar) => (p.linhas?.length ? p.linhas : [null]);
-    return perguntas.flatMap((p, k) => {
-      // Os blocos do mapa são contíguos; como um localizador real, que aponta a área da pergunta e não
-      // o bloco inteiro, o padrão recua 2,5% em cima e embaixo, mais que a folga de cada lado, para
-      // que perguntas vizinhas não se sobreponham com a folga (DEC-174 (5)). O mesmo vale nas faixas.
-      const MARGEM = 0.025;
-      const doMapa = ctx.mapa?.find((m) => m.codigo === p.codigo)?.regiao;
-      const faixa = 1 / perguntas.length;
-      const bloco: Regiao = doMapa ?? { x: 0.05, y: k * faixa, largura: 0.9, altura: faixa };
-      const r: Regiao = { ...bloco, y: bloco.y + MARGEM, altura: Math.max(0.001, bloco.altura - 2 * MARGEM) };
-      return linhasDe(p).map((linha) => ({ codigo: p.codigo, linha, ...r }));
-    });
-  }
-
-  para(ctx: ContextoLocalizacao): Localizador {
+  para(ctx: ContextoIdentificacao): Pick<ReadEngine, 'estimarCustoIdentificacaoUsd' | 'identificarPagina'> {
     return {
-      estimarCustoLocalizacaoUsd: () => this.custo.estimadoUsd,
-      localizar: async (img: Buffer, entrada: EntradaLocalizacao) => {
+      estimarCustoIdentificacaoUsd: () => this.custo.estimadoUsd,
+      identificarPagina: async (img: Buffer, perguntas: PerguntasPorPagina) => {
         const chave = `${ctx.aplicacaoId}|${ctx.imagemId}`;
         const n = (this.tentativas.get(chave) ?? 0) + 1;
         this.tentativas.set(chave, n);
         const prog = this.roteiros.get(ctx.aplicacaoId)?.[ctx.imagemId];
         const falha = prog && 'falha' in prog && n <= prog.falha.vezes ? prog.falha.tipo : undefined;
-        const ok: LocalizacaoOk = !prog ? {} : 'falha' in prog ? (prog.depois ?? {}) : prog;
+        const ok: IdentificacaoOk = !prog ? {} : 'falha' in prog ? (prog.depois ?? {}) : prog;
         const { largura, altura } = dimensoes(img);
-        const informada = entrada.pagina_informada ?? null;
-        const chamada: ChamadaLocalizador = {
-          imagem_id: ctx.imagemId,
-          pagina_informada: informada,
-          perguntas: Object.fromEntries(entrada.paginas.map((p) => [p.pagina, p.perguntas.flatMap((q) => (q.linhas?.length ? q.linhas.map((l) => `${q.codigo}.${l}`) : [q.codigo]))])),
-          entrada: JSON.stringify(entrada),
-          largura,
-          altura,
-          resultado: falha ?? 'ok',
-          em: this.agora(),
-        };
-        const registrar = (resultado: ChamadaLocalizador['resultado']) =>
+        const chamada: ChamadaIdentificador = { imagem_id: ctx.imagemId, perguntas, entrada: JSON.stringify(perguntas), largura, altura, resultado: falha ?? 'ok', em: this.agora() };
+        const registrar = (resultado: ChamadaIdentificador['resultado']) =>
           this.registro.set(ctx.aplicacaoId, [...(this.registro.get(ctx.aplicacaoId) ?? []), { ...chamada, resultado }]);
         if (falha) {
           registrar(falha);
           throw new ErroLeitura(falha);
         }
-
-        const total = entrada.paginas.length ? Math.max(...entrada.paginas.map((p) => p.pagina)) : 0;
-        const sugerida = informada ?? ctx.paginaQr ?? ctx.posicao;
-        const pagina = informada !== null ? informada : ok.pagina !== undefined ? ok.pagina : sugerida >= 1 && sugerida <= total ? sugerida : null;
-        const daPagina = entrada.paginas.find((p) => p.pagina === pagina)?.perguntas ?? [];
-        let regioes = this.padrao(ctx, daPagina);
-        for (const [k, r] of Object.entries(ok.regioes ?? {})) {
-          const [codigo, linha] = k.split('.') as [string, string | undefined];
-          const alvo = (x: RegiaoPergunta) => x.codigo === codigo && (linha === undefined || x.linha === linha);
-          if (r === null) {
-            regioes = regioes.filter((x) => !alvo(x));
-            continue;
-          }
-          const existentes = regioes.filter(alvo);
-          if (existentes.length) regioes = regioes.map((x) => (alvo(x) ? { ...x, ...r } : x));
-          else regioes.push({ codigo, linha: linha ?? null, ...r });
-        }
-        const assinatura = ok.regiao_assinatura !== undefined ? ok.regiao_assinatura : pagina === 1 ? (ctx.assinatura ?? ASSINATURA_PADRAO) : null;
-        const bruto = {
-          ...(informada === null ? { pagina, confianca: ok.confianca ?? 0.99 } : {}),
-          regioes,
-          regiao_assinatura: assinatura,
-          ...(ok.extra ?? {}),
-        };
+        const total = Math.max(0, ...Object.keys(perguntas).map(Number));
+        const sugerida = ctx.paginaQr ?? ctx.posicao;
+        const pagina = ok.pagina !== undefined ? ok.pagina : sugerida >= 1 && sugerida <= total ? sugerida : null;
+        const bruto = { pagina, confianca: ok.confianca ?? 0.99, ...(ok.extra ?? {}) };
         try {
-          const r = validarLocalizacao(bruto, entrada);
+          const r = validarIdentificacao(bruto, perguntas);
           registrar('ok');
           return { ...r, custoUsd: this.custo.realUsd };
         } catch (e) {
@@ -375,8 +369,33 @@ export async function criarHarness() {
   const relogio = { agora: () => new Date(agora) };
   const armazenamento = new ArmazenamentoEmMemoria(relogio.agora);
   await armazenamento.iniciar();
-  const motor = new MotorSimulado(relogio.agora);
-  const localizador = new LocalizadorSimulado(relogio.agora);
+  // Regiões padrão da leitura: as do `mapa_layout` da versão (com 2,5% de recuo em cima e embaixo, como
+  // um provedor que aponta a área da pergunta e não o bloco inteiro) ou, no papel antigo, uma faixa
+  // horizontal igual por pergunta, na ordem da página.
+  const ligacao: { banco?: { manutencao: <T>(fn: (tx: import('./infra/banco.js').Executor) => Promise<T>) => Promise<T> } } = {};
+  const padrao: Padrao = async (aplicacaoId, pagina) => {
+    const MARGEM = 0.025;
+    const r = await ligacao.banco!.manutencao(async (tx) => {
+      const v = await linha<{ mapa_layout: { perguntas: { codigo: string; pagina: number; regiao: Regiao }[]; assinatura?: { regiao: Regiao } } | null; versao_id: string }>(
+        tx,
+        sql`SELECT v.mapa_layout, v.id AS versao_id FROM aplicacao a JOIN versao v ON v.id = a.versao_id WHERE a.id = ${aplicacaoId}`,
+      );
+      const codigos = v
+        ? await linhas<{ codigo: string }>(tx, sql`SELECT codigo FROM pergunta WHERE versao_id = ${v.versao_id} AND pagina = ${pagina} AND NOT nao_consta ORDER BY ordem`)
+        : [];
+      return { mapa: v?.mapa_layout ?? null, codigos: codigos.map((c) => c.codigo) };
+    });
+    const regioes = new Map<string, Regiao>();
+    r.codigos.forEach((codigo, k) => {
+      const doMapa = r.mapa?.perguntas.find((m) => m.codigo === codigo)?.regiao;
+      const faixa = 1 / r.codigos.length;
+      const bloco: Regiao = doMapa ?? { x: 0.05, y: k * faixa, largura: 0.9, altura: faixa };
+      regioes.set(codigo, { ...bloco, y: bloco.y + MARGEM, altura: Math.max(0.001, bloco.altura - 2 * MARGEM) });
+    });
+    return { regioes, assinatura: r.mapa?.assinatura?.regiao ?? ASSINATURA_PADRAO };
+  };
+  const motor = new MotorSimulado(relogio.agora, padrao);
+  const identificador = new IdentificadorSimulado(relogio.agora);
   const extrator = new ExtratorSimulado(relogio.agora);
   const logs: string[] = [];
   const config: Config = {
@@ -394,13 +413,14 @@ export async function criarHarness() {
     antimalware: new AntimalwareEicar(),
     gerarId: randomUUID,
     motorLeitura: (contexto) => motor.para(contexto),
-    localizador: (contexto) => localizador.para(contexto),
+    identificador: (contexto) => identificador.para(contexto),
     extratorEstrutura: (contexto) => extrator.para(contexto),
-    log: (l) => void logs.push(l),
+    log: (l) => { if (process.env.MP_TEST_LOG) console.error(l); logs.push(l); },
   };
   const api = await criarApi(config);
   config.origensPermitidas.push(api.url);
   const n = api.nucleo;
+  ligacao.banco = n.banco;
 
   const worker = new WorkerLeitura(n);
 
@@ -481,6 +501,48 @@ export async function criarHarness() {
         await n.banco.manutencao((tx) => tx.execute(sql`UPDATE pagina_aplicacao SET nome_arquivo = NULL WHERE aplicacao_id = ${aplicacaoId}`));
       },
 
+      /** Aplicação como as anteriores à v2.9: sem versão e sem formulário (DEC-223, CA-061 exemplos 14 e 15). */
+      async semFormulario(aplicacaoId: string) {
+        await n.banco.manutencao((tx) => tx.execute(sql`UPDATE aplicacao SET versao_id = NULL, formulario_id = NULL WHERE id = ${aplicacaoId}`));
+      },
+
+      /** O maior código possível gravado na base, para testar o limite sem criar milhares de registros (CA-063). */
+      async limiteDeCodigo(d: { tipo: 'projeto'; tenantId: string } | { tipo: 'formulario'; projetoId: string } | { tipo: 'versao'; formId: string }) {
+        await n.banco.manutencao((tx) =>
+          d.tipo === 'projeto'
+            ? tx.execute(sql`UPDATE projeto SET codigo = 99999 WHERE id = (SELECT id FROM projeto WHERE tenant_id = ${d.tenantId} ORDER BY codigo DESC LIMIT 1)`)
+            : d.tipo === 'formulario'
+              ? tx.execute(sql`UPDATE formulario SET codigo = 999 WHERE id = (SELECT id FROM formulario WHERE projeto_id = ${d.projetoId} ORDER BY codigo DESC LIMIT 1)`)
+              : tx.execute(sql`UPDATE versao SET numero = 99 WHERE id = (SELECT id FROM versao WHERE formulario_id = ${d.formId} ORDER BY numero DESC LIMIT 1)`),
+        );
+      },
+
+      /** Base como antes da migração 0011: desfaz a migração, grava projetos e formulários sem código e a refaz (CA-063). */
+      async baseSemCodigos(d: { tenantId: string; projetos: { nome: string; criadoEm: string; formularios?: { nome: string; criadoEm: string }[] }[] }) {
+        const su = new pg.Client({ connectionString: banco.superUrl });
+        await su.connect();
+        try {
+          const desfeita = await reverterUltima(su);
+          if (desfeita !== '0011_codigos_formulario_envio.sql') throw new Error(`a última migração é ${desfeita}, não a 0011`);
+          const saida: { projetoId: string; formularioIds: string[] }[] = [];
+          for (const p of d.projetos) {
+            const projetoId = n.id();
+            await su.query('INSERT INTO projeto (id, tenant_id, nome, criado_em) VALUES ($1, $2, $3, $4)', [projetoId, d.tenantId, p.nome, p.criadoEm]);
+            const formularioIds: string[] = [];
+            for (const f of p.formularios ?? []) {
+              const formId = n.id();
+              await su.query('INSERT INTO formulario (id, tenant_id, projeto_id, nome, criado_em) VALUES ($1, $2, $3, $4, $5)', [formId, d.tenantId, projetoId, f.nome, f.criadoEm]);
+              formularioIds.push(formId);
+            }
+            saida.push({ projetoId, formularioIds });
+          }
+          await aplicarMigracoes(su);
+          return saida;
+        } finally {
+          await su.end();
+        }
+      },
+
       /** Arquivo de onde sai a página da importação trocado por bytes que não são imagem (FL-004). */
       async corromperPaginaImportacao(importacaoId: string, numeroPagina: number) {
         const i = await n.banco.manutencao((tx) => linha<{ tenant_id: string }>(tx, sql`SELECT tenant_id FROM importacao_formulario WHERE id = ${importacaoId}`));
@@ -508,15 +570,15 @@ export async function criarHarness() {
     },
 
     motor: {
-      programar: (aplicacaoId: string, roteiro: Record<string, LeituraSimulada>) => motor.programar(aplicacaoId, roteiro),
+      programar: (aplicacaoId: string, roteiro: Record<string, LeituraSimulada>, opcoes?: OpcoesMotor) => motor.programar(aplicacaoId, roteiro, opcoes),
       custo: (c: { estimadoUsd: number; realUsd: number }) => motor.definirCusto(c),
       chamadas: async (aplicacaoId: string) => motor.chamadas(aplicacaoId),
     },
 
-    localizador: {
-      programar: (aplicacaoId: string, roteiro: Record<string, LocalizacaoSimulada>) => localizador.programar(aplicacaoId, roteiro),
-      custo: (c: { estimadoUsd: number; realUsd: number }) => localizador.definirCusto(c),
-      chamadas: async (aplicacaoId: string) => localizador.chamadas(aplicacaoId),
+    identificador: {
+      programar: (aplicacaoId: string, roteiro: Record<string, IdentificacaoSimulada>) => identificador.programar(aplicacaoId, roteiro),
+      custo: (c: { estimadoUsd: number; realUsd: number }) => identificador.definirCusto(c),
+      chamadas: async (aplicacaoId: string) => identificador.chamadas(aplicacaoId),
     },
 
     worker: {
@@ -624,6 +686,7 @@ export async function criarHarness() {
           const a = await linha<{
             estado: string;
             respondente_id: string | null;
+            formulario_id: string | null;
             versao_id: string | null;
             origem_qr: boolean;
             data_aplicacao: string | null;
@@ -632,7 +695,7 @@ export async function criarHarness() {
             motivo_reabertura: string | null;
           }>(
             tx,
-            sql`SELECT estado, respondente_id, versao_id, origem_qr, to_char(data_aplicacao, 'YYYY-MM-DD') AS data_aplicacao, local_aplicacao,
+            sql`SELECT estado, respondente_id, formulario_id, versao_id, origem_qr, to_char(data_aplicacao, 'YYYY-MM-DD') AS data_aplicacao, local_aplicacao,
                        motivo_descarte, motivo_reabertura
                   FROM aplicacao WHERE id = ${aplicacaoId}`,
           );
@@ -663,7 +726,7 @@ export async function criarHarness() {
             imagem_id: string;
             tipo: 'formulario' | 'assinatura';
             numero_pagina: number | null;
-            regioes: RegiaoPergunta[] | null;
+            regioes: { codigo: string; linha: string | null; x: number; y: number; largura: number; altura: number }[] | null;
             ordem_envio: number;
             nome_arquivo: string | null;
           }>(

@@ -379,6 +379,7 @@ export interface LinhaAplicacao {
   tenant_id: string;
   projeto_id: string;
   versao_id: string | null;
+  formulario_id: string | null;
   estado: string;
   aviso: string | null;
   assinatura: string;
@@ -394,7 +395,7 @@ export interface LinhaAplicacao {
 }
 
 export const COLUNAS_APLICACAO = sql.raw(
-  `id, tenant_id, projeto_id, versao_id, estado, aviso, assinatura, versao, respondente_id, respondente_anterior_id,
+  `id, tenant_id, projeto_id, versao_id, formulario_id, estado, aviso, assinatura, versao, respondente_id, respondente_anterior_id,
    manter_cadastro, cadastro_versao, cpf_exibido_em, criada_em, origem_qr, paginas_informadas`,
 );
 
@@ -514,6 +515,7 @@ export async function corpoAplicacao(n: Nucleo, tx: Executor, a: LinhaAplicacao,
     id: a.id,
     projeto_id: a.projeto_id,
     versao_id: a.versao_id,
+    formulario_id: a.formulario_id,
     estado: a.estado,
     assinatura: a.assinatura,
     aviso: a.aviso,

@@ -108,7 +108,7 @@ export async function montarConfig(
   if (s.chaveApiAnthropic) {
     const motor = new AdaptadorClaude({ apiKey: s.chaveApiAnthropic, ...(local.ia ?? IA_PADRAO) });
     config.motorLeitura = () => motor;
-    config.localizador = () => motor;
+    config.identificador = () => motor;
     const extrator = new ExtratorClaude({ apiKey: s.chaveApiAnthropic, ...(local.ia ?? IA_PADRAO) });
     config.extratorEstrutura = () => extrator;
   }

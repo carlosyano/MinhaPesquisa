@@ -8,6 +8,8 @@ import { ehUuid } from './nucleo.js';
 
 export interface LinhaProjeto {
   id: string;
+  /** Código sequencial do projeto no tenant, de 1 a 99999 (DEC-217). */
+  codigo: number;
   nome: string;
   descricao: string | null;
   objetivo: string | null;
@@ -26,7 +28,7 @@ export const etag = (versao: number) => `"${versao}"`;
 
 /** Colunas de LinhaProjeto, com as datas do ciclo de coleta como YYYY-MM-DD (DEC-137). */
 export const COLUNAS_PROJETO = sql.raw(
-  `id, nome, descricao, objetivo, coordenador, to_char(coleta_inicio, 'YYYY-MM-DD') AS coleta_inicio,
+  `id, codigo, nome, descricao, objetivo, coordenador, to_char(coleta_inicio, 'YYYY-MM-DD') AS coleta_inicio,
    to_char(coleta_fim, 'YYYY-MM-DD') AS coleta_fim, status, criado_em, versao,
    to_char(padrao_data_aplicacao, 'YYYY-MM-DD') AS padrao_data_aplicacao, padrao_local_aplicacao`,
 );

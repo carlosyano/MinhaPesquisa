@@ -120,6 +120,8 @@ interface Ajustada {
 /** Medida da altura do bloco no PDF e base de cada página (DEC-143), do módulo de layout. */
 export interface Medida {
   altura(p: PerguntaEntrada): number;
+  /** Espaço vertical entre blocos (DEC-219). */
+  espaco: number;
   /** Topo da área das perguntas, igual em todas as páginas. */
   topo: number;
   limiteInferior(pagina: number): number;
@@ -237,7 +239,7 @@ export function montarVersao(paginas: readonly (readonly PerguntaLida[])[], medi
   // Passo 4 (com a medida da DEC-143): os 5 no início da página 1; as demais na ordem do original.
   let pagina = 1;
   let y = medida.topo;
-  for (const p of cinco) y -= medida.altura(p);
+  for (const p of cinco) y -= medida.altura(p) + medida.espaco;
   const usados = new Set([...CODIGOS_RESERVADOS, ...comuns.flatMap((p) => (p.campo ? [p.campo.codigo] : []))]);
   const perguntas: PerguntaEntrada[] = [...cinco];
   for (const a of comuns) {
@@ -251,7 +253,7 @@ export function montarVersao(paginas: readonly (readonly PerguntaLida[])[], medi
       pagina += 1;
       y = medida.topo;
     }
-    y -= altura;
+    y -= altura + medida.espaco;
     // Passo 2: códigos pela transformação T, com sufixo quando já usados (inclusive os reservados).
     if (!a.campo) base.codigo = semColisao(transformar(a.enunciado, true).toUpperCase() || `P${a.pagina}_${a.posicao}`, usados);
     perguntas.push({ ...base, pagina });

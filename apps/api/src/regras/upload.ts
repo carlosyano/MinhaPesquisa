@@ -1,5 +1,5 @@
 // Regras do upload (RF-006) como funções puras: validação de arquivo (DEC-029, DEC-042),
-// leitura do conteúdo do QR e tabela de criação da FL-001 (REQ v2.7, CHG-017).
+// leitura do conteúdo do QR e tabela de criação da FL-001 (REQ v2.9, CHG-019).
 
 export type TipoArquivo = 'jpeg' | 'png' | 'pdf';
 
@@ -21,18 +21,41 @@ export function tipoPorConteudo(b: Buffer): TipoArquivo | null {
   return null;
 }
 
-/** Conteúdo do QR impresso: "MP1.<código opaco da versão>.<página>" (CA-028, DEC-048). */
-export function conteudoQr(qrCodigo: string, pagina: number): string {
-  return `MP1.${qrCodigo}.${pagina}`;
+/** O que o QR `PPPPP.FFF.VV.X/Y` carrega (DEC-218): códigos do projeto e do formulário, versão e página sobre o total. */
+export interface QrLido {
+  projeto: number;
+  formulario: number;
+  versao: number;
+  pagina: number;
+  total: number;
 }
 
-// O formato é a estrutura `MP1.<26 letras ou dígitos>.<página>` (DEC-187): um código fora do base32
-// gerado é de versão inexistente (ERR-039), não de outro formato.
-const FORMATO_QR = /^MP1\.([A-Z0-9]{26})\.([1-9][0-9]{0,2})$/;
+const zeros = (n: number, largura: number) => String(n).padStart(largura, '0');
 
-export function lerConteudoQr(conteudo: string): { codigo: string; pagina: number } | null {
+/** Conteúdo do QR impresso: "PPPPP.FFF.VV.X/Y", com zeros à esquerda (CA-028, DEC-218). */
+export function conteudoQr(q: QrLido): string {
+  return `${zeros(q.projeto, 5)}.${zeros(q.formulario, 3)}.${zeros(q.versao, 2)}.${q.pagina}/${q.total}`;
+}
+
+// Só o que decodifica nesse formato, com 1 ≤ X ≤ Y, conta como QR legível; o `MP1.` impresso antes da
+// v2.9 e qualquer outro conteúdo contam como ausente (DEC-187, DEC-218).
+const FORMATO_QR = /^(\d{5})\.(\d{3})\.(\d{2})\.([1-9]\d{0,2})\/([1-9]\d{0,2})$/;
+
+export function lerConteudoQr(conteudo: string): QrLido | null {
   const m = FORMATO_QR.exec(conteudo);
-  return m ? { codigo: m[1], pagina: Number(m[2]) } : null;
+  if (!m) return null;
+  const [projeto, formulario, versao, pagina, total] = m.slice(1).map(Number);
+  if (projeto < 1 || formulario < 1 || versao < 1 || pagina > total) return null;
+  return { projeto, formulario, versao, pagina, total };
+}
+
+/** Códigos de projeto e de formulário da primeira folha cujo QR é de outro (ERR-045, DEC-215, DEC-224). */
+export function primeiroQrDivergente(paginas: readonly PaginaLida[], projeto: number, formulario: number): QrLido | null {
+  for (const p of paginas) {
+    const q = p.qr ? lerConteudoQr(p.qr) : null;
+    if (q && (q.projeto !== projeto || q.formulario !== formulario)) return q;
+  }
+  return null;
 }
 
 /** Página como lida no envio. `qr` null = sem QR legível no formato do MinhaPesquisa (DEC-187). */
@@ -40,10 +63,9 @@ export interface PaginaLida {
   qr: string | null;
 }
 
-/** Versão publicada do tenant a que um código de QR ou a escolha do envio se refere. */
+/** Versão publicada do formulário escolhido a que um QR ou a escolha do envio se refere. */
 export interface VersaoDoQr {
   versaoId: string;
-  projetoId: string;
   totalPaginas: number;
   papelAntigo: boolean;
 }
@@ -56,38 +78,40 @@ export type Criacao =
   | { estado: 'identificacao_pendente'; aviso: 'ERR-004' | 'ERR-039'; versaoId: string | null; origemQr: boolean };
 
 /**
- * Tabela de criação da FL-001 (REQ v2.7), na ordem: (1) QR legível de versão inválida → ERR-039;
- * (2) sem QR legível de versão válida e sem versão escolhida → ERR-004; (3) sem esse QR e versão
- * escolhida inválida → ERR-039; (4) versões diferentes, página de QR repetida ou além do total, ou
- * número de folhas diferente do total da versão → ERR-004; (6) em_leitura. A linha 5 (teto de custo)
- * é da cota (`iniciarLeitura`). Com QR legível válido, a versão do QR vale para todas as folhas
- * (DEC-180); a escolhida só vale sem ele, e a de papel antigo nunca com QR legível (DEC-184).
+ * Tabela de criação da FL-001 (REQ v2.9), depois da conferência do projeto e do formulário (ordem 0,
+ * ERR-045): (1) QR legível de versão inexistente, não publicada ou de papel antigo, ou com o total `Y`
+ * diferente do `total_paginas` → ERR-039; (2) sem QR legível de versão válida e sem versão escolhida →
+ * ERR-004; (3) sem esse QR e versão escolhida inválida → ERR-039; (4) versões diferentes, página de QR
+ * repetida, ou número de folhas diferente do total da versão → ERR-004; (6) em_leitura. A linha 5
+ * (teto de custo) é da cota (`iniciarLeitura`). Com QR legível válido, a versão do QR vale para todas
+ * as folhas (DEC-180); a escolhida só vale sem ele, e a de papel antigo nunca com QR legível (DEC-184).
+ * O `resolver` devolve a versão publicada do formulário escolhido com o número do QR.
  */
 export function classificarCriacao(
   paginas: readonly PaginaLida[],
-  projetoId: string,
-  resolver: (codigo: string) => VersaoDoQr | undefined,
+  resolver: (numeroVersao: number) => VersaoDoQr | undefined,
   escolhida: Escolhida = { informada: false },
 ): Criacao {
   const lidas = paginas.flatMap((p) => {
     const c = p.qr ? lerConteudoQr(p.qr) : null;
-    return c ? [{ versao: resolver(c.codigo), pagina: c.pagina }] : [];
+    return c ? [{ qr: c, versao: resolver(c.versao) }] : [];
   });
-  const valida = (v: VersaoDoQr | undefined): v is VersaoDoQr => !!v && v.projetoId === projetoId;
-  const guardada = escolhida.informada && valida(escolhida.versao) && !(lidas.length && escolhida.versao.papelAntigo) ? escolhida.versao.versaoId : null;
-  if (lidas.some((l) => !valida(l.versao))) return { estado: 'identificacao_pendente', aviso: 'ERR-039', versaoId: guardada, origemQr: false };
+  const guardada = escolhida.informada && escolhida.versao && !(lidas.length && escolhida.versao.papelAntigo) ? escolhida.versao.versaoId : null;
+  if (lidas.some((l) => !l.versao || l.versao.papelAntigo || l.qr.total !== l.versao.totalPaginas)) {
+    return { estado: 'identificacao_pendente', aviso: 'ERR-039', versaoId: guardada, origemQr: false };
+  }
 
   if (lidas.length) {
     const versao = lidas[0].versao!;
     const pendente: Criacao = { estado: 'identificacao_pendente', aviso: 'ERR-004', versaoId: versao.versaoId, origemQr: true };
     if (new Set(lidas.map((l) => l.versao!.versaoId)).size !== 1) return pendente;
-    const numeros = lidas.map((l) => l.pagina);
-    if (new Set(numeros).size !== numeros.length || numeros.some((n) => n > versao.totalPaginas) || paginas.length !== versao.totalPaginas) return pendente;
+    const numeros = lidas.map((l) => l.qr.pagina);
+    if (new Set(numeros).size !== numeros.length || paginas.length !== versao.totalPaginas) return pendente;
     return { estado: 'em_leitura', aviso: null, versaoId: versao.versaoId, origemQr: true };
   }
 
   if (!escolhida.informada) return { estado: 'identificacao_pendente', aviso: 'ERR-004', versaoId: null, origemQr: false };
-  if (!valida(escolhida.versao)) return { estado: 'identificacao_pendente', aviso: 'ERR-039', versaoId: null, origemQr: false };
+  if (!escolhida.versao) return { estado: 'identificacao_pendente', aviso: 'ERR-039', versaoId: null, origemQr: false };
   const versao = escolhida.versao;
   // Linha 4 também com a versão escolhida (FL-001, CA-052 exemplo 2); conflito com o CA-053 exemplo 9 na Q-083.
   if (paginas.length !== versao.totalPaginas) return { estado: 'identificacao_pendente', aviso: 'ERR-004', versaoId: versao.versaoId, origemQr: false };

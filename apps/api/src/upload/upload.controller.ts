@@ -26,6 +26,7 @@ import {
   lerConteudoQr,
   MOTIVO,
   paginasCompletas,
+  primeiroQrDivergente,
   tipoPorConteudo,
   type Criacao,
   type Escolhida,
@@ -72,12 +73,30 @@ interface Identificar {
 
 /** Versão, data e local do envio (UploadRequest; DEC-169, DEC-179). */
 interface Envio {
+  formularioId?: string;
   versaoId?: string;
   data?: string;
   local?: string;
 }
 
 const CAMPOS_ENVIO = ['versao_id', 'data_aplicacao', 'local_aplicacao'];
+/** O `uploadImages` também recebe o formulário escolhido (DEC-215); o `addApplicationPages` usa o da aplicação (DEC-221). */
+const CAMPOS_UPLOAD = ['formulario_id', ...CAMPOS_ENVIO];
+
+const cod = (n: number, largura: number) => String(n).padStart(largura, '0');
+
+/** QR de projeto ou formulário diferente do escolhido: recusa, auditada só com os códigos lidos (DEC-215, DEC-224). */
+function divergenciaDeQr(paginas: readonly { qr: string | null }[], projeto: number, formulario: number, aplicacaoId: string | null): ErroApi | null {
+  const q = primeiroQrDivergente(paginas, projeto, formulario);
+  if (!q) return null;
+  const projeto_qr = cod(q.projeto, 5);
+  const formulario_qr = cod(q.formulario, 3);
+  return new ErroApi('ERR-045', {
+    projetoQr: projeto_qr,
+    formularioQr: formulario_qr,
+    auditar: { acao: 'form_selection_mismatch', entidade: 'Aplicacao', registroId: aplicacaoId, detalhes: { projeto_qr, formulario_qr } },
+  });
+}
 
 const recusa = (motivo: string, posicao?: number) => new ErroApi('ERR-029', { motivo, substituir: motivo, posicao });
 
@@ -170,8 +189,10 @@ export class UploadController {
   }
 
   /** Versão, data e local do envio; data futura ou fora do formato → ERR-001, antes de gravar (DEC-182). */
-  private lerEnvio(textos: Record<string, string>): Envio {
+  private lerEnvio(textos: Record<string, string>, comFormulario = false): Envio {
     const campos: string[] = [];
+    const formularioId = textos.formulario_id;
+    if (comFormulario && (formularioId === undefined || !ehUuid(formularioId))) campos.push('formulario_id');
     const versaoId = textos.versao_id;
     if (versaoId !== undefined && !ehUuid(versaoId)) campos.push('versao_id');
     const data = textos.data_aplicacao;
@@ -179,7 +200,7 @@ export class UploadController {
     const local = textos.local_aplicacao;
     if (local !== undefined && (local.trim().length < 1 || local.length > 200)) campos.push('local_aplicacao');
     if (campos.length) throw new ErroApi('ERR-001', { campos });
-    return { versaoId, data, local };
+    return { formularioId, versaoId, data, local };
   }
 
   // ───────────────────────────── consultas ─────────────────────────────
@@ -197,30 +218,41 @@ export class UploadController {
     );
   }
 
-  /** Versões publicadas do tenant pelos códigos dos QR (a RLS esconde as de outros tenants). */
-  private async resolverQrs(tx: Executor, conteudos: (string | null)[]): Promise<Map<string, VersaoDoQr>> {
-    const codigos = [...new Set(conteudos.map((c) => (c ? lerConteudoQr(c)?.codigo : undefined)).filter((c): c is string => !!c))];
-    const mapa = new Map<string, VersaoDoQr & { qrCodigo: string }>();
-    if (!codigos.length) return mapa;
-    const vs = await linhas<{ qr_codigo: string; id: string; projeto_id: string; total: number; papel_antigo: boolean }>(
+  /** Versões publicadas do formulário, pelo número que o QR traz (DEC-218); a RLS esconde as de outros tenants. */
+  private async versoesDoFormulario(tx: Executor, formularioId: string): Promise<(numero: number) => VersaoDoQr | undefined> {
+    const vs = await linhas<{ numero: number; id: string; total: number; papel_antigo: boolean }>(
       tx,
-      sql`SELECT v.qr_codigo, v.id, f.projeto_id, v.total_paginas AS total, v.papel_antigo
-            FROM versao v JOIN formulario f ON f.id = v.formulario_id
-           WHERE v.status = 'publicada' AND v.qr_codigo IN (SELECT jsonb_array_elements_text(${JSON.stringify(codigos)}::jsonb))`,
+      sql`SELECT numero, id, total_paginas AS total, papel_antigo FROM versao WHERE formulario_id = ${formularioId} AND status = 'publicada'`,
     );
-    for (const v of vs) mapa.set(v.qr_codigo, { versaoId: v.id, projetoId: v.projeto_id, totalPaginas: v.total, papelAntigo: v.papel_antigo, qrCodigo: v.qr_codigo });
-    return mapa;
+    const mapa = new Map(vs.map((v) => [v.numero, { versaoId: v.id, totalPaginas: v.total, papelAntigo: v.papel_antigo }]));
+    return (numero) => mapa.get(numero);
   }
 
-  /** Versão escolhida no envio, se publicada no tenant (DEC-169); inválida = undefined. */
-  private async resolverEscolhida(tx: Executor, versaoId: string | null | undefined): Promise<Escolhida> {
+  /**
+   * Versão escolhida no envio (DEC-169): ausente, ou informada e resolvida (undefined = inválida:
+   * inexistente ou de outro tenant, com a tentativa auditada sem o id, não publicada ou de outro
+   * projeto, DEC-232, DEC-233). A de outro formulário do projeto recusa o pedido com ERR-039, sem
+   * gravar nada (DEC-221, DEC-225).
+   */
+  private async resolverEscolhida(tx: Executor, s: SessaoAtiva, onde: { aplicacaoId: string; projetoId: string; formularioId: string; comQr: boolean }, versaoId: string | null | undefined): Promise<Escolhida> {
     if (!versaoId) return { informada: false };
-    const v = await linha<{ id: string; projeto_id: string; total: number; papel_antigo: boolean }>(
+    const v = await linha<{ id: string; status: string; total: number; papel_antigo: boolean; formulario_id: string; projeto_id: string }>(
       tx,
-      sql`SELECT v.id, f.projeto_id, v.total_paginas AS total, v.papel_antigo
-            FROM versao v JOIN formulario f ON f.id = v.formulario_id WHERE v.id = ${versaoId} AND v.status = 'publicada'`,
+      sql`SELECT v.id, v.status, v.total_paginas AS total, v.papel_antigo, v.formulario_id, f.projeto_id
+            FROM versao v JOIN formulario f ON f.id = v.formulario_id WHERE v.id = ${versaoId}`,
     );
-    return { informada: true, versao: v ? { versaoId: v.id, projetoId: v.projeto_id, totalPaginas: v.total, papelAntigo: v.papel_antigo } : undefined };
+    if (!v) {
+      await this.n.auditar(tx, s, 'version_out_of_scope', 'Aplicacao', onde.aplicacaoId);
+      return { informada: true, versao: undefined };
+    }
+    if (v.projeto_id !== onde.projetoId) return { informada: true, versao: undefined };
+    if (v.formulario_id !== onde.formularioId) {
+      // Com QR legível nas folhas do pedido, a versão do QR prevalece sobre a escolhida (DEC-169, DEC-180).
+      if (onde.comQr) return { informada: true, versao: undefined };
+      throw new ErroApi('ERR-039', { auditar: { acao: 'VERSAO_FORA_DE_CONTEXTO', entidade: 'Aplicacao', registroId: onde.aplicacaoId } });
+    }
+    if (v.status !== 'publicada') return { informada: true, versao: undefined };
+    return { informada: true, versao: { versaoId: v.id, totalPaginas: v.total, papelAntigo: v.papel_antigo } };
   }
 
   private corpoPagina(p: LinhaPagina) {
@@ -231,14 +263,14 @@ export class UploadController {
     return corpoAplicacao(this.n, tx, a);
   }
 
-  /** Página do QR da folha quando o QR é da versão da aplicação; senão a página vem da localização. */
-  private paginaDoQr(qr: string | null, resolvidas: Map<string, VersaoDoQr>, versaoId: string | null): number | null {
+  /** Página do QR da folha quando o QR é da versão da aplicação; senão a página vem da identificação. */
+  private paginaDoQr(qr: string | null, resolver: (numero: number) => VersaoDoQr | undefined, versaoId: string | null): number | null {
     const lido = qr ? lerConteudoQr(qr) : null;
-    return lido && versaoId && resolvidas.get(lido.codigo)?.versaoId === versaoId ? lido.pagina : null;
+    return lido && versaoId && resolver(lido.versao)?.versaoId === versaoId ? lido.pagina : null;
   }
 
   /** Grava as imagens; se algo falhar depois, o chamador apaga as que gravou. */
-  private async gravarPaginas(tx: Executor, s: SessaoAtiva, aplicacaoId: string, paginas: PaginaProcessada[], resolvidas: Map<string, VersaoDoQr>, versaoId: string | null, gravadas: string[]): Promise<void> {
+  private async gravarPaginas(tx: Executor, s: SessaoAtiva, aplicacaoId: string, paginas: PaginaProcessada[], resolver: (numero: number) => VersaoDoQr | undefined, versaoId: string | null, gravadas: string[]): Promise<void> {
     const ordem = (await linha<{ n: number }>(tx, sql`SELECT coalesce(max(ordem_envio), 0)::int AS n FROM pagina_aplicacao WHERE aplicacao_id = ${aplicacaoId}`))!.n;
     for (const [i, p] of paginas.entries()) {
       const id = this.n.id();
@@ -248,7 +280,7 @@ export class UploadController {
       await tx.execute(sql`
         INSERT INTO pagina_aplicacao (id, tenant_id, aplicacao_id, tipo, numero_pagina, ordem_envio, qr_codigo, chave_storage,
                                       sha256, registro_ok, criado_em, nome_arquivo)
-        VALUES (${id}, ${s.tenantId}, ${aplicacaoId}, 'formulario', ${this.paginaDoQr(p.qr, resolvidas, versaoId)}, ${ordem + i + 1},
+        VALUES (${id}, ${s.tenantId}, ${aplicacaoId}, 'formulario', ${this.paginaDoQr(p.qr, resolver, versaoId)}, ${ordem + i + 1},
                 ${p.qr?.slice(0, 200) ?? null}, ${chave}, ${p.sha256}, ${p.registroOk}, ${this.n.agora()}, ${p.nomeArquivo})`);
     }
   }
@@ -304,25 +336,37 @@ export class UploadController {
       if (p.status !== 'ativo') throw new ErroApi('ERR-001', { campos: ['projeto'] }); // CA-027
     });
     const textos: Record<string, string> = {};
-    const paginas = await this.processarArquivos(req, { arquivos: 'arquivos', textos: CAMPOS_ENVIO }, textos);
-    const envio = this.lerEnvio(textos);
+    let paginas: PaginaProcessada[];
+    try {
+      paginas = await this.processarArquivos(req, { arquivos: 'arquivos', textos: CAMPOS_UPLOAD }, textos);
+    } catch (e) {
+      // O formulário do projeto vem antes da validação dos arquivos (DEC-220 (3)), se já foi lido.
+      if (e instanceof ErroApi && textos.formulario_id !== undefined) await this.n.comAtor(s, (tx) => this.formularioDoProjeto(tx, projetoId, textos.formulario_id));
+      throw e;
+    }
+    const envio = this.lerEnvio(textos, true);
 
     const gravadas: string[] = [];
     try {
       return await this.n.comAtor(s, async (tx) => {
         const p = await projetoNoEscopo(tx, projetoId, true);
         if (p.status !== 'ativo') throw new ErroApi('ERR-001', { campos: ['projeto'] });
+        const formulario = await this.formularioDoProjeto(tx, projetoId, envio.formularioId!);
         const impressao = { projetoId, arquivos: paginas.map((x) => x.sha256.toString('hex')), ...envio };
         const feito = await this.n.idempotente(tx, s, 'uploadImages', chave, impressao, async () => {
+          // QR de outro projeto ou formulário: nada é gravado (DEC-215, DEC-224).
+          const divergente = divergenciaDeQr(paginas, p.codigo, formulario.codigo, null);
+          if (divergente) throw divergente;
           const id = this.n.id();
-          // Data e local ficam gravados até a localização confirmar a versão e as páginas (DEC-186).
+          // Data e local ficam gravados até a identificação confirmar a versão e as páginas (DEC-186).
           await tx.execute(sql`
-            INSERT INTO aplicacao (id, tenant_id, projeto_id, estado, criada_em, criada_por, data_aplicacao, local_aplicacao)
-            VALUES (${id}, ${s.tenantId}, ${projetoId}, 'identificacao_pendente', ${this.n.agora()}, ${s.usuarioId},
+            INSERT INTO aplicacao (id, tenant_id, projeto_id, formulario_id, estado, criada_em, criada_por, data_aplicacao, local_aplicacao)
+            VALUES (${id}, ${s.tenantId}, ${projetoId}, ${formulario.id}, 'identificacao_pendente', ${this.n.agora()}, ${s.usuarioId},
                     ${envio.data ?? null}::date, ${this.n.cifrar(envio.local ?? null)})`);
-          const resolvidas = await this.resolverQrs(tx, paginas.map((x) => x.qr));
-          const c = classificarCriacao(paginas, projetoId, (codigo) => resolvidas.get(codigo), await this.resolverEscolhida(tx, envio.versaoId));
-          await this.gravarPaginas(tx, s, id, paginas, resolvidas, c.versaoId, gravadas);
+          const resolver = await this.versoesDoFormulario(tx, formulario.id);
+          const escolhida = await this.resolverEscolhida(tx, s, { aplicacaoId: id, projetoId, formularioId: formulario.id, comQr: paginas.some((x) => x.qr) }, envio.versaoId);
+          const c = classificarCriacao(paginas, resolver, escolhida);
+          await this.gravarPaginas(tx, s, id, paginas, resolver, c.versaoId, gravadas);
           await this.aplicarEstado(tx, s, id, c);
           await this.atualizarPadrao(tx, projetoId, envio);
           await this.auditarQrOutro(tx, s, id, paginas);
@@ -343,6 +387,13 @@ export class UploadController {
     }
   }
 
+  /** Formulário do projeto escolhido no envio; ausente ou de outro projeto → ERR-001 (DEC-215). */
+  private async formularioDoProjeto(tx: Executor, projetoId: string, formularioId: string | undefined): Promise<{ id: string; codigo: number }> {
+    const f = formularioId && ehUuid(formularioId) ? await linha<{ id: string; codigo: number }>(tx, sql`SELECT id, codigo FROM formulario WHERE id = ${formularioId} AND projeto_id = ${projetoId}`) : undefined;
+    if (!f) throw new ErroApi('ERR-001', { campos: ['formulario_id'] });
+    return f;
+  }
+
   // ───────────────────────────── addApplicationPages ─────────────────────────────
 
   @Post('applications/:applicationId/pages')
@@ -353,7 +404,8 @@ export class UploadController {
     if (!chave || chave.length < 16 || chave.length > 64) throw new ErroApi('ERR-001', { campos: ['Idempotency-Key'] });
     await this.n.comAtor(s, async (tx) => {
       const a = await this.aplicacao(tx, s, id);
-      if (a.estado !== 'identificacao_pendente') throw new ErroApi('ERR-018');
+      // Aplicação anterior à v2.9, sem formulário: só depois do identifyApplication (DEC-226).
+      if (a.estado !== 'identificacao_pendente' || a.formulario_id === null) throw new ErroApi('ERR-018');
     });
     const textos: Record<string, string> = {};
     const novas = await this.processarArquivos(req, { arquivos: 'arquivos', textos: CAMPOS_ENVIO }, textos);
@@ -363,18 +415,30 @@ export class UploadController {
     try {
       return await this.n.comAtor(s, async (tx) => {
         const a = await this.aplicacao(tx, s, id, true);
-        if (a.estado !== 'identificacao_pendente') throw new ErroApi('ERR-018');
+        if (a.estado !== 'identificacao_pendente' || a.formulario_id === null) throw new ErroApi('ERR-018');
         const impressao = { aplicacaoId: id, arquivos: novas.map((x) => x.sha256.toString('hex')), ...envio };
         await this.n.idempotente(tx, s, 'addApplicationPages', chave, impressao, async () => {
+          const codigos = (await linha<{ projeto: number; formulario: number }>(
+            tx,
+            sql`SELECT p.codigo AS projeto, f.codigo AS formulario FROM formulario f JOIN projeto p ON p.id = f.projeto_id WHERE f.id = ${a.formulario_id}`,
+          ))!;
+          const divergente = divergenciaDeQr(novas, codigos.projeto, codigos.formulario, id);
+          if (divergente) throw divergente;
           const existentes = (await this.paginas(tx, id)).filter((p) => p.tipo === 'formulario');
           const todas = [...existentes.map((p) => ({ qr: p.qr_codigo })), ...novas];
-          const resolvidas = await this.resolverQrs(tx, todas.map((x) => x.qr));
+          const resolver = await this.versoesDoFormulario(tx, a.formulario_id!);
           // A versão do pedido substitui a escolhida no envio (DEC-169); data e local, só o que vier (DEC-185).
-          const c = classificarCriacao(todas, a.projeto_id, (codigo) => resolvidas.get(codigo), await this.resolverEscolhida(tx, envio.versaoId ?? a.versao_id));
-          await this.gravarPaginas(tx, s, id, novas, resolvidas, c.versaoId, gravadas);
+          const escolhida = await this.resolverEscolhida(tx, s, { aplicacaoId: id, projetoId: a.projeto_id, formularioId: a.formulario_id!, comQr: novas.some((x) => x.qr) }, envio.versaoId ?? a.versao_id);
+          // Versão inválida no pedido e nenhuma folha nova com QR legível: vale a linha 3 da tabela, e o QR
+          // das folhas anteriores não a substitui (DEC-230, DEC-232).
+          const c: Criacao =
+            escolhida.informada && !escolhida.versao && !novas.some((p) => p.qr)
+              ? { estado: 'identificacao_pendente', aviso: 'ERR-039', versaoId: null, origemQr: false }
+              : classificarCriacao(todas, resolver, escolhida);
+          await this.gravarPaginas(tx, s, id, novas, resolver, c.versaoId, gravadas);
           // Páginas já gravadas ganham o número quando o QR é da versão da aplicação.
           for (const p of existentes) {
-            await tx.execute(sql`UPDATE pagina_aplicacao SET numero_pagina = ${this.paginaDoQr(p.qr_codigo, resolvidas, c.versaoId)} WHERE id = ${p.id}`);
+            await tx.execute(sql`UPDATE pagina_aplicacao SET numero_pagina = ${this.paginaDoQr(p.qr_codigo, resolver, c.versaoId)} WHERE id = ${p.id}`);
           }
           await tx.execute(sql`
             UPDATE aplicacao SET data_aplicacao = coalesce(${envio.data ?? null}::date, data_aplicacao),
@@ -402,22 +466,26 @@ export class UploadController {
     const s = await exigirSessao(this.n, req);
     exigirCsrf(this.n, req);
     const removidas: string[] = [];
+    // ERR-004 que grava o formulário da aplicação antiga: a recusa sai depois do commit (DEC-229).
+    let recusa: ErroApi | null = null;
     const r = await this.n.comAtor(s, async (tx) => {
       const a = await this.aplicacao(tx, s, id, true);
       const campos = this.n.contrato.validarCorpo('identifyApplication', corpo);
       if (campos) throw new ErroApi('ERR-001', { campos });
-      await this.n.idempotente(tx, s, 'identifyApplication', chave, { id, ...corpo }, async () => {
+      const feito = await this.n.idempotente(tx, s, 'identifyApplication', chave, { id, ...corpo }, async () => {
         if (a.estado !== 'identificacao_pendente') throw new ErroApi('ERR-018');
         const foraDeContexto = new ErroApi('ERR-039', { auditar: { acao: 'VERSAO_FORA_DE_CONTEXTO', entidade: 'Aplicacao', registroId: id } });
         const v = ehUuid(corpo.versao_id)
-          ? await linha<{ projeto_id: string; status: string; total: number; papel_antigo: boolean; qr_codigo: string | null }>(
+          ? await linha<{ formulario_id: string; projeto_id: string; status: string; numero: number; total: number; papel_antigo: boolean; cod_projeto: number; cod_formulario: number }>(
               tx,
-              sql`SELECT f.projeto_id, v.status, v.total_paginas AS total, v.papel_antigo, v.qr_codigo
-                    FROM versao v JOIN formulario f ON f.id = v.formulario_id WHERE v.id = ${corpo.versao_id}`,
+              sql`SELECT v.formulario_id, f.projeto_id, v.status, v.numero, v.total_paginas AS total, v.papel_antigo, p.codigo AS cod_projeto, f.codigo AS cod_formulario
+                    FROM versao v JOIN formulario f ON f.id = v.formulario_id JOIN projeto p ON p.id = f.projeto_id WHERE v.id = ${corpo.versao_id}`,
             )
           : undefined;
         // Inexistente, de outro tenant (a RLS esconde), de outro projeto ou não publicada (DEC-100).
         if (!v || v.status !== 'publicada' || v.projeto_id !== a.projeto_id) throw foraDeContexto;
+        // A versão é do formulário da aplicação (DEC-221); na antiga sem formulário, ela o define (DEC-223).
+        if (a.formulario_id !== null && v.formulario_id !== a.formulario_id) throw foraDeContexto;
 
         const imagens = (await this.paginas(tx, id)).filter((p) => p.tipo === 'formulario');
         const ids = corpo.paginas.map((p) => p.imagem_id);
@@ -426,19 +494,28 @@ export class UploadController {
         const mantidas = corpo.paginas.filter((p) => !p.descartar);
         // A conferência com o QR considera só as folhas mantidas (FL-001).
         const qrs = imagens.filter((i) => mantidas.some((m) => m.imagem_id === i.id) && i.qr_codigo !== null);
-        const resolvidas = await this.resolverQrs(tx, qrs.map((i) => i.qr_codigo));
+        // QR legível e válido: do projeto e do formulário da versão informada, de versão publicada (DEC-180).
+        const resolver = await this.versoesDoFormulario(tx, v.formulario_id);
         const validos = qrs.flatMap((i) => {
-          const versao = resolvidas.get(lerConteudoQr(i.qr_codigo!)!.codigo);
-          return versao && versao.projetoId === a.projeto_id ? [versao] : [];
+          const q = lerConteudoQr(i.qr_codigo!);
+          const versao = q && q.projeto === v.cod_projeto && q.formulario === v.cod_formulario ? resolver(q.versao) : undefined;
+          return versao ? [versao] : [];
         });
         // Versão diferente da do QR legível e válido (DEC-180); papel antigo com QR legível (DEC-184).
         if (validos.some((x) => x.versaoId !== corpo.versao_id) || (v.papel_antigo && qrs.length > 0)) throw foraDeContexto;
         if (!coerente || mantidas.some((p) => p.numero_pagina === undefined) || !paginasCompletas(mantidas.map((p) => p.numero_pagina!), v.total)) {
+          if (a.formulario_id === null) {
+            // Grava só o formulário, uma única vez, e zera a versão de outro projeto (DEC-229, DEC-234).
+            await this.definirFormularioPelaVersao(tx, s, id, v.formulario_id, a.projeto_id);
+            recusa = new ErroApi('ERR-004');
+            return { status: 400, recursoId: id };
+          }
           throw new ErroApi('ERR-004');
         }
+        if (a.formulario_id === null) await this.definirFormularioPelaVersao(tx, s, id, v.formulario_id, a.projeto_id);
 
         // A página informada prevalece; só a folha cuja página mudou ou não tinha sido reconhecida é
-        // localizada de novo, só para as regiões (RN-052, item 3a). Versão nova: todas (aplicarEstado).
+        // identificada de novo (RN-052, item 3a). Versão nova: todas (aplicarEstado).
         const limite = Number(await parametro(tx, 'limite_confianca_localizacao', s.tenantId, a.projeto_id));
         for (const p of corpo.paginas) {
           const img = imagens.find((i) => i.id === p.imagem_id)!;
@@ -462,10 +539,24 @@ export class UploadController {
         await this.n.auditar(tx, s, 'IDENTIFICAR_APLICACAO', 'Aplicacao', id, { descartadas: removidas.length, origem_qr: origemQr });
         return { status: 200, recursoId: id };
       });
-      return this.corpoAplicacao(tx, await this.aplicacao(tx, s, id));
+      // Repetição da mesma chave depois da recusa que gravou o formulário: a mesma recusa.
+      if (feito.repetida && feito.status === 400) recusa = new ErroApi('ERR-004');
+      return recusa ? null : this.corpoAplicacao(tx, await this.aplicacao(tx, s, id));
     });
+    if (recusa) throw recusa;
     await this.apagarObjetos(removidas);
     return r;
+  }
+
+  /** Define o formulário da aplicação antiga pela versão informada, uma única vez (DEC-223, DEC-229). */
+  private async definirFormularioPelaVersao(tx: Executor, s: SessaoAtiva, id: string, formularioId: string, projetoId: string): Promise<void> {
+    const r = await tx.execute(sql`UPDATE aplicacao SET formulario_id = ${formularioId} WHERE id = ${id} AND formulario_id IS NULL`);
+    if (!r.rowCount) return;
+    // Versão gravada de outro projeto não fica ao lado do formulário novo (DEC-234).
+    await tx.execute(sql`
+      UPDATE aplicacao SET versao_id = NULL
+       WHERE id = ${id} AND versao_id IN (SELECT v.id FROM versao v JOIN formulario f ON f.id = v.formulario_id WHERE f.projeto_id <> ${projetoId})`);
+    await this.n.auditar(tx, s, 'form_set_from_version', 'Aplicacao', id);
   }
 
   // ───────────────────────────── attachSignaturePage ─────────────────────────────
@@ -497,9 +588,20 @@ export class UploadController {
         const a = await this.aplicacao(tx, s, id, true);
         await this.n.idempotente(tx, s, 'attachSignaturePage', chave, { id, arquivo: p.sha256.toString('hex') }, async () => {
           if (a.estado !== 'sem_assinatura') throw new ErroApi('ERR-018');
-          const v = await linha<{ qr_codigo: string }>(tx, sql`SELECT qr_codigo FROM versao WHERE id = ${a.versao_id}`);
+          const v = await linha<{ numero: number; total: number; cod_projeto: number; cod_formulario: number }>(
+            tx,
+            sql`SELECT v.numero, v.total_paginas AS total, p.codigo AS cod_projeto, f.codigo AS cod_formulario
+                  FROM versao v JOIN formulario f ON f.id = v.formulario_id JOIN projeto p ON p.id = f.projeto_id WHERE v.id = ${a.versao_id}`,
+          );
+          if (!v) throw new ErroApi('ERR-004');
           const lido = p.qr ? lerConteudoQr(p.qr) : null;
-          if (!v || (lido && (lido.codigo !== v.qr_codigo || lido.pagina !== 1))) throw new ErroApi('ERR-004');
+          if (lido) {
+            // Outro projeto ou formulário: ERR-045; outra versão ou total diferente: ERR-039 (DEC-222, DEC-227).
+            const divergente = divergenciaDeQr([p], v.cod_projeto, v.cod_formulario, id);
+            if (divergente) throw divergente;
+            if (lido.versao !== v.numero || lido.total !== v.total) throw new ErroApi('ERR-039', { auditar: { acao: 'VERSAO_FORA_DE_CONTEXTO', entidade: 'Aplicacao', registroId: id } });
+            if (lido.pagina !== 1) throw new ErroApi('ERR-004');
+          }
           const imagemId = this.n.id();
           const chaveObjeto = chaveImagem(s.tenantId, id, imagemId);
           await this.n.config.armazenamento.gravar(chaveObjeto, p.jpeg, 'image/jpeg');
