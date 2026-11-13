@@ -1,7 +1,7 @@
 # Arquitetura do Projeto MinhaPesquisa
 
 > Mapa do repositório para pessoas e agentes de IA. Resume o que está decidido em
-> `docs/architecture/PLANO.md` (v3.21) e aponta a fonte de verdade de cada artefato.
+> `docs/architecture/PLANO.md` (v3.22) e aponta a fonte de verdade de cada artefato.
 > Em conflito, vale a precedência do PLANO: decisões de negócio → REQ → PLANO/DEC técnicas → Bloco P.
 
 ## 1. Situação atual
@@ -48,6 +48,7 @@ minhapesquisa/
 │   └── contratos/           # Tipos gerados de contracts/openapi.yaml
 ├── infra/                   # Scripts locais: instalação, redefinição de senha e backup (IMP-005)
 ├── contracts/openapi.yaml   # Contrato (fonte de verdade)
+├── contracts/oasdiff-erros-aceitos.txt  # Quebras de contrato aceitas no CI (PLANO DEC-228)
 ├── docs/spec/               # REQ e Bloco P
 ├── docs/architecture/       # PLANO
 ├── registros/               # CSVs gerados + controle de mudanças
@@ -71,8 +72,8 @@ packages/contratos <── apps/api, apps/web (tipos)
 
 ## 6. Fluxos críticos (detalhe no PLANO §4)
 
-1. Upload → validação, antimalware, remoção de metadados → QR ou versão escolhida no envio (DEC-169) → estado inicial (FL-001).
-2. Worker → reserva de orçamento (DEC-051) → localização da página inteira (DEC-174) → recortes das regiões → ReadEngine → estado dos itens (FL-002).
+1. Upload com projeto e formulário escolhidos (DEC-215) → validação, antimalware, remoção de metadados → QR `PPPPP.FFF.VV.X/Y` (divergente → ERR-045) ou versão escolhida no envio (DEC-169, DEC-218) → estado inicial (FL-001).
+2. Worker → reserva de orçamento (DEC-051) → identificação da página inteira → leitura da página inteira com o gabarito (DEC-216, DEC-220) → estado dos itens (FL-002).
 3. Revisão sem reserva, com If-Match (DEC-112) → conclusão com vínculo por CPF ou, no papel antigo sem CPF, pelo nome (DEC-176).
 4. Eliminação LGPD → anonimização, expurgo e lista de eliminações reaplicada após restore.
 5. Login com senha local → sessão plena, sem MFA (DEC-108).

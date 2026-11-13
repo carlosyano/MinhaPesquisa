@@ -46,7 +46,8 @@ jobs:
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
           git show "$BASE_SHA:contracts/openapi.yaml" > /tmp/openapi-base.yaml
           docker run --rm -v /tmp:/base -v "$PWD/contracts:/head" tufin/oasdiff:v1.11.7 \
-            breaking /base/openapi-base.yaml /head/openapi.yaml --fail-on ERR
+            breaking /base/openapi-base.yaml /head/openapi.yaml --fail-on ERR \
+            --err-ignore /head/oasdiff-erros-aceitos.txt
 
   testes:
     runs-on: ubuntu-24.04
