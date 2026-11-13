@@ -273,7 +273,7 @@ describe('CA-059 — leitura do complemento (pré-regra 1b)', () => {
   });
 
   // @trace CA-059, DEC-197, DEC-203, RN-045, RN-038
-  it('o complemento é lido na mesma chamada da pergunta, sem chamada nem recorte próprios', async () => {
+  it('o complemento é lido na mesma chamada da pergunta, sem chamada própria', async () => {
     const id = await lerAplicacao(motivo('outros', 0.95, { valor: 'Maternidade', confianca: 0.95 }));
     const chamadas = await h.motor.chamadas(id);
     const comMotivo = chamadas.filter((x) => x.campos.includes('MOTIVO_CONSULTA'));

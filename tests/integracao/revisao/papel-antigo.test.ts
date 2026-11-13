@@ -261,13 +261,13 @@ describe('CA-044 — assinatura anexada sem QR legível (DEC-183)', () => {
   // @trace CA-044, DEC-183
   it('exemplo 2: página 1 sem QR legível → concluida; nenhuma chamada de localização nem de leitura', async () => {
     const id = await semAssinatura();
-    const loc = (await h.localizador.chamadas(id)).length;
+    const loc = (await h.identificador.chamadas(id)).length;
     const lei = (await h.motor.chamadas(id)).length;
     const r = await anexar(id, await semQr(f.paginas[0]));
     expect(r.status, r.texto).toBe(200);
     expect(r.corpo).toMatchObject({ estado: 'concluida', assinatura: 'presente' });
     await h.worker.processar();
-    expect(await h.localizador.chamadas(id)).toHaveLength(loc);
+    expect(await h.identificador.chamadas(id)).toHaveLength(loc);
     expect(await h.motor.chamadas(id)).toHaveLength(lei);
   });
 

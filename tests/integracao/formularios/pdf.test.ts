@@ -1,6 +1,6 @@
-// PDF imprimível (CA-028, DEC-005, DEC-048, T-14). O QR é lido pelos testes a partir do PDF
-// renderizado, sem conhecer o formato: basta ser legível, distinto por página e por versão e
-// não carregar identificadores internos (identificador opaco).
+// PDF imprimível (CA-028, DEC-005, DEC-048, DEC-218, DEC-219, T-14). O QR é lido pelos testes a partir do PDF
+// renderizado: formato `PPPPP.FFF.VV.X/Y` com os códigos, sem IDs internos; cabeçalho, rodapé e espaçamento
+// conforme a CHG-019 (IMP-010).
 // O termo da página 1 é o parâmetro `termo_consentimento` do tenant, com texto padrão
 // provisório na REQ seção 2.9 (DEC-094).
 // A pergunta de CPF sai com 11 caixas, uma por dígito (DEC-105), e o mapa de layout grava a
@@ -44,7 +44,7 @@ const semHifen = (id: string) => id.replace(/-/g, '');
 const normalizar = (t: string) => t.replace(/\s+/g, ' ').trim();
 
 describe('CA-028 — PDF imprimível', () => {
-  // @trace CA-028, DEC-005
+  // @trace CA-028, DEC-005, DEC-218
   it('uma página impressa por página da versão, cada uma com QR legível e distinto', () => {
     expect(f.paginas).toHaveLength(PAGINAS_VERSAO);
     const conteudos = f.paginas.map((p) => p.qr?.conteudo);
@@ -52,14 +52,58 @@ describe('CA-028 — PDF imprimível', () => {
     expect(new Set(conteudos).size).toBe(PAGINAS_VERSAO);
   });
 
-  // @trace CA-028, T-14, DEC-048
-  it('o QR é opaco: não contém IDs de tenant, projeto, formulário nem versão', () => {
+  // @trace CA-028, DEC-218, RF-015
+  it('o QR é `PPPPP.FFF.VV.X/Y` com os códigos do projeto, do formulário e da versão (CA-028, DEC-218)', () => {
+    expect(f.paginas.map((p) => p.qr?.conteudo)).toEqual([1, 2, 3, 4].map((x) => `00001.001.01.${x}/4`));
+  });
+
+  // @trace CA-028, T-14, DEC-048, DEC-218
+  it('o QR não contém IDs internos (UUID) de tenant, projeto, formulário nem versão', () => {
     for (const p of f.paginas) {
       const c = p.qr!.conteudo.toLowerCase();
+      expect(c).not.toMatch(/[0-9a-f]{8}-?[0-9a-f]{4}/);
       for (const id of [T.tenantId, projeto, f.formId, f.versaoId]) {
         expect(c, `página ${p.numero}`).not.toContain(id.toLowerCase());
         expect(c, `página ${p.numero}`).not.toContain(semHifen(id).toLowerCase());
       }
+    }
+  });
+
+  // @trace CA-028, DEC-219
+  it('cada página traz no cabeçalho o nome do projeto (negrito, 14 pt) e, logo abaixo, o do formulário (11 pt)', () => {
+    for (const p of f.paginas) {
+      const proj = p.itens.find((i) => i.texto.trim() === 'Saúde Idoso');
+      const form = p.itens.find((i) => i.texto.trim() === 'Demografia');
+      expect(proj, `projeto na página ${p.numero}`).toBeDefined();
+      expect(form, `formulário na página ${p.numero}`).toBeDefined();
+      expect(proj!.tamanho).toBeCloseTo(14, 0);
+      expect(proj!.negrito).toBe(true);
+      expect(form!.tamanho).toBeCloseTo(11, 0);
+      expect(form!.yTopo).toBeGreaterThan(proj!.yTopo);
+      expect(proj!.yTopo).toBeLessThan(120);
+    }
+  });
+
+  // @trace CA-028, DEC-219, DEC-218
+  it('o rodapé traz "Projeto: 00001 · Formulário: 001 · Versão: 01 · Página X/4" e o QR no canto inferior', () => {
+    for (const p of f.paginas) {
+      expect(normalizar(p.texto), `página ${p.numero}`).toContain(`Projeto: 00001 · Formulário: 001 · Versão: 01 · Página ${p.numero}/4`);
+      const q = p.qr!.caixa;
+      expect(q.x + q.largura / 2).toBeGreaterThan(p.largura / 2);
+      expect(q.y + q.altura / 2).toBeGreaterThan(p.altura * 0.75);
+    }
+  });
+
+  // @trace CA-028, DEC-219
+  it('há pelo menos 18 pt entre os blocos de identificação, CPF, data da aplicação e as seções, sem encostar (mapa_layout)', async () => {
+    const mapa = (await h.inspect.mapaLayout(f.versaoId))!;
+    const A4_PT = 841.89;
+    const pagina1 = mapa.perguntas.filter((q) => q.pagina === 1).sort((a, b) => a.regiao.y - b.regiao.y);
+    expect(pagina1.length).toBeGreaterThanOrEqual(5);
+    for (let i = 1; i < pagina1.length; i++) {
+      const anterior = pagina1[i - 1].regiao;
+      const folga = (pagina1[i].regiao.y - (anterior.y + anterior.altura)) * A4_PT;
+      expect(folga, `${pagina1[i - 1].codigo} → ${pagina1[i].codigo}`).toBeGreaterThanOrEqual(18);
     }
   });
 

@@ -52,6 +52,8 @@ export interface PaginaRenderizada {
   qr: { conteudo: string; caixa: Caixa } | null;
   /** Texto extraído da página do PDF. */
   texto: string;
+  /** Trechos de texto com tamanho (pt), negrito e posição vertical do topo da página (pt); acrescentado no IA-TEST do IMP-010. */
+  itens: { texto: string; tamanho: number; negrito: boolean; yTopo: number }[];
 }
 
 /** Luminância (0 a 255) de cada pixel de uma página renderizada. */
@@ -87,6 +89,19 @@ export async function lerPdf(bytes: Buffer): Promise<PaginaRenderizada[]> {
     const dados = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const q = jsQR(new Uint8ClampedArray(dados.data), dados.width, dados.height);
     const conteudo = await p.getTextContent();
+    const alturaPt = p.getViewport({ scale: 1 }).height;
+    const itens: PaginaRenderizada['itens'] = [];
+    for (const i of conteudo.items) {
+      if (!('str' in i) || i.str.trim() === '') continue;
+      let negrito = false;
+      try {
+        const fonte = p.commonObjs.has(i.fontName) ? (p.commonObjs.get(i.fontName) as { name?: string; bold?: boolean }) : undefined;
+        negrito = Boolean(fonte?.bold) || /bold/i.test(fonte?.name ?? '');
+      } catch {
+        negrito = false;
+      }
+      itens.push({ texto: i.str, tamanho: Math.abs(i.transform[3]), negrito, yTopo: alturaPt - i.transform[5] });
+    }
     paginas.push({
       numero: n,
       png: await canvas.encode('png'),
@@ -94,6 +109,7 @@ export async function lerPdf(bytes: Buffer): Promise<PaginaRenderizada[]> {
       altura: canvas.height,
       qr: q ? { conteudo: q.data, caixa: caixaDoQr(q.location) } : null,
       texto: conteudo.items.map((i) => ('str' in i ? i.str : '')).join(' '),
+      itens,
     });
   }
   await tarefa.destroy();

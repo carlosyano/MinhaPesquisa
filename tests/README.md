@@ -1,6 +1,6 @@
 # Testes do MinhaPesquisa
 
-IA-TEST do IMP-001, do IMP-002, do IMP-005, do IMP-003, do IMP-006, do IMP-007, do IMP-008 e do IMP-009 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
+IA-TEST do IMP-001, do IMP-002, do IMP-005, do IMP-003, do IMP-006, do IMP-007, do IMP-008, do IMP-009 e do IMP-010 (DEC-053). Os testes nascem da REQ e ficam vermelhos até o PR de
 implementação (IA-DEV), que não pode alterá-los: o job `testes-congelados` do CI marca de
 vermelho qualquer mudança em teste sem o rótulo `ia-test`, e o responsável só autoriza a
 junção depois de revisar o diff, com as verificações verdes.
@@ -115,6 +115,24 @@ CA-051 ganham `Arquivo` e `Complemento` (DEC-201), com os índices das colunas e
 (`support/exportacao.ts`), e a leitura de apoio da exportação envia as 2 páginas num só PDF,
 "maria.pdf"; o CA-054 passa a achar a coluna do CPF por `COL`.
 
+No IMP-010 (projeto e formulário no envio, leitura da página inteira e QR legível, CHG-019, DEC-215 a DEC-235) o
+`localizador` sai e entra o `identificador` (identificação só com página e confiança, sem regiões; pulada depois do
+`identifyApplication`). O motor simulado passa a receber a página inteira com o gabarito (`ChamadaMotor.gabarito`,
+`procurar_assinatura`, `maxTokens`, imagem de no máximo 2.000 px); a região vem por campo (`LeituraOk.regiao`, `null` =
+sem região) e `motor.programar` ganha `OpcoesMotor` (região da assinatura e campos extras, que o schema fechado
+recusa). Entram `seed.semFormulario`, `seed.limiteDeCodigo`, `seed.baseSemCodigos` (desfaz o `down` da migração 0011,
+grava a base antiga e refaz) e `inspect.aplicacao().formulario_id`. Os auxiliares `enviar` e `enviarAntigo` mandam o
+`formulario_id` (o da versão ou o último criado no projeto; `formularioId` explícito; `null` omite o campo), então os
+testes aceitos que só enviam não mudaram de chamada. `lerPdf` devolve também `itens` (tamanho, negrito e posição do
+texto). Escolhas técnicas do IA-TEST a confirmar no IA-DEV: eventos de auditoria `form_selection_mismatch`,
+`version_out_of_scope` e `form_set_from_version`; assinatura `conteudoQr({projeto, formulario, versao, pagina, total})`
+e `lerConteudoQr` devolvendo o mesmo objeto (`unit/qr.test.ts`); no adaptador, `lerPagina(imagem, gabarito)` (mesma
+resposta `leituras` de antes, mais `regiao_assinatura`) e `identificarPagina(imagem, perguntasPorPagina)`; a chave
+opaca `cN` do schema continua e o `recorte` sai. Os testes aceitos que mudam com a CHG-019 foram ajustados (PLANO §11.1):
+CA-053 e CA-055 (`localizacao.test.ts` reescrito), CA-028 (`pdf.test.ts`: QR `PPPPP.FFF.VV.X/Y`, cabeçalho, rodapé,
+espaçamento), a minimização do `leitura.test.ts` e do `revisao-medios.test.ts` (página inteira, sem recorte) e o
+`motor-leitura.test.ts` (`lerRecorte` vira `lerPagina`). Ainda por ajustar no IA-DEV só o que a implementação mostrar.
+
 ## Cobertura
 
 | Arquivo | Rastreio |
@@ -127,6 +145,10 @@ CA-051 ganham `Arquivo` e `Complemento` (DEC-201), com os índices das colunas e
 | `integracao/formularios/versoes.test.ts` | RF-004, CA-001, TS-006, CA-036, RN-017, RN-047 (sim/não e sensibilidade), REQ §6.5; ajustado no IMP-006 (RN-050) |
 | `integracao/formularios/pdf.test.ts` | CA-028 (QR opaco por página, termo e assinatura na página 1) |
 | `integracao/upload/upload.test.ts` | CA-003, CA-004, CA-029 (exemplos 1 a 5), TS-002, RN-040, RF-006, ERR-019 |
+| `integracao/upload/formulario-no-envio.test.ts` | CA-061 (exemplos 1 a 19), RF-015, DEC-215, DEC-221 a DEC-235, ERR-045 |
+| `integracao/projetos/codigos.test.ts` | CA-063, DEC-217, DEC-218, DEC-220 (1) |
+| `integracao/leitura/pagina-inteira.test.ts` | CA-062, DEC-216, DEC-220 (4) e (5) |
+| `unit/qr.test.ts` | DEC-218, DEC-187, CA-028, CA-061 |
 | `integracao/upload/montagem.test.ts` | CA-013, CA-039, CA-040, FL-001 (ordem da criação e saída de `identificacao_pendente`) |
 | `unit/chaves.test.ts` | DEC-114 (subchaves por HKDF, cópia com a senha de recuperação, guarda pelo DPAPI), CA-035 |
 | `unit/armazenamento-disco.test.ts` | DEC-113, RN-029 (pasta local, caminho seguro, links assinados de 5 min em 127.0.0.1) |

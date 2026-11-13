@@ -154,24 +154,16 @@ describe('DEC-131 (4) — checks de aplicação no banco (ENT-010, PLANO §5.3)'
 
 describe('DEC-131 (5) — o que o motor recebe (RN-045)', () => {
   // @trace DEC-131, RN-045, RN-038
-  it('chaves opacas, sem o código da pergunta, e cada campo com o número do seu recorte', async () => {
+  it('chaves opacas no schema, sem o código da pergunta, e uma chave por campo do gabarito (sem número de recorte)', async () => {
     const id = await enviarELer(h, dig, projeto, f, leiturasCompletas());
     const chamadas = await h.motor.chamadas(id);
     expect(chamadas.length).toBeGreaterThan(0);
     for (const c of chamadas) {
       for (const codigo of c.campos) expect(c.schema, codigo).not.toContain(codigo.split('.')[0]);
-      const schema = JSON.parse(c.schema) as { campos: { chave: string; recorte: number }[] };
+      const schema = JSON.parse(c.schema) as { campos: { chave: string; recorte?: number }[] };
       expect(schema.campos.map((x) => x.chave)).toEqual(schema.campos.map((_, i) => `c${i + 1}`));
-      const recortes = schema.campos.map((x) => x.recorte);
-      expect(recortes[0]).toBe(1);
-      for (let i = 1; i < recortes.length; i++) expect(recortes[i] - recortes[i - 1]).toBeGreaterThanOrEqual(0);
-      expect(Math.max(...recortes)).toBe(new Set(c.campos.map((x) => x.split('.')[0])).size);
+      expect(schema.campos.every((x) => x.recorte === undefined)).toBe(true);
+      expect(schema.campos).toHaveLength(c.campos.length);
     }
-    // A matriz tem um recorte só para as duas linhas.
-    const matriz = chamadas.find((c) => c.campos.includes('SINTOMAS.dor'))!;
-    const schema = JSON.parse(matriz.schema) as { campos: { recorte: number }[] };
-    const i = matriz.campos.indexOf('SINTOMAS.dor');
-    const j = matriz.campos.indexOf('SINTOMAS.cansaco');
-    expect(schema.campos[i].recorte).toBe(schema.campos[j].recorte);
   });
 });

@@ -210,24 +210,24 @@ describe('Regras de salto na leitura (CA-015, CA-018, CA-019; FL-002 regras 1 a 
 describe('Minimização do que vai para a IA (RN-038, RN-039, RN-045, DEC-022)', () => {
   const IDENTIFICACAO = new Set(['NOME', 'DATA_NASCIMENTO', 'CPF']);
 
-  // @trace RN-038, RN-039, DEC-022, DEC-097
-  it('identificação nunca vai na mesma chamada que os demais campos; cada campo é lido uma vez', async () => {
+  // @trace RN-038, DEC-216, DEC-220, RF-015
+  it('uma leitura por página, com a identificação e os demais campos juntos (RN-039 revogada); cada campo é lido uma vez', async () => {
     const id = await enviarELer(h, dig, projeto, f, leiturasCompletas());
     const chamadas = (await h.motor.chamadas(id)).filter((c) => c.resultado === 'ok');
-    expect(chamadas.length).toBeGreaterThanOrEqual(5); // identificação da página 1 + demais da página 1 + páginas 2 a 4
-    for (const c of chamadas) {
-      const ident = c.campos.filter((x) => IDENTIFICACAO.has(x));
-      expect(ident.length === 0 || ident.length === c.campos.length, `chamada mistura identificação e outros: ${c.campos}`).toBe(true);
-    }
+    expect(chamadas.map((c) => c.pagina).sort()).toEqual([1, 2, 3, 4]);
+    const pagina1 = chamadas.find((c) => c.pagina === 1)!;
+    for (const x of IDENTIFICACAO) expect(pagina1.campos).toContain(x);
+    expect(pagina1.campos.length).toBeGreaterThan(IDENTIFICACAO.size);
     expect(chamadas.flatMap((c) => c.campos).sort()).toEqual([...ITENS].sort());
   });
 
-  // @trace RN-038, RN-045, DEC-022, DEC-048
-  it('cada chamada leva recortes, nunca a página inteira', async () => {
+  // @trace RN-038, RN-045, DEC-216, DEC-220
+  it('cada chamada leva a página inteira, já sem metadados, com o lado maior de no máximo 2.000 px (sem recorte nem tarja)', async () => {
     const id = await enviarELer(h, dig, projeto, f, leiturasCompletas());
     for (const c of await h.motor.chamadas(id)) {
       const pagina = f.paginas[c.pagina - 1];
-      expect(c.largura * c.altura, `página ${c.pagina}`).toBeLessThan(pagina.largura * pagina.altura);
+      expect(Math.max(c.largura, c.altura), `página ${c.pagina}`).toBeLessThanOrEqual(2000);
+      expect(c.largura / c.altura, `página ${c.pagina}`).toBeCloseTo(pagina.largura / pagina.altura, 2);
     }
   });
 
@@ -237,6 +237,7 @@ describe('Minimização do que vai para a IA (RN-038, RN-039, RN-045, DEC-022)',
     for (const c of await h.motor.chamadas(id)) {
       for (const proibido of [A.tenantId, projeto, f.formId, f.versaoId, id, 'Saúde Idoso', 'Demografia', 'Maria Silva', '52998224725']) {
         expect(c.schema).not.toContain(proibido);
+        expect(c.gabarito).not.toContain(proibido);
       }
     }
   });
