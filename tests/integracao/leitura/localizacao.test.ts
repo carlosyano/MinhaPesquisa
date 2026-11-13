@@ -10,7 +10,7 @@ import { chaveIdempotencia, type Cliente } from '../../support/cliente.js';
 import { entrar, MINUTO, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
 import { arquivo, formularioPublicado, projetoCriado, type FormularioPublicado } from '../../support/formularios.js';
 import { criarHarness, type Harness } from '../../support/harness.js';
-import { abrir, consultar, item, prepararCotacao, type ItemRevisao } from '../../support/leitura.js';
+import { abrir, calibrarConfianca, consultar, item, prepararCotacao, type ItemRevisao } from '../../support/leitura.js';
 import {
   conteudoCondicoes,
   conteudoDuasPaginas,
@@ -266,6 +266,7 @@ describe('CA-055 — identificação sem leitura de valores e leitura da página
     projB = await projetoCriado(adminB, 'Saúde Idoso');
     v = await papelAntigoPublicado(adminB, projB, 'Condições de Saúde', conteudoCondicoes());
     digB = await entrar(h, B.usuaria);
+    await calibrarConfianca(h, B.tenantId);
   });
 
   async function enviar(): Promise<{ id: string; f: string[] }> {
@@ -353,7 +354,8 @@ describe('CA-055 — identificação sem leitura de valores e leitura da página
       }),
     );
     const lista = await itensDe(id);
-    expect(item({ itens: lista }, 'NOME').estado).not.toBe('a_revisar');
+    // NOME é texto curto e sempre vai à conferência (FL-002, regra 6); o vizinho de confiança alta não.
+    expect(item({ itens: lista }, 'ESTADO_CIVIL').estado).not.toBe('a_revisar');
     expect(item({ itens: lista }, 'PRESSAO')).toMatchObject({ estado: 'a_revisar', valor_ia: 'sim' });
   });
 
