@@ -133,7 +133,7 @@ paths:
         Projeto inicia `ativo`; criação registrada no histórico e na auditoria (CA-027). Objetivo,
         coordenador e período de coleta são opcionais; `coleta_fim` antes de `coleta_inicio` → ERR-001
         (DEC-137, CA-049). Recebe o próximo `codigo` sequencial; acima de 99999 → ERR-001 (DEC-217).
-      x-trace: [RF-003, RF-011, CA-027, CA-049, DEC-137, RF-015, DEC-217]
+      x-trace: [RF-003, RF-011, CA-027, CA-049, DEC-137, RF-015, CA-063, DEC-217]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -304,7 +304,7 @@ paths:
         (DEC-135, CA-048). Projeto arquivado → ERR-001 (`campos`: `projeto`, DEC-146). `papel_antigo`
         marca a versão 1 como de papel antigo (DEC-175). Recebe o próximo `codigo` sequencial do projeto;
         acima de 999 → ERR-001 (DEC-217).
-      x-trace: [RF-004, RF-011, RF-013, RN-050, CA-048, DEC-135, DEC-146, DEC-175, RF-015, DEC-217]
+      x-trace: [RF-004, RF-011, RF-013, RN-050, CA-048, DEC-135, DEC-146, DEC-175, RF-015, CA-063, DEC-217]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -343,7 +343,7 @@ paths:
         em pergunta comum (RN-050, DEC-145, DEC-147, CA-048). Quando a versão nova não é de papel
         antigo, a marca `nao_consta` é retirada das perguntas copiadas (DEC-179) e o `total_paginas`
         informado é apagado; quando é, ele é copiado (DEC-189). Versão acima da 99 → ERR-001 (DEC-218).
-      x-trace: [RF-004, RF-011, RF-013, CA-001, RN-042, RN-050, CA-048, DEC-147, DEC-179, DEC-189, RF-014, DEC-202, RF-015, DEC-218]
+      x-trace: [RF-004, RF-011, RF-013, CA-001, RN-042, RN-050, CA-048, DEC-147, DEC-179, DEC-189, RF-014, DEC-202, RF-015, CA-063, DEC-218]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -606,7 +606,7 @@ paths:
         No papel antigo, `data_aplicacao` e `local_aplicacao` viram o padrão do projeto no próprio
         envio (DEC-192) e preenchem as perguntas `nao_consta` quando a localização confirma a versão
         e as páginas (DEC-179, DEC-186, CA-057). Só conta o QR no formato do MinhaPesquisa (DEC-187).
-      x-trace: [RF-006, RF-013, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040, CA-052, CA-053, CA-055, CA-057, RN-040, DEC-029, DEC-169, DEC-179, DEC-180, DEC-182, DEC-185, DEC-186, DEC-187, DEC-192, RF-014, CA-060, DEC-198, RF-015, CA-061, CA-062, DEC-215, DEC-216, DEC-218]
+      x-trace: [RF-006, RF-013, CA-003, CA-004, CA-013, CA-029, CA-039, CA-040, CA-052, CA-053, CA-055, CA-057, RN-040, DEC-029, DEC-169, DEC-179, DEC-180, DEC-182, DEC-185, DEC-186, DEC-187, DEC-192, RF-014, CA-060, DEC-198, RF-015, CA-061, CA-062, DEC-215, DEC-216, DEC-218, DEC-224]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -651,7 +651,7 @@ paths:
         na hora, porque a identificação conta como concluída (DEC-182, DEC-185, DEC-186).
         Continua inválido → 400 ERR-004 ou ERR-039. Versão de outro tenant, de outro projeto ou
         inexistente → 400 ERR-039, auditado (DEC-100). Próximo estado conforme FL-001.
-      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, CA-057, DEC-100, DEC-171, DEC-180, DEC-184, DEC-185, DEC-186, DEC-187, RF-015, DEC-221]
+      x-trace: [RF-006, RF-013, CA-004, CA-013, CA-039, CA-040, CA-052, CA-053, CA-057, DEC-100, DEC-171, DEC-180, DEC-184, DEC-185, DEC-186, DEC-187, RF-015, DEC-221, DEC-223, DEC-226]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -691,7 +691,7 @@ paths:
         com folha de QR legível (DEC-184); `data_aplicacao` e `local_aplicacao`, quando vierem, substituem
         os gravados no envio, só o que vier, e são aplicados ou apagados ao fim da identificação (DEC-182,
         DEC-185, DEC-186).
-      x-trace: [RF-006, RF-013, CA-013, CA-040, CA-057, RN-040, DEC-098, DEC-169, DEC-180, DEC-182, DEC-184, DEC-185, DEC-186, RF-014, CA-060, DEC-198, RF-015, DEC-221, DEC-222]
+      x-trace: [RF-006, RF-013, CA-013, CA-040, CA-057, RN-040, DEC-098, DEC-169, DEC-180, DEC-182, DEC-184, DEC-185, DEC-186, RF-014, CA-060, DEC-198, RF-015, CA-061, DEC-221, DEC-222, DEC-225, DEC-226]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -976,7 +976,7 @@ paths:
         na conferência que é a página 1, DEC-183) sem reler os outros campos; exige a confirmação humana
         da assinatura (RN-044); vincula o respondente com o `manter_cadastro` gravado (CA-044). QR legível
         de outro projeto ou formulário → 409 ERR-045, nada é gravado (DEC-222).
-      x-trace: [RF-008, RF-013, CA-044, RN-044, DEC-183, RF-014, CA-060, DEC-198, RF-015, DEC-222]
+      x-trace: [RF-008, RF-013, CA-044, RN-044, DEC-183, RF-014, CA-060, DEC-198, RF-015, CA-061, DEC-222, DEC-227]
       security:
         - sessionCookie: []
           csrfToken: []
@@ -1616,7 +1616,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-018', title: Estado inválido, status: 409, detail: Esta ação não é permitida no estado atual., errorCode: ERR-018, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     PagesConflict:
-      description: Ação não permitida no estado atual (ERR-018) ou QR de projeto ou formulário diferente do da aplicação (ERR-045, DEC-222), com os códigos lidos em `projeto_qr` e `formulario_qr`
+      description: Ação não permitida no estado atual (ERR-018, também no addApplicationPages em aplicação antiga sem formulário, DEC-226), chave de idempotência reutilizada com outro conteúdo (ERR-019) ou QR de projeto ou formulário diferente do da aplicação (ERR-045, DEC-222), com os códigos lidos em `projeto_qr` e `formulario_qr`
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -1699,7 +1699,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-029', title: Arquivo recusado, status: 400, detail: 'Arquivo recusado: [motivo].', errorCode: ERR-029, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, motivo: excede o limite de 20 MB, posicao: 2 }
     FileOrQrRejected:
-      description: Arquivo recusado (ERR-029, com motivo e `posicao`) ou identificação inválida da folha (ERR-039 no addApplicationPages, com versão de outro formulário, DEC-221; ERR-004 no attachSignaturePage, com a folha não reconhecida como a página 1). Nada é gravado e a aplicação não muda
+      description: 'Recusa do pedido, sem gravar nada e sem mudar a aplicação: arquivo recusado (ERR-029, com motivo e `posicao`); data da aplicação futura (ERR-001, DEC-182); no addApplicationPages, `versao_id` inexistente, não publicada, de outro tenant, projeto ou formulário, ou de papel antigo em aplicação com folha de QR legível (ERR-039, DEC-100, DEC-184, DEC-221, DEC-225); no attachSignaturePage, QR legível de página diferente de 1 (ERR-004) ou de outra versão do formulário ou com total de páginas diferente (ERR-039, DEC-227)'
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
