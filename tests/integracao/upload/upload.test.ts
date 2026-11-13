@@ -78,7 +78,7 @@ describe('CA-003 — upload identifica formulário, versão e página', () => {
     const id: string = r.corpo.aplicacao_id;
     expect((await dig.get(`/applications/${id}`)).corpo).toMatchObject({ origem_qr: true, papel_antigo: false, versao_id: f.versaoId });
     await h.worker.processar();
-    const chamadas = await h.localizador.chamadas(id);
+    const chamadas = await h.identificador.chamadas(id);
     expect(chamadas.map((c) => c.imagem_id).sort()).toEqual((r.corpo.paginas as { imagem_id: string }[]).map((p) => p.imagem_id).sort());
     const primeiraLeitura = Math.min(...(await h.motor.chamadas(id)).map((c) => c.em.getTime()));
     expect(Math.max(...chamadas.map((c) => c.em.getTime()))).toBeLessThanOrEqual(primeiraLeitura);
@@ -126,7 +126,7 @@ describe('CA-004 — upload sem QR legível', () => {
     const id: string = r.corpo.aplicacao_id;
     await h.worker.processar();
     expect(await h.inspect.leiturasSolicitadas(id)).toBe(0);
-    expect(await h.localizador.chamadas(id)).toHaveLength(0);
+    expect(await h.identificador.chamadas(id)).toHaveLength(0);
     expect(await h.motor.chamadas(id)).toHaveLength(0);
   });
 

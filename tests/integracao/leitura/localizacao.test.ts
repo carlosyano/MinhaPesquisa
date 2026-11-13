@@ -1,6 +1,8 @@
-// Localização das perguntas pela IA (RF-013, CA-053, CA-055, RN-052, DEC-171, DEC-174, DEC-177,
-// DEC-178, DEC-188, RN-036, RN-037, RN-039, RN-045). Localizador e motor simulados do harness; as
-// fotos de papel antigo são imagens sintéticas sem QR, de 1240 × 1754 px.
+// Identificação da página e leitura da página inteira (RF-013, RF-015, CA-053, CA-055, RN-052, DEC-171,
+// DEC-177, DEC-178, DEC-188, DEC-216, DEC-220, RN-036, RN-037, RN-045). Identificador e motor simulados do
+// harness; as fotos de papel antigo são imagens sintéticas sem QR, de 1240 × 1754 px.
+// Reescrito no IA-TEST do IMP-010 (CHG-019): a identificação devolve só a página e a confiança; as regiões
+// vêm da leitura, que recebe a página inteira com o gabarito (sem recortes nem teste de sobreposição).
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { jpeg } from '../../support/arquivos.js';
@@ -76,48 +78,55 @@ async function pendenteSemLeitura(id: string): Promise<void> {
   expect(await h.motor.chamadas(id)).toHaveLength(0);
 }
 
-describe('CA-053 — ordem das folhas indicada pela localização (DEC-171, DEC-178, DEC-188)', () => {
-  // @trace CA-053, DEC-171, DEC-174, RN-052
-  it('exemplo 1: foto 1 = página 2 e foto 2 = página 1 → lidas nessa ordem, com os recortes das regiões da localização', async () => {
+describe('CA-053 — ordem das folhas indicada pela identificação (DEC-171, DEC-178, DEC-188, DEC-216)', () => {
+  // @trace CA-053, DEC-171, DEC-216, DEC-220, RN-052
+  it('exemplo 1: foto 1 = página 2 e foto 2 = página 1 → lidas nessa ordem, cada uma inteira com o gabarito da sua página', async () => {
     const { id, f } = await fotos(2);
     await localizarELer(
       h,
       id,
-      { [f[0]]: { pagina: 2 }, [f[1]]: { pagina: 1, regioes: { NOME: faixa(0.2, 0.1), PRESSAO: faixa(0.5, 0.1) } } },
-      leiturasAntigas(),
+      { [f[0]]: { pagina: 2 }, [f[1]]: { pagina: 1 } },
+      leiturasAntigas({ NOME: { valor: 'Maria Souza', confianca: 0.97, regiao: faixa(0.2, 0.1) } }),
     );
     expect(await paginasGravadas(id)).toEqual([2, 1]);
     expect(await estado(id)).toBe('em_revisao');
+    // As regiões vêm da leitura e ficam gravadas na folha da página 1 (a segunda do envio).
     const gravada = (await h.inspect.folhas(id))[1];
     expect(gravada.regioes).toEqual(expect.arrayContaining([expect.objectContaining({ codigo: 'NOME', linha: null, ...faixa(0.2, 0.1) })]));
 
-    // Recorte da região com a folga de 2% de cada lado (DEC-174 (5)): 0,94 × 0,14 da foto.
-    const nome = (await h.motor.chamadas(id)).find((c) => c.campos.includes('NOME') && c.resultado === 'ok')!;
-    expect(nome.pagina).toBe(1);
-    expect(Math.abs(nome.largura - 0.94 * LARGURA)).toBeLessThanOrEqual(3);
-    expect(Math.abs(nome.altura - 0.14 * ALTURA)).toBeLessThanOrEqual(3);
+    // Uma leitura por página, com a imagem inteira (sem recorte, sem folga) e o gabarito da página.
+    const leituras = (await h.motor.chamadas(id)).filter((c) => c.resultado === 'ok');
+    expect(leituras.map((c) => [c.pagina, [...c.campos].sort()])).toEqual(
+      expect.arrayContaining([
+        [1, ['NOME', 'PRESSAO']],
+        [2, ['CPF', 'DATA_APLICACAO', 'DATA_NASCIMENTO', 'ESTADO_CIVIL', 'LOCAL_APLICACAO']],
+      ]),
+    );
+    for (const c of leituras) {
+      expect(c.largura).toBe(LARGURA);
+      expect(c.altura).toBe(ALTURA);
+    }
   });
 
   // @trace CA-053, DEC-178, ERR-004
-  it('exemplos 2 e 5: confiança 0,40 → pendente sem leitura; com as páginas informadas, só a foto 2 é localizada de novo, só para as regiões; pergunta sem região vai a a_revisar', async () => {
+  it('exemplos 2 e 5: confiança 0,40 → pendente sem leitura; com as páginas informadas não há nova identificação e as duas fotos são lidas; pergunta que a leitura não encontra vai a a_revisar', async () => {
     const { id, f } = await fotos(2);
     await localizarELer(h, id, { [f[0]]: { pagina: 1, confianca: 0.9 }, [f[1]]: { pagina: 2, confianca: 0.4 } });
     await pendenteSemLeitura(id);
-    const antes = (await h.localizador.chamadas(id)).length;
+    const antes = (await h.identificador.chamadas(id)).length;
 
     const ok = await identificar(dig, id, condicoes.versaoId, emSequencia(f));
     expect(ok.status, ok.texto).toBe(200);
     expect(ok.corpo.estado).toBe('em_leitura');
-    await localizarELer(h, id, { [f[1]]: { pagina: null, regioes: { ESTADO_CIVIL: null } } }, leiturasAntigas());
+    await localizarELer(h, id, {}, leiturasAntigas({ ESTADO_CIVIL: { valor: null, confianca: 0.2, regiao: null } }));
 
-    const novas = (await h.localizador.chamadas(id)).slice(antes);
-    expect(novas.map((c) => c.imagem_id)).toEqual([f[1]]);
-    expect(novas[0].pagina_informada).toBe(2);
+    // A página informada prevalece: nenhuma identificação nova (DEC-220 (5)).
+    expect(await h.identificador.chamadas(id)).toHaveLength(antes);
     expect(await paginasGravadas(id)).toEqual([1, 2]);
     expect(await estado(id)).toBe('em_revisao');
     const estadoCivil = item((await consultar(dig, id)).corpo, 'ESTADO_CIVIL');
     expect(estadoCivil).toMatchObject({ estado: 'a_revisar', valor_ia: null });
-    expect((await h.motor.chamadas(id)).flatMap((c) => c.campos)).not.toContain('ESTADO_CIVIL');
+    expect((await h.motor.chamadas(id)).filter((c) => c.pagina === 2 && c.resultado === 'ok')).toHaveLength(1);
   });
 
   // @trace CA-053, CA-013, ERR-004
@@ -134,11 +143,11 @@ describe('CA-053 — ordem das folhas indicada pela localização (DEC-171, DEC-
   });
 
   // @trace CA-053, DEC-171, RN-052
-  it('exemplo 4: localização diverge do QR legível → pendente; a página informada prevalece sem conferir o QR (RN-052, item 3a)', async () => {
+  it('exemplo 4: identificação diverge do QR legível → pendente; a página informada prevalece sem conferir o QR (RN-052, item 3a)', async () => {
     const r = await enviarAntigo(dig, projeto, [
       arquivo('qr-1.jpg', 'image/jpeg', await jpeg(condicoesQr.paginas[0])),
       arquivo('qr-2.jpg', 'image/jpeg', await jpeg(condicoesQr.paginas[1])),
-    ], { versaoId: condicoes.versaoId });
+    ], { versaoId: condicoes.versaoId, formularioId: condicoesQr.formId });
     expect(r.status, r.texto).toBe(202);
     const id: string = r.corpo.aplicacao_id;
     const f = imagens(r);
@@ -205,14 +214,14 @@ describe('CA-053 — ordem das folhas indicada pela localização (DEC-171, DEC-
   });
 
   // @trace CA-053, RN-052, FL-001, DEC-196
-  it('exemplo 9: terceira foto repetida → pendente já no envio, sem localização; descartada a terceira, as duas são localizadas só para as regiões, com a página informada', async () => {
+  it('exemplo 9: terceira foto repetida → pendente já no envio, sem identificação; descartada a terceira, as duas são lidas com a página informada, sem nova identificação', async () => {
     const r = await enviarAntigo(dig, projeto, await folhasAntigas(3, 'foto'), { versaoId: condicoes.versaoId });
     expect(r.status, r.texto).toBe(202);
     expect(r.corpo).toMatchObject({ estado: 'identificacao_pendente', aviso: 'ERR-004' });
     const id: string = r.corpo.aplicacao_id;
     const f = imagens(r);
     await h.worker.processar();
-    expect(await h.localizador.chamadas(id)).toHaveLength(0);
+    expect(await h.identificador.chamadas(id)).toHaveLength(0);
 
     const ok = await identificar(dig, id, condicoes.versaoId, [
       { imagem_id: f[0], numero_pagina: 1 },
@@ -222,30 +231,30 @@ describe('CA-053 — ordem das folhas indicada pela localização (DEC-171, DEC-
     expect(ok.status, ok.texto).toBe(200);
     expect(ok.corpo.estado).toBe('em_leitura');
     await localizarELer(h, id, {}, leiturasAntigas());
-    const chamadas = (await h.localizador.chamadas(id)).map((c) => [c.imagem_id, c.pagina_informada]);
-    expect(chamadas.sort()).toEqual([[f[0], 1], [f[1], 2]].sort());
+    expect(await h.identificador.chamadas(id)).toHaveLength(0);
+    expect(await paginasGravadas(id)).toEqual([1, 2]);
     expect(await estado(id)).toBe('em_revisao');
-    expect((await h.motor.chamadas(id)).length).toBeGreaterThan(0);
+    expect((await h.motor.chamadas(id)).map((c) => c.pagina).sort()).toEqual([1, 2]);
   });
 
   // @trace CA-053, RN-052, DEC-129
-  it('páginas já localizadas são preservadas na falha; a retomada localiza só as que faltam (RN-052, item 3b)', async () => {
+  it('páginas já identificadas são preservadas na falha; a retomada identifica só as que faltam (RN-052, item 3b)', async () => {
     const { id, f } = await fotos(2);
     await localizarELer(h, id, { [f[1]]: { falha: { tipo: 'erro', vezes: 10 } } });
     expect(await estado(id)).toBe('erro_leitura');
-    const daFoto1 = (await h.localizador.chamadas(id)).filter((c) => c.imagem_id === f[0]).length;
+    const daFoto1 = (await h.identificador.chamadas(id)).filter((c) => c.imagem_id === f[0]).length;
     expect(daFoto1).toBe(1);
 
-    h.localizador.programar(id, {});
+    h.identificador.programar(id, {});
     const retry = await dig.post(`/applications/${id}/retry`, { headers: { 'idempotency-key': chaveIdempotencia() } });
     expect(retry.status, retry.texto).toBe(202); // retryReading responde 202 (contrato; testes falha e cota do IMP-003)
     await localizarELer(h, id, {}, leiturasAntigas());
-    expect((await h.localizador.chamadas(id)).filter((c) => c.imagem_id === f[0])).toHaveLength(daFoto1);
+    expect((await h.identificador.chamadas(id)).filter((c) => c.imagem_id === f[0])).toHaveLength(daFoto1);
     expect(await estado(id)).toBe('em_revisao');
   });
 });
 
-describe('CA-055 — localização sem leitura de valores (RN-045, RN-037, RN-039, DEC-174)', () => {
+describe('CA-055 — identificação sem leitura de valores e leitura da página inteira (RN-045, RN-037, RN-036, DEC-216, DEC-220)', () => {
   let B: TenantPronto;
   let digB: Cliente;
   let projB: string;
@@ -269,85 +278,91 @@ describe('CA-055 — localização sem leitura de valores (RN-045, RN-037, RN-03
     return (await consultar(digB, id)).corpo.itens;
   }
 
-  // @trace CA-055, RN-045, RN-039, RN-036, DEC-174
-  it('exemplo 1: uma chamada de localização com a página inteira e as perguntas, sem projeto nem tenant; NOME e PRESSAO em chamadas separadas; o custo das chamadas entra no teto', async () => {
-    h.localizador.custo({ estimadoUsd: 0.02, realUsd: 0.02 });
+  // @trace CA-055, RN-045, RN-036, DEC-216, DEC-220
+  it('exemplo 1: uma identificação por folha (página inteira e perguntas por página, sem projeto nem tenant) e uma leitura por página com o gabarito; o custo entra no teto', async () => {
+    h.identificador.custo({ estimadoUsd: 0.02, realUsd: 0.02 });
     h.motor.custo({ estimadoUsd: 0.02, realUsd: 0.02 });
     try {
       const { id, f } = await enviar();
-      await localizarELer(h, id, { [f[0]]: { pagina: 1, regioes: { NOME: faixa(0.2, 0.1), PRESSAO: faixa(0.4, 0.1) } } }, leiturasAntigas());
+      await localizarELer(h, id, { [f[0]]: { pagina: 1 } }, leiturasAntigas());
       expect((await consultar(digB, id)).corpo.estado).toBe('em_revisao');
 
-      const loc = (await h.localizador.chamadas(id)).filter((c) => c.imagem_id === f[0]);
-      expect(loc).toHaveLength(1);
-      expect(loc[0].pagina_informada).toBeNull();
-      expect([...loc[0].perguntas[1]].sort()).toEqual(['NOME', 'PRESSAO']);
-      expect(loc[0].largura / loc[0].altura).toBeCloseTo(LARGURA / ALTURA, 2);
-      for (const proibido of [B.tenantId, projB, v.formId, v.versaoId, id, 'Saúde Idoso', 'Condições de Saúde', B.usuaria.email]) {
-        expect(loc[0].entrada).not.toContain(proibido);
-      }
+      const ident = (await h.identificador.chamadas(id)).filter((c) => c.imagem_id === f[0]);
+      expect(ident).toHaveLength(1);
+      expect(ident[0].perguntas[1]).toContain('NOME');
+      expect(ident[0].perguntas[1]).toContain('PRESSAO');
+      expect(ident[0].largura / ident[0].altura).toBeCloseTo(LARGURA / ALTURA, 2);
+      const proibidos = [B.tenantId, projB, v.formId, v.versaoId, id, 'Saúde Idoso', 'Condições de Saúde', B.usuaria.email, 'ca055'];
+      for (const proibido of proibidos) expect(ident[0].entrada).not.toContain(proibido);
 
-      const motor = (await h.motor.chamadas(id)).filter((c) => c.pagina === 1 && c.resultado === 'ok');
-      expect(motor.map((c) => c.campos)).toEqual(expect.arrayContaining([['NOME'], ['PRESSAO']]));
-      for (const c of motor) expect(c.largura * c.altura).toBeLessThan(loc[0].largura * loc[0].altura);
+      // Leitura da página 1: a página inteira, só com NOME e PRESSAO no gabarito, também sem contexto.
+      const leitura = (await h.motor.chamadas(id)).filter((c) => c.pagina === 1 && c.resultado === 'ok');
+      expect(leitura).toHaveLength(1);
+      expect([...leitura[0].campos].sort()).toEqual(['NOME', 'PRESSAO']);
+      expect(leitura[0].largura).toBe(ident[0].largura);
+      expect(leitura[0].altura).toBe(ident[0].altura);
+      for (const proibido of proibidos) expect(leitura[0].gabarito).not.toContain(proibido);
 
-      const feitas = (await h.localizador.chamadas(id)).length + (await h.motor.chamadas(id)).length;
+      const feitas = (await h.identificador.chamadas(id)).length + (await h.motor.chamadas(id)).length;
       const cota = await digB.get('/tenant/quota');
       expect(cota.corpo.consumido).toBe((0.1 * feitas).toFixed(2)); // US$ 0,02 × R$ 5,00 por chamada
     } finally {
-      h.localizador.custo({ estimadoUsd: 0, realUsd: 0 });
+      h.identificador.custo({ estimadoUsd: 0, realUsd: 0 });
       h.motor.custo({ estimadoUsd: 0, realUsd: 0 });
     }
   });
 
-  // @trace CA-055, RN-037, DEC-174, ERR-041
-  it('exemplo 2: resposta com o texto "Maria" junto das regiões → recusada como falha da chamada; depois de 3, erro_leitura (ERR-041), sem leitura', async () => {
+  // @trace CA-055, RN-037, DEC-216, ERR-041
+  it('exemplo 2: a identificação traz o texto "Maria" junto da página → recusada como falha da chamada; depois de 3, erro_leitura (ERR-041), sem leitura', async () => {
     const { id, f } = await enviar();
     await localizarELer(h, id, { [f[0]]: { pagina: 1, extra: { texto: 'Maria' } } });
     expect((await consultar(digB, id)).corpo).toMatchObject({ estado: 'erro_leitura', aviso: 'ERR-041' });
-    expect((await h.localizador.chamadas(id)).filter((c) => c.imagem_id === f[0])).toHaveLength(3);
+    expect((await h.identificador.chamadas(id)).filter((c) => c.imagem_id === f[0])).toHaveLength(3);
     expect(await h.motor.chamadas(id)).toHaveLength(0);
     expect(await h.inspect.logs()).not.toContain('Maria');
   });
 
-  // @trace CA-055, DEC-174
-  it('código de pergunta fora da versão ou região fora de 0..1 → também recusada como falha da chamada', async () => {
-    const casos: Record<string, RegiaoNormalizada | null>[] = [{ OUTRA: faixa(0.2) }, { NOME: { x: -0.1, y: 0.2, largura: 0.5, altura: 0.1 } }];
-    for (const regioes of casos) {
-      const { id, f } = await enviar();
-      await localizarELer(h, id, { [f[0]]: { pagina: 1, regioes } });
-      expect((await consultar(digB, id)).corpo.estado, JSON.stringify(regioes)).toBe('erro_leitura');
-      expect(await h.motor.chamadas(id)).toHaveLength(0);
-    }
-  });
-
-  // @trace CA-055, RN-052, RN-039
-  it('exemplo 3: região de NOME sobreposta à de PRESSAO → os dois em a_revisar, sem leitura', async () => {
+  // @trace CA-055, DEC-216, RN-052
+  it('exemplo 3: regiões de NOME e PRESSAO que se sobrepõem → os dois itens seguem a confiança; não há teste de sobreposição (RN-052, item 5, revogado)', async () => {
     const { id, f } = await enviar();
-    await localizarELer(h, id, { [f[0]]: { pagina: 1, regioes: { NOME: faixa(0.2, 0.15), PRESSAO: faixa(0.3, 0.15) } } }, leiturasAntigas());
+    await localizarELer(
+      h,
+      id,
+      { [f[0]]: { pagina: 1 } },
+      leiturasAntigas({
+        NOME: { valor: 'Maria Souza', confianca: 0.97, regiao: faixa(0.2, 0.15) },
+        PRESSAO: { valor: 'sim', confianca: 0.97, regiao: faixa(0.3, 0.15) },
+      }),
+    );
     const lista = await itensDe(id);
-    for (const codigo of ['NOME', 'PRESSAO']) expect(item({ itens: lista }, codigo), codigo).toMatchObject({ estado: 'a_revisar', valor_ia: null });
-    const lidos = (await h.motor.chamadas(id)).flatMap((c) => c.campos);
-    expect(lidos).not.toContain('NOME');
-    expect(lidos).not.toContain('PRESSAO');
+    expect(item({ itens: lista }, 'NOME')).toMatchObject({ valor_ia: 'Maria Souza' });
+    expect(item({ itens: lista }, 'PRESSAO')).toMatchObject({ valor_ia: 'sim' });
+    expect((await h.motor.chamadas(id)).flatMap((c) => c.campos)).toEqual(expect.arrayContaining(['NOME', 'PRESSAO']));
   });
 
-  // @trace CA-055, RN-052, DEC-174
-  it('regiões que só se sobrepõem com a folga de 2% também levam os dois a a_revisar', async () => {
+  // @trace CA-055, DEC-216, DEC-177
+  it('regiões sobrepostas com um dos campos de confiança baixa → só a confiança manda o item a a_revisar', async () => {
     const { id, f } = await enviar();
-    // NOME termina em 0,30 e PRESSAO começa em 0,31: com a folga de 0,02 de cada lado, elas se tocam.
-    await localizarELer(h, id, { [f[0]]: { pagina: 1, regioes: { NOME: faixa(0.2, 0.1), PRESSAO: faixa(0.31, 0.1) } } }, leiturasAntigas());
+    await localizarELer(
+      h,
+      id,
+      { [f[0]]: { pagina: 1 } },
+      leiturasAntigas({
+        NOME: { valor: 'Maria Souza', confianca: 0.97, regiao: faixa(0.2, 0.15) },
+        PRESSAO: { valor: 'sim', confianca: 0.3, regiao: faixa(0.3, 0.15) },
+      }),
+    );
     const lista = await itensDe(id);
-    for (const codigo of ['NOME', 'PRESSAO']) expect(item({ itens: lista }, codigo).estado, codigo).toBe('a_revisar');
+    expect(item({ itens: lista }, 'NOME').estado).not.toBe('a_revisar');
+    expect(item({ itens: lista }, 'PRESSAO')).toMatchObject({ estado: 'a_revisar', valor_ia: 'sim' });
   });
 
-  // @trace CA-055, DEC-177, DEC-174
-  it('exemplo 4: sem região de PRESSAO → PRESSAO em a_revisar, sem leitura; a imagem do item é a página inteira, com regiao nula', async () => {
+  // @trace CA-055, DEC-177, DEC-216
+  it('exemplo 4: leitura sem valor e sem região de PRESSAO → PRESSAO em a_revisar; a imagem do item é a página inteira, com regiao nula', async () => {
     const { id, f } = await enviar();
-    await localizarELer(h, id, { [f[0]]: { pagina: 1, regioes: { PRESSAO: null } } }, leiturasAntigas());
+    await localizarELer(h, id, { [f[0]]: { pagina: 1 } }, leiturasAntigas({ PRESSAO: { valor: null, confianca: 0.2, regiao: null } }));
     const pressao = item({ itens: await itensDe(id) }, 'PRESSAO');
     expect(pressao).toMatchObject({ estado: 'a_revisar', valor_ia: null });
-    expect((await h.motor.chamadas(id)).flatMap((c) => c.campos)).not.toContain('PRESSAO');
     expect(item({ itens: await itensDe(id) }, 'NOME').valor_ia).toBe('Maria Souza');
 
     expect((await abrir(digB, id)).status).toBe(200);
@@ -357,5 +372,25 @@ describe('CA-055 — localização sem leitura de valores (RN-045, RN-037, RN-03
     const nome = item({ itens: await itensDe(id) }, 'NOME');
     const imgNome = await digB.get(`/applications/${id}/items/${nome.id}/image`);
     expect(imgNome.corpo.regiao).not.toBeNull();
+  });
+
+  // @trace CA-055, RN-037, DEC-220
+  it('exemplo 5: a leitura traz um campo PESO, fora do gabarito da página → recusada como falha da chamada; depois de 3, erro_leitura (ERR-041)', async () => {
+    const { id, f } = await enviar();
+    await localizarELer(h, id, { [f[0]]: { pagina: 1 } }, leiturasAntigas(), { camposExtras: { PESO: { valor: '70', confianca: 0.97 } } });
+    expect((await consultar(digB, id)).corpo).toMatchObject({ estado: 'erro_leitura', aviso: 'ERR-041' });
+    const paginaUm = (await h.motor.chamadas(id)).filter((c) => c.pagina === 1);
+    expect(paginaUm).toHaveLength(3);
+    expect(paginaUm.every((c) => c.resultado === 'malformada')).toBe(true);
+    expect(await h.inspect.logs()).not.toContain('"PESO"');
+  });
+
+  // @trace CA-055, RN-037, DEC-220
+  it('região fora de 0..1 também é recusada como falha da chamada', async () => {
+    for (const regiao of [{ x: -0.1, y: 0.2, largura: 0.5, altura: 0.1 }, { x: 0.5, y: 0.2, largura: 0.8, altura: 0.1 }]) {
+      const { id, f } = await enviar();
+      await localizarELer(h, id, { [f[0]]: { pagina: 1 } }, leiturasAntigas({ NOME: { valor: 'Maria Souza', confianca: 0.97, regiao } }));
+      expect((await consultar(digB, id)).corpo.estado, JSON.stringify(regiao)).toBe('erro_leitura');
+    }
   });
 });

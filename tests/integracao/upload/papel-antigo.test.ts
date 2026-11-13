@@ -78,7 +78,7 @@ async function pendenteSemLeitura(r: Resposta, aviso: 'ERR-004' | 'ERR-039'): Pr
   await localizarELer(h, id);
   expect((await consultar(dig, id)).corpo.estado).toBe('identificacao_pendente');
   expect(await h.inspect.leiturasSolicitadas(id)).toBe(0);
-  expect(await h.localizador.chamadas(id)).toHaveLength(0);
+  expect(await h.identificador.chamadas(id)).toHaveLength(0);
   expect(await h.motor.chamadas(id)).toHaveLength(0);
   return id;
 }
@@ -107,7 +107,7 @@ describe('CA-052 — papel antigo sem QR, com a versão escolhida no envio (DEC-
     const app = (await consultar(dig, id)).corpo;
     expect(app).toMatchObject({ versao_id: condicoes.versaoId, origem_qr: false, papel_antigo: true, estado: 'em_revisao' });
     expect(await paginasGravadas(id)).toEqual([1, 2]);
-    expect(await h.localizador.chamadas(id)).toHaveLength(2);
+    expect(await h.identificador.chamadas(id)).toHaveLength(2);
   });
 
   // @trace CA-052, CA-040, ERR-004, FL-001
@@ -244,7 +244,7 @@ describe('FL-001 — tabela de criação com a versão escolhida no envio (DEC-1
     await h.seed.consumoIa({ tenantId: B.tenantId, valorReais: '500.00' });
     const id = await aceito(await enviarAntigo(adminB, projB, await folhasAntigas(2), { versaoId: v.versaoId }), 'aguardando_cota', 'ERR-003');
     await h.worker.processar();
-    expect(await h.localizador.chamadas(id)).toHaveLength(0);
+    expect(await h.identificador.chamadas(id)).toHaveLength(0);
   });
 });
 
@@ -273,7 +273,7 @@ describe('CA-057 — perguntas que não constam no papel antigo e padrão de dat
 
   /** Nenhuma das perguntas dadas foi à localização nem à leitura. */
   async function semLocalizarNemLer(id: string, codigos: string[]): Promise<void> {
-    for (const c of await h.localizador.chamadas(id)) {
+    for (const c of await h.identificador.chamadas(id)) {
       const enviadas = Object.values(c.perguntas).flat();
       for (const codigo of codigos) expect(enviadas, `localização com ${codigo}`).not.toContain(codigo);
     }
@@ -283,7 +283,7 @@ describe('CA-057 — perguntas que não constam no papel antigo e padrão de dat
   }
 
   async function lidas(id: string, codigos: string[]): Promise<void> {
-    const enviadas = (await h.localizador.chamadas(id)).flatMap((c) => Object.values(c.perguntas).flat());
+    const enviadas = (await h.identificador.chamadas(id)).flatMap((c) => Object.values(c.perguntas).flat());
     const campos = (await h.motor.chamadas(id)).flatMap((c) => c.campos);
     for (const codigo of codigos) {
       expect(enviadas, `localização de ${codigo}`).toContain(codigo);

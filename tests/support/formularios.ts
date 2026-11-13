@@ -69,10 +69,31 @@ export async function projetoCriado(admin: Cliente, nome: string): Promise<strin
   return r.corpo.id;
 }
 
+// Formulário de cada versão e último formulário criado em cada projeto (IA-TEST do IMP-010, CHG-019).
+// Desde a DEC-215 todo envio informa o `formulario_id`; os testes que não são sobre a escolha usam o
+// formulário da versão que já enviam ou, sem versão, o último criado no projeto. Quem precisa de outro
+// passa `formularioId` (ver `enviar`).
+const formularioDaVersao = new Map<string, string>();
+const ultimoFormulario = new Map<string, string>();
+
+/** Guarda o formulário recém-criado para o `enviar` (também usado por `papel-antigo.ts`). */
+export function registrarFormulario(projetoId: string, formId: string, versaoId: string): void {
+  formularioDaVersao.set(versaoId, formId);
+  ultimoFormulario.set(projetoId, formId);
+}
+
+/** Formulário do envio: o da versão dada, senão o último criado no projeto; falha o teste se não houver. */
+export function formularioDoEnvio(projetoId: string, versaoId?: string): string {
+  const id = (versaoId && formularioDaVersao.get(versaoId)) || ultimoFormulario.get(projetoId);
+  if (!id) throw new Error(`IA-TEST: projeto ${projetoId} sem formulário criado pelos auxiliares; informe formularioId`);
+  return id;
+}
+
 export async function criarFormulario(admin: Cliente, projetoId: string, nome: string): Promise<{ formId: string; versaoId: string }> {
   const r = await admin.post('/forms', { corpo: { nome, projeto_id: projetoId }, headers: { 'idempotency-key': chaveIdempotencia() } });
   expect(r.status, r.texto).toBe(201);
   expect(r.corpo.versoes).toHaveLength(1);
+  registrarFormulario(projetoId, r.corpo.id, r.corpo.versoes[0].id);
   return { formId: r.corpo.id, versaoId: r.corpo.versoes[0].id };
 }
 
@@ -117,6 +138,12 @@ export function arquivo(nome: string, tipo: string, bytes: Buffer): Arquivo {
   return { nome, tipo, bytes };
 }
 
-export async function enviar(dig: Cliente, projetoId: string, arquivos: Arquivo[], chave = chaveIdempotencia()): Promise<Resposta> {
-  return dig.enviarArquivos(`/projects/${projetoId}/applications/upload`, arquivos, { 'idempotency-key': chave });
+/**
+ * `uploadImages` com o `formulario_id` obrigatório (DEC-215): `formularioId` explícito ou, sem ele, o
+ * último formulário criado no projeto pelos auxiliares. `formularioId: null` omite o campo (CA-061, exemplo 2).
+ */
+export async function enviar(dig: Cliente, projetoId: string, arquivos: Arquivo[], chave = chaveIdempotencia(), formularioId?: string | null): Promise<Resposta> {
+  const campos: [string, string | Arquivo][] = arquivos.map((a) => ['arquivos', a]);
+  if (formularioId !== null) campos.push(['formulario_id', formularioId ?? formularioDoEnvio(projetoId)]);
+  return dig.enviarFormulario(`/projects/${projetoId}/applications/upload`, campos, { 'idempotency-key': chave });
 }

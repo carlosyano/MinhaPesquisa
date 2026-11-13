@@ -10,8 +10,8 @@ import { createCanvas, loadImage } from '@napi-rs/canvas';
 import QRCode from 'qrcode';
 import { expect } from 'vitest';
 import { chaveIdempotencia, type Arquivo, type Cliente, type Resposta } from './cliente.js';
-import { arquivo, caminhoVersao, conteudoValido, publicar, salvarConteudo, type Conteudo, type Pergunta } from './formularios.js';
-import type { Harness, RegiaoNormalizada, RoteiroLeitura, RoteiroLocalizacao } from './harness.js';
+import { arquivo, caminhoVersao, conteudoValido, formularioDoEnvio, publicar, registrarFormulario, salvarConteudo, type Conteudo, type Pergunta } from './formularios.js';
+import type { Harness, OpcoesMotor, RegiaoNormalizada, RoteiroIdentificacao, RoteiroLeitura } from './harness.js';
 import { confirmarPendentes } from './leitura.js';
 
 /** Perguntas da RN-050 que PODEM ser marcadas `nao_consta` no papel antigo (DEC-179). */
@@ -96,6 +96,7 @@ export async function rascunhoAntigo(admin: Cliente, projetoId: string, nome: st
   expect(r.status, r.texto).toBe(201);
   const versaoId: string = r.corpo.versoes[0].id;
   expect(r.corpo.versoes[0].papel_antigo).toBe(true);
+  registrarFormulario(projetoId, r.corpo.id, versaoId);
   const gravado = await salvarConteudo(admin, r.corpo.id, versaoId, {
     ...conteudo,
     papel_antigo: true,
@@ -144,13 +145,17 @@ export async function folhasAntigas(n: number, prefixo = 'antiga'): Promise<Arqu
 
 export interface OpcoesEnvio {
   versaoId?: string;
+  /** Formulário escolhido no envio (DEC-215); padrão: o da versão ou o último criado no projeto. `null` omite o campo. */
+  formularioId?: string | null;
   data?: string;
   local?: string;
   chave?: string;
 }
 
-function camposEnvio(arquivos: Arquivo[], o: OpcoesEnvio): [string, string | Arquivo][] {
+function camposEnvio(arquivos: Arquivo[], o: OpcoesEnvio, projetoId?: string): [string, string | Arquivo][] {
   const campos: [string, string | Arquivo][] = arquivos.map((a) => ['arquivos', a]);
+  // Só o uploadImages leva o formulário; o addApplicationPages usa o da aplicação (DEC-221).
+  if (projetoId !== undefined && o.formularioId !== null) campos.push(['formulario_id', o.formularioId ?? formularioDoEnvio(projetoId, o.versaoId)]);
   if (o.versaoId) campos.push(['versao_id', o.versaoId]);
   if (o.data !== undefined) campos.push(['data_aplicacao', o.data]);
   if (o.local !== undefined) campos.push(['local_aplicacao', o.local]);
@@ -159,7 +164,7 @@ function camposEnvio(arquivos: Arquivo[], o: OpcoesEnvio): [string, string | Arq
 
 /** `uploadImages` com a versão escolhida e a data e o local do envio (DEC-169, DEC-179). */
 export async function enviarAntigo(dig: Cliente, projetoId: string, arquivos: Arquivo[], o: OpcoesEnvio = {}): Promise<Resposta> {
-  return dig.enviarFormulario(`/projects/${projetoId}/applications/upload`, camposEnvio(arquivos, o), { 'idempotency-key': o.chave ?? chaveIdempotencia() });
+  return dig.enviarFormulario(`/projects/${projetoId}/applications/upload`, camposEnvio(arquivos, o, projetoId), { 'idempotency-key': o.chave ?? chaveIdempotencia() });
 }
 
 /** `addApplicationPages` com a versão e a data e o local, que substituem os do envio (DEC-185). */
@@ -183,10 +188,10 @@ export function emSequencia(ids: string[]): PaginaInformada[] {
   return ids.map((imagem_id, i) => ({ imagem_id, numero_pagina: i + 1 }));
 }
 
-/** Programa o localizador e o motor e roda o worker com as retentativas de 1 e 2 s (DEC-129). */
-export async function localizarELer(h: Harness, aplicacaoId: string, localizacao: RoteiroLocalizacao = {}, leitura: RoteiroLeitura = {}): Promise<void> {
-  h.localizador.programar(aplicacaoId, localizacao);
-  h.motor.programar(aplicacaoId, leitura);
+/** Programa o identificador e o motor e roda o worker com as retentativas de 1 e 2 s (DEC-129). */
+export async function localizarELer(h: Harness, aplicacaoId: string, identificacao: RoteiroIdentificacao = {}, leitura: RoteiroLeitura = {}, opcoes?: OpcoesMotor): Promise<void> {
+  h.identificador.programar(aplicacaoId, identificacao);
+  h.motor.programar(aplicacaoId, leitura, opcoes);
   await h.worker.processar();
   for (const ms of [1_000, 2_000]) {
     await h.clock.advance(ms);

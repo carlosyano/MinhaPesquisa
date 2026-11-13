@@ -78,6 +78,23 @@
 //   `inspect.nomesArquivo`, com as folhas expurgadas, para provar o apagamento no expurgo (DEC-206);
 // - `seed.paginasAntigas`, que apaga o `nome_arquivo` das folhas como nas enviadas antes da migração
 //   0010 (CA-060, exemplo 5).
+//
+// Acrescentado no IA-TEST do IMP-010 (CHG-019, DEC-215 a DEC-235):
+// - `seed.semFormulario`, que deixa a aplicação como as anteriores à v2.9, sem versão e sem
+//   `formulario_id` (DEC-223); `seed.limiteDeCodigo`, que põe na base o maior código de projeto
+//   (99999), de formulário (999) ou o número de versão 99 (CA-063, exemplos 5 a 7); e
+//   `seed.baseSemCodigos`, que desfaz a migração 0011 (`down`), grava projetos e formulários como
+//   antes dela, com as datas de criação dadas, e refaz a migração (CA-063, exemplos 4 e 8);
+// - em `inspect.aplicacao`, o `formulario_id` (ENT-010, DEC-221);
+// - o localizador sai e entra o `identificador` (DEC-216): a identificação devolve só a página e a
+//   confiança, sem regiões, e roda uma vez por folha (pulada depois do `identifyApplication`, que já
+//   informa a página). A região de cada pergunta passa a vir da leitura, que recebe a página inteira com
+//   o gabarito das perguntas dela (`ChamadaMotor.gabarito`) e devolve valor, confiança e região por campo
+//   (`LeituraOk.regiao`) e, na página 1, a região da assinatura (`motor.programar`, terceiro argumento).
+//   Não há mais recorte nem empilhamento com tarjas (RN-038 sem exceção): a imagem enviada é a página
+//   inteira, já sem metadados, com o lado maior de no máximo 2.000 px (DEC-220 (5));
+// - o motor aplica o schema fechado da leitura (DEC-220 (4)): campo, linha ou código fora do gabarito,
+//   ou região fora de 0..1, faz a chamada falhar como saída malformada, com as retentativas da DEC-129.
 
 /** Resultado de um script local: código de saída e tudo o que ele escreveu no terminal. */
 export interface SaidaScript {
@@ -146,7 +163,8 @@ export type LeituraSimulada =
 export interface LeituraOk {
   valor: string | null;
   confianca: number;
-  regiao?: RegiaoNormalizada;
+  /** Região do campo na página; ausente = a padrão; `null` = o campo volta sem região (DEC-177, DEC-216). */
+  regiao?: RegiaoNormalizada | null;
   /**
    * Complemento de cada opção com complemento da pergunta, pelo código da opção (DEC-197, DEC-203 (3)).
    * Opção não programada: lida em branco com confiança 0,99. `null`: ausente na resposta (pré-regra
@@ -162,17 +180,37 @@ export interface LeituraOk {
  */
 export type RoteiroLeitura = Record<string, LeituraSimulada>;
 
-/** Uma chamada ao motor, como o motor a recebeu (RN-045): recorte e schema, sem contexto. */
+/** Programação da leitura da página inteira que não é de um campo do gabarito (DEC-220 (4)). Acrescentado no IA-TEST do IMP-010. */
+export interface OpcoesMotor {
+  /** Região da assinatura que a leitura da página 1 devolve (padrão: a do `mapa_layout`); `null` = não achada. */
+  assinatura?: RegiaoNormalizada | null;
+  /**
+   * Campos que o motor devolve a mais, fora do gabarito da página, na primeira leitura de cada aplicação
+   * (ex.: `PESO`); o schema fechado os recusa e a chamada falha como saída malformada (CA-055, exemplo 5).
+   */
+  camposExtras?: Record<string, LeituraOk>;
+}
+
+/**
+ * Uma chamada de leitura ao motor, como ele a recebeu (RN-045, DEC-216): a página inteira e o gabarito das
+ * perguntas dela, sem projeto, tenant, respondente nem nome de arquivo (RN-028, RN-045).
+ */
 export interface ChamadaMotor {
-  /** Perguntas (e linhas) cujos campos foram nesta chamada, ex.: `PRESSAO_ALTA`, `SINTOMAS.dor`. */
+  /** Campos do gabarito da página, na ordem: `PRESSAO_ALTA`, `SINTOMAS.dor`. */
   campos: string[];
-  /** Página da versão de onde saíram os recortes. */
+  /** Página da versão que a chamada lê. */
   pagina: number;
-  /** Dimensões da imagem enviada, em pixels. */
+  /** Se o gabarito pede a região da assinatura (verdadeiro na página 1, DEC-220 (4)). */
+  procurar_assinatura: boolean;
+  /** Dimensões da imagem enviada, em pixels: a página inteira, no máximo 2000 no lado maior (DEC-220 (5)). */
   largura: number;
   altura: number;
+  /** Gabarito exatamente como foi passado ao motor, serializado em JSON (`pagina`, `procurar_assinatura` e as perguntas). */
+  gabarito: string;
   /** Schema exatamente como foi passado ao motor, serializado em JSON. */
   schema: string;
+  /** Teto de tokens de saída da chamada (300 por campo do gabarito, mais 1.000 por opção com complemento, DEC-220 (4)). */
+  maxTokens: number;
   /** Sucesso ou o tipo da falha programada. */
   resultado: 'ok' | 'tempo_esgotado' | 'erro' | 'malformada';
   em: Date;
@@ -259,48 +297,39 @@ export interface ContagemExportacao {
   tarefas: number;
 }
 
-/** Região de uma pergunta na folha (DEC-174): `linha` é o código da linha da matriz, nulo nas outras. */
+/** Região de uma pergunta na folha, gravada pela leitura (DEC-216): `linha` é o código da linha da matriz, nulo nas outras. */
 export interface RegiaoLocalizada extends RegiaoNormalizada {
   codigo: string;
   linha: string | null;
 }
 
-/** Resposta do localizador simulado para uma folha (DEC-174 (1)). Ausente = o padrão da folha. */
-export interface LocalizacaoOk {
+/** Resposta do identificador simulado para uma folha (DEC-216, DEC-220 (4)). Ausente = o padrão da folha. */
+export interface IdentificacaoOk {
   /** Página da versão indicada; `null` = não indicada (DEC-178). */
   pagina?: number | null;
   /** Padrão 0,99. */
   confianca?: number;
-  /**
-   * Regiões por chave `CODIGO` ou `CODIGO.linha`, por cima das padrão; `null` tira a pergunta da
-   * resposta (pergunta não encontrada, DEC-177).
-   */
-  regioes?: Record<string, RegiaoNormalizada | null>;
-  /** Região da assinatura, só na página 1; `null` = não achada. */
-  regiao_assinatura?: RegiaoNormalizada | null;
-  /** Campos a mais na raiz da resposta, como um texto lido (`{ texto: 'Maria' }`), que o schema fechado recusa (DEC-174 (2)). */
+  /** Campos a mais na raiz da resposta, como um texto lido (`{ texto: 'Maria' }`), que o schema fechado recusa. */
   extra?: Record<string, unknown>;
 }
 
 /**
- * O que o localizador simulado devolve para uma folha. `falha` faz as primeiras `vezes` chamadas da
- * folha falharem (tempo esgotado, erro do provedor ou saída malformada, DEC-129); depois devolve `depois`.
+ * O que o identificador simulado devolve para uma folha. `falha` faz as primeiras `vezes` chamadas da folha
+ * falharem (tempo esgotado, erro do provedor ou saída malformada, DEC-129); depois devolve `depois`.
  */
-export type LocalizacaoSimulada = LocalizacaoOk | { falha: { tipo: 'tempo_esgotado' | 'erro' | 'malformada'; vezes: number }; depois?: LocalizacaoOk };
+export type IdentificacaoSimulada = IdentificacaoOk | { falha: { tipo: 'tempo_esgotado' | 'erro' | 'malformada'; vezes: number }; depois?: IdentificacaoOk };
 
 /** Folhas de uma aplicação, pelo `imagem_id`. */
-export type RoteiroLocalizacao = Record<string, LocalizacaoSimulada>;
+export type RoteiroIdentificacao = Record<string, IdentificacaoSimulada>;
 
-/** Uma chamada ao localizador, como ele a recebeu (DEC-174 (1), RN-045). */
-export interface ChamadaLocalizador {
+/** Uma chamada ao identificador, como ele a recebeu (DEC-216, RN-045). */
+export interface ChamadaIdentificador {
   imagem_id: string;
-  /** Página informada ao localizador, só depois do `identifyApplication` (RN-052, item 3a); senão null. */
-  pagina_informada: number | null;
   /** Perguntas enviadas por página da versão: `CODIGO` ou, na matriz, `CODIGO.linha`. */
   perguntas: Record<number, string[]>;
-  /** Tudo o que acompanhou a imagem, serializado em JSON, exatamente como foi passado ao localizador. */
+  /** Tudo o que acompanhou a imagem, serializado em JSON, exatamente como foi passado ao identificador. */
   entrada: string;
-  /** Dimensões da imagem enviada, em pixels. */
+  /** Dimensões da imagem enviada, em pixels: a folha inteira, no máximo 2000 no lado maior. */
   largura: number;
   altura: number;
   resultado: 'ok' | 'tempo_esgotado' | 'erro' | 'malformada';
@@ -312,7 +341,7 @@ export interface FolhaGravada {
   imagem_id: string;
   tipo: 'formulario' | 'assinatura';
   numero_pagina: number | null;
-  /** Regiões gravadas pela localização; null antes dela e na folha de página sem perguntas (RN-052, item 3c). */
+  /** Regiões gravadas pela leitura da página (DEC-216); null antes dela e na folha de página sem perguntas (RN-052, item 3c). */
   regioes: RegiaoLocalizada[] | null;
   /** Posição da folha na aplicação, na ordem do envio (ENT-025, DEC-198). Acrescentado no IA-TEST do IMP-009. */
   ordem_envio: number;
@@ -333,6 +362,8 @@ export interface RespondenteGravado {
 export interface AplicacaoGravada {
   estado: string;
   respondente_id: string | null;
+  /** Formulário da aplicação (ENT-010, DEC-221); null na anterior à v2.9 até o `identifyApplication` (DEC-223). Acrescentado no IA-TEST do IMP-010. */
+  formulario_id: string | null;
   /** Acrescentados no IA-TEST do IMP-008. */
   versao_id: string | null;
   origem_qr: boolean;
@@ -435,12 +466,37 @@ export interface Harness {
      * migração 0010 (CA-060, exemplo 5). Acrescentado no IA-TEST do IMP-009.
      */
     paginasAntigas(aplicacaoId: string): Promise<void>;
+    /**
+     * Deixa a aplicação (em `identificacao_pendente`) como as criadas antes da v2.9: sem `versao_id` e
+     * sem `formulario_id` (DEC-223, CA-061 exemplos 14 e 15). Acrescentado no IA-TEST do IMP-010.
+     */
+    semFormulario(aplicacaoId: string): Promise<void>;
+    /**
+     * Grava na base o maior código possível, para testar o limite sem criar milhares de registros
+     * (CA-063, exemplos 5 a 7): `projeto` põe 99999 no `codigo` do último projeto do tenant;
+     * `formulario` põe 999 no `codigo` do último formulário do projeto; `versao` põe 99 no `numero`
+     * da última versão do formulário. Acrescentado no IA-TEST do IMP-010.
+     */
+    limiteDeCodigo(dados: { tipo: 'projeto'; tenantId: string } | { tipo: 'formulario'; projetoId: string } | { tipo: 'versao'; formId: string }): Promise<void>;
+    /**
+     * Base como antes da migração 0011 (CA-063, exemplos 4 e 8): desfaz a migração (o `down` da
+     * DEC-220), grava os projetos e os formulários do tenant sem código, com o `criado_em` dado (ISO
+     * 8601), e refaz a migração. Devolve os ids na ordem dada. Acrescentado no IA-TEST do IMP-010.
+     */
+    baseSemCodigos(dados: {
+      tenantId: string;
+      projetos: { nome: string; criadoEm: string; formularios?: { nome: string; criadoEm: string }[] }[];
+    }): Promise<{ projetoId: string; formularioIds: string[] }[]>;
   };
 
   /** Motor de leitura simulado (DEC-123), no lugar do adaptador Claude. */
   motor: {
-    /** Leituras da aplicação; vale para as chamadas feitas depois, inclusive nas retentativas. */
-    programar(aplicacaoId: string, roteiro: RoteiroLeitura): void;
+    /**
+     * Leituras da aplicação; vale para as chamadas feitas depois, inclusive nas retentativas. Campo sem
+     * `regiao` no roteiro: a região do `mapa_layout` da versão ou, no papel antigo, a faixa igual por
+     * pergunta na ordem da página; `regiao: null`: o campo volta sem região (acrescentado no IA-TEST do IMP-010).
+     */
+    programar(aplicacaoId: string, roteiro: RoteiroLeitura, opcoes?: OpcoesMotor): void;
     /** Custo de cada chamada em dólar: o estimado antes (reserva) e o real depois (DEC-051). Padrão 0. */
     custo(dados: { estimadoUsd: number; realUsd: number }): void;
     /** Chamadas feitas ao motor para a aplicação, em ordem. */
@@ -457,14 +513,19 @@ export interface Harness {
     chamadas(importacaoId: string): Promise<ChamadaExtrator[]>;
   };
 
-  /** Localizador simulado (DEC-174), no lugar da operação `localizar` do adaptador Claude. Acrescentado no IA-TEST do IMP-008. */
-  localizador: {
-    /** Folhas da aplicação; vale para as chamadas feitas depois, inclusive nas retentativas e na localização que segue o `identifyApplication`. */
-    programar(aplicacaoId: string, roteiro: RoteiroLocalizacao): void;
+  /**
+   * Identificador simulado (DEC-216), no lugar da operação `identificarPagina` do adaptador Claude. Folha não
+   * programada: confiança 0,99 e a página do QR legível da folha, a informada no `identifyApplication` ou,
+   * sem nenhuma das duas, a posição da folha entre as folhas de formulário da aplicação, na ordem do envio.
+   * Acrescentado no IA-TEST do IMP-010 (substitui o `localizador` do IMP-008).
+   */
+  identificador: {
+    /** Folhas da aplicação; vale para as chamadas feitas depois, inclusive nas retentativas. */
+    programar(aplicacaoId: string, roteiro: RoteiroIdentificacao): void;
     /** Custo de cada chamada em dólar: o estimado antes (reserva) e o real depois (DEC-051). Padrão 0. */
     custo(dados: { estimadoUsd: number; realUsd: number }): void;
-    /** Chamadas feitas ao localizador para a aplicação, em ordem. */
-    chamadas(aplicacaoId: string): Promise<ChamadaLocalizador[]>;
+    /** Chamadas feitas ao identificador para a aplicação, em ordem. */
+    chamadas(aplicacaoId: string): Promise<ChamadaIdentificador[]>;
   };
 
   worker: {
