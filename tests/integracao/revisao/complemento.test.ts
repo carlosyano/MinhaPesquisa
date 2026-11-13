@@ -154,7 +154,7 @@ function motivo(valor: string | null, confianca: number, comp?: { valor: string 
 /** Envia as 2 páginas num PDF, programa o motor e roda o worker; devolve o id da aplicação. */
 async function lerAplicacao(extra: RoteiroLeitura, form = f): Promise<string> {
   const pdf = await pdfDeImagens(await Promise.all([0, 1].map((i) => jpeg(form.paginas[i]))));
-  const r = await enviar(c, saude, [arquivo(`pessoa-${sequencia + 1}.pdf`, 'application/pdf', pdf)]);
+  const r = await enviar(c, saude, [arquivo(`pessoa-${sequencia + 1}.pdf`, 'application/pdf', pdf)], undefined, form.formId);
   expect(r.status, r.texto).toBe(202);
   const id: string = r.corpo.aplicacao_id;
   h.motor.programar(id, roteiro(extra));
@@ -511,7 +511,7 @@ describe('CA-059 — leitura do complemento (pré-regra 1b)', () => {
 
   // @trace CA-059, DEC-203, DEC-129, RN-037
   it('complemento acima de 2000 caracteres está fora do schema da chamada: falha da leitura com as retentativas, não a regra 7', async () => {
-    const r = await enviar(c, saude, [arquivo('longo.pdf', 'application/pdf', await pdfDeImagens(await Promise.all([0, 1].map((i) => jpeg(f.paginas[i])))))]);
+    const r = await enviar(c, saude, [arquivo('longo.pdf', 'application/pdf', await pdfDeImagens(await Promise.all([0, 1].map((i) => jpeg(f.paginas[i])))))], undefined, f.formId);
     expect(r.status, r.texto).toBe(202);
     const id: string = r.corpo.aplicacao_id;
     h.motor.programar(id, roteiro(motivo('outros', 0.95, { valor: 'a'.repeat(2001), confianca: 0.95 })));

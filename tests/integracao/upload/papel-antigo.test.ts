@@ -3,7 +3,7 @@
 // usam os simulados do harness; as folhas de papel antigo são imagens sintéticas sem QR.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { comQr, conteudoForjado, jpeg, semQr } from '../../support/arquivos.js';
+import { comQr, jpeg, semQr } from '../../support/arquivos.js';
 import { esperarErro } from '../../support/catalogo.js';
 import { chaveIdempotencia, type Arquivo, type Cliente, type Resposta } from '../../support/cliente.js';
 import { entrar, MINUTO, tenantComUsuaria, type TenantPronto } from '../../support/cenarios.js';
@@ -56,6 +56,12 @@ beforeEach(async () => {
 afterAll(async () => {
   await h?.close();
 });
+
+/** Conteúdo do QR da página `n` de "Saúde Geral" com a versão 05, que não existe (DEC-218). */
+function qrForjado(n: number): string {
+  const [pr, fm, , pg] = geral.paginas[n - 1].qr!.conteudo.split('.');
+  return `${pr}.${fm}.05.${pg}`;
+}
 
 async function geralJpeg(n: number): Promise<Arquivo> {
   return arquivo(`geral-${n}.jpg`, 'image/jpeg', await jpeg(geral.paginas[n - 1]));
@@ -129,20 +135,20 @@ describe('CA-052 — papel antigo sem QR, com a versão escolhida no envio (DEC-
 
   // @trace CA-052, DEC-169, DEC-180
   it('exemplo 5: papel antigo escolhido, mas QR íntegro de "Saúde Geral" → o QR prevalece, origem_qr = true', async () => {
-    const id = await aceito(await enviarAntigo(dig, projeto, [await geralJpeg(1), await geralJpeg(2)], { versaoId: condicoes.versaoId }), 'em_leitura');
+    const id = await aceito(await enviarAntigo(dig, projeto, [await geralJpeg(1), await geralJpeg(2)], { versaoId: condicoes.versaoId, formularioId: geral.formId }), 'em_leitura');
     expect((await consultar(dig, id)).corpo).toMatchObject({ versao_id: geral.versaoId, origem_qr: true });
   });
 
   // @trace CA-052, ERR-039, DEC-100
   it('exemplo 6: versão de outro projeto escolhida → identificacao_pendente com ERR-039; a tentativa é auditada', async () => {
-    const id = await pendenteSemLeitura(await enviarAntigo(dig, projeto, await folhasAntigas(2), { versaoId: habitos.versaoId }), 'ERR-039');
+    const id = await pendenteSemLeitura(await enviarAntigo(dig, projeto, await folhasAntigas(2), { versaoId: habitos.versaoId, formularioId: condicoes.formId }), 'ERR-039');
     expect((await eventosDe(id)).length).toBeGreaterThan(0);
   });
 
   // @trace CA-052, DEC-180, RN-052
   it('exemplo 7: papel antigo escolhido; a primeira folha com QR da página 1 de "Saúde Geral" e a segunda sem QR → versão do QR nas duas; a segunda tem a página da localização', async () => {
     // A folha sem QR vem antes, para que a página dela só possa sair da localização.
-    const r = await enviarAntigo(dig, projeto, [await geralSemQr(2), await geralJpeg(1)], { versaoId: condicoes.versaoId });
+    const r = await enviarAntigo(dig, projeto, [await geralSemQr(2), await geralJpeg(1)], { versaoId: condicoes.versaoId, formularioId: geral.formId });
     const id = await aceito(r, 'em_leitura');
     const [semQrId] = imagens(r);
     await localizarELer(h, id, { [semQrId]: { pagina: 2 } });
@@ -168,16 +174,15 @@ describe('CA-052 — papel antigo sem QR, com a versão escolhida no envio (DEC-
 
   // @trace CA-052, CA-039, DEC-180, DEC-184, ERR-039
   it('exemplo 10: QR legível de versão inexistente → ERR-039; papel antigo recusado no identifyApplication (DEC-184); "Saúde Geral" aceita, com origem_qr = false', async () => {
-    const forjado = conteudoForjado(geral.paginas[0].qr!.conteudo);
     const folhas = [
-      arquivo('f1.jpg', 'image/jpeg', await comQr(geral.paginas[0], forjado)),
-      arquivo('f2.jpg', 'image/jpeg', await comQr(geral.paginas[1], forjado)),
+      arquivo('f1.jpg', 'image/jpeg', await comQr(geral.paginas[0], qrForjado(1))),
+      arquivo('f2.jpg', 'image/jpeg', await comQr(geral.paginas[1], qrForjado(2))),
     ];
     const r = await enviarAntigo(dig, projeto, folhas);
     const id = await pendenteSemLeitura(r, 'ERR-039');
 
     const antes = (await eventosDe(id)).length;
-    esperarErro(await identificar(dig, id, condicoes.versaoId, emSequencia(imagens(r))), 'ERR-039');
+    esperarErro(await identificar(dig, id, condicoes.versaoId, emSequencia(imagens(r))), 'ERR-039'); // outro formulário (DEC-221)
     expect((await eventosDe(id)).length).toBeGreaterThan(antes);
     expect((await consultar(dig, id)).corpo.estado).toBe('identificacao_pendente');
     expect(await h.inspect.leiturasSolicitadas(id)).toBe(0);
@@ -207,7 +212,7 @@ describe('CA-052 — papel antigo sem QR, com a versão escolhida no envio (DEC-
   // @trace CA-052, DEC-187, DEC-184
   it('QR de outro formato não impede a versão de papel antigo no identifyApplication (DEC-187)', async () => {
     const folhas = [arquivo('site.jpg', 'image/jpeg', await folhaAntiga('site', 'https://outro-sistema.exemplo.test/x')), ...(await folhasAntigas(1))];
-    const r = await enviarAntigo(dig, projeto, folhas);
+    const r = await enviarAntigo(dig, projeto, folhas, { formularioId: condicoes.formId });
     const id = await aceito(r, 'identificacao_pendente', 'ERR-004');
     const ok = await identificar(dig, id, condicoes.versaoId, emSequencia(imagens(r)));
     expect(ok.status, ok.texto).toBe(200);
@@ -223,8 +228,8 @@ describe('CA-052 — papel antigo sem QR, com a versão escolhida no envio (DEC-
 describe('FL-001 — tabela de criação com a versão escolhida no envio (DEC-169, DEC-184)', () => {
   // @trace FL-001, DEC-184
   it('papel antigo escolhido com uma folha de QR legível de versão inexistente → identificacao_pendente com ERR-039 (linha 1)', async () => {
-    const forjada = arquivo('forjada.jpg', 'image/jpeg', await comQr(geral.paginas[0], conteudoForjado(geral.paginas[0].qr!.conteudo)));
-    await pendenteSemLeitura(await enviarAntigo(dig, projeto, [forjada, ...(await folhasAntigas(1))], { versaoId: condicoes.versaoId }), 'ERR-039');
+    const forjada = arquivo('forjada.jpg', 'image/jpeg', await comQr(geral.paginas[0], qrForjado(1)));
+    await pendenteSemLeitura(await enviarAntigo(dig, projeto, [forjada, ...(await folhasAntigas(1))], { versaoId: condicoes.versaoId, formularioId: geral.formId }), 'ERR-039');
   });
 
   // @trace FL-001, DEC-100
@@ -386,7 +391,7 @@ describe('CA-057 — perguntas que não constam no papel antigo e padrão de dat
 
   // @trace CA-057, DEC-182, DEC-186, DEC-192
   it('exemplo 7: sem versão, com 2024-05-24; o padrão muda no envio; depois do identifyApplication, ao fim da localização, os itens recebem 2024-05-24', async () => {
-    const r = await enviarAntigo(dig, proj, await folhasAntigas(2), { data: '2024-05-24', local: 'Centro Dia' });
+    const r = await enviarAntigo(dig, proj, await folhasAntigas(2), { data: '2024-05-24', local: 'Centro Dia', formularioId: cond.formId });
     const id = await aceito(r, 'identificacao_pendente', 'ERR-004');
     expect(await padrao()).toEqual({ data: '2024-05-24', local: 'Centro Dia' });
     expect(await h.inspect.aplicacao(id)).toMatchObject({ data_aplicacao: '2024-05-24', local_aplicacao: 'Centro Dia' });
@@ -425,8 +430,8 @@ describe('CA-057 — perguntas que não constam no papel antigo e padrão de dat
     expect(await padrao()).toEqual({ data: '2024-06-03', local: 'Centro Dia' });
   });
 
-  // @trace CA-057, DEC-185, DEC-186, DEC-192, V-11
-  it('exemplo 10: versão oficial por engano, folhas que a localização não reconhece; data e local continuam gravados; depois do identifyApplication com o papel antigo, os itens os recebem', async () => {
+  // @trace CA-057, DEC-185, DEC-186, DEC-192, DEC-221, V-11
+  it('exemplo 10: versão oficial por engano, folhas que a identificação não reconhece; data e local continuam gravados; o identifyApplication com a versão de outro formulário é recusado (DEC-221); com a do formulário escolhido, data e local são apagados', async () => {
     const r = await enviarAntigo(dig, proj, await folhasAntigas(2), { versaoId: saudeGeral.versaoId, data: '2024-06-07', local: 'Centro Dia' });
     const id = await aceito(r, 'em_leitura');
     expect(await padrao()).toEqual({ data: '2024-06-07', local: 'Centro Dia' });
@@ -437,17 +442,20 @@ describe('CA-057 — perguntas que não constam no papel antigo e padrão de dat
     expect((await consultar(dig, id)).corpo).toMatchObject({ estado: 'identificacao_pendente', aviso: 'ERR-004' });
     expect(await h.inspect.aplicacao(id)).toMatchObject({ data_aplicacao: '2024-06-07', local_aplicacao: 'Centro Dia' });
 
-    const ok = await identificar(dig, id, cond.versaoId, emSequencia([f1, f2]));
+    // O papel antigo é de outro formulário: a versão errada não se corrige trocando de formulário.
+    esperarErro(await identificar(dig, id, cond.versaoId, emSequencia([f1, f2])), 'ERR-039');
+    expect(await h.inspect.aplicacao(id)).toMatchObject({ estado: 'identificacao_pendente', data_aplicacao: '2024-06-07', local_aplicacao: 'Centro Dia' });
+
+    const ok = await identificar(dig, id, saudeGeral.versaoId, emSequencia([f1, f2]));
     expect(ok.status, ok.texto).toBe(200);
-    await localizarELer(h, id, {}, leiturasAntigas());
-    const lista = await itens(id);
-    esperarItem(lista, 'DATA_APLICACAO', 'corrigido', '2024-06-07');
-    esperarItem(lista, 'LOCAL_APLICACAO', 'corrigido', 'Centro Dia');
+    await localizarELer(h, id, {}, {});
+    expect(await h.inspect.aplicacao(id)).toMatchObject({ data_aplicacao: null, local_aplicacao: null });
+    expect(await padrao()).toEqual({ data: '2024-06-07', local: 'Centro Dia' });
   });
 
   // @trace CA-057, CA-013, DEC-185, DEC-192
   it('exemplo 11: 1 folha sem versão, com 2024-06-14; addApplicationPages com a segunda folha, a versão e 2024-06-21 → a data nova substitui a do envio e o local é mantido', async () => {
-    const r = await enviarAntigo(dig, proj, await folhasAntigas(1, 'primeira'), { data: '2024-06-14', local: 'Centro Dia' });
+    const r = await enviarAntigo(dig, proj, await folhasAntigas(1, 'primeira'), { data: '2024-06-14', local: 'Centro Dia', formularioId: cond.formId });
     const id = await aceito(r, 'identificacao_pendente', 'ERR-004');
     expect(await padrao()).toEqual({ data: '2024-06-14', local: 'Centro Dia' });
 
@@ -474,8 +482,8 @@ describe('CA-057 — perguntas que não constam no papel antigo e padrão de dat
     await lidas(id, ['LOCAL_APLICACAO']);
   });
 
-  // @trace CA-057, DEC-186, DEC-192
-  it('exemplo 13: papel antigo com 2024-07-05; uma folha não reconhecida; nada aplicado na pendência; identifyApplication com a versão oficial → data e local apagados, padrão mantido', async () => {
+  // @trace CA-057, DEC-186, DEC-192, DEC-221
+  it('exemplo 13: papel antigo com 2024-07-05; uma folha não reconhecida; nada aplicado na pendência; identifyApplication com a versão oficial de outro formulário → ERR-039, sem mudar nada; com a do papel antigo, data e local são aplicados', async () => {
     const r = await enviarAntigo(dig, proj, await folhasAntigas(2), { versaoId: cond.versaoId, data: '2024-07-05', local: 'Centro Dia' });
     const id = await aceito(r, 'em_leitura');
     expect(await padrao()).toEqual({ data: '2024-07-05', local: 'Centro Dia' });
@@ -487,10 +495,12 @@ describe('CA-057 — perguntas que não constam no papel antigo e padrão de dat
       expect(gravada.itens.find((i) => i.pergunta_codigo === codigo)?.valor_final ?? null, codigo).toBeNull();
     }
 
-    const ok = await identificar(dig, id, saudeGeral.versaoId, emSequencia([f1, f2]));
+    esperarErro(await identificar(dig, id, saudeGeral.versaoId, emSequencia([f1, f2])), 'ERR-039');
+    expect(await h.inspect.aplicacao(id)).toMatchObject({ estado: 'identificacao_pendente' });
+
+    const ok = await identificar(dig, id, cond.versaoId, emSequencia([f1, f2]));
     expect(ok.status, ok.texto).toBe(200);
-    await localizarELer(h, id, {}, {});
-    expect(await h.inspect.aplicacao(id)).toMatchObject({ data_aplicacao: null, local_aplicacao: null });
+    await localizarELer(h, id, {}, leiturasAntigas());
     expect(await padrao()).toEqual({ data: '2024-07-05', local: 'Centro Dia' });
   });
 });

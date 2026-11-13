@@ -7,7 +7,7 @@ import type { Cliente } from '../../support/cliente.js';
 import { jpeg } from '../../support/arquivos.js';
 import { arquivo, enviar, formularioPublicado, projetoCriado, type FormularioPublicado } from '../../support/formularios.js';
 import { criarHarness, type Harness } from '../../support/harness.js';
-import { calibrarConfianca, consultar, CPF, item, prepararCotacao } from '../../support/leitura.js';
+import { abrir, calibrarConfianca, consultar, CPF, item, prepararCotacao } from '../../support/leitura.js';
 import { conteudoDuasPaginas } from '../../support/papel-antigo.js';
 
 let h: Harness;
@@ -86,8 +86,9 @@ describe('CA-062 — CPF em caixas e data da aplicação vizinhos são lidos', (
       CPF: { valor: CPF.joana, confianca: 0.97, regiao: cpfReg },
       DATA_APLICACAO: { valor: '2026-10-30', confianca: 0.97, regiao: dataReg },
     });
-    const app = (await consultar(dig, id)).corpo;
-    expect(item(app, 'CPF')).toMatchObject({ valor_ia: CPF.joana, estado: 'confirmado_automaticamente' });
+    // O CPF completo só aparece depois do openReview (DEC-126) e o CPF sempre vai à conferência (FL-002, regras 5 e 6).
+    const app = (await abrir(dig, id)).corpo;
+    expect(item(app, 'CPF')).toMatchObject({ valor_ia: CPF.joana, estado: 'a_revisar' });
     expect(item(app, 'DATA_APLICACAO')).toMatchObject({ valor_ia: '2026-10-30', estado: 'confirmado_automaticamente' });
     const folha1 = (await h.inspect.folhas(id)).find((x) => x.numero_pagina === 1)!;
     expect(folha1.regioes).toEqual(
@@ -105,6 +106,6 @@ describe('CA-062 — CPF em caixas e data da aplicação vizinhos são lidos', (
     const id2 = await lida({ DATA_APLICACAO: { valor: '2026-10-30', confianca: 0.4 } });
     const app2 = (await consultar(dig, id2)).corpo;
     expect(item(app2, 'DATA_APLICACAO').estado).toBe('a_revisar');
-    expect(item(app2, 'CPF').estado).not.toBe('a_revisar');
+    expect(item(app2, 'DATA_NASCIMENTO').estado).not.toBe('a_revisar');
   });
 });

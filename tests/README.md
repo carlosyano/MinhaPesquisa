@@ -133,6 +133,14 @@ CA-053 e CA-055 (`localizacao.test.ts` reescrito), CA-028 (`pdf.test.ts`: QR `PP
 espaçamento), a minimização do `leitura.test.ts` e do `revisao-medios.test.ts` (página inteira, sem recorte) e o
 `motor-leitura.test.ts` (`lerRecorte` vira `lerPagina`). Ainda por ajustar no IA-DEV só o que a implementação mostrar.
 
+Ajuste do IA-TEST do IMP-010 depois de rodar a implementação (PLANO §12.3, T-01 a T-03): quem envia folhas com o QR de um
+formulário que não é o último criado no projeto passa o `formularioId` (montagem, papel antigo e complemento); o CA-039 de
+`montagem.test.ts` segue a tabela da REQ v2.9 (versão 05, total 1/3, `MP1.` e página além do total) e o QR de outro
+tenant deixa de ser caso, porque os códigos são sequenciais por tenant e o QR dele é igual ao de um formulário do tenant;
+a página de outro formulário no mesmo envio é ERR-045; no CA-057 (exemplos 10 e 13), a versão de outro formulário no
+`identifyApplication` é recusada com ERR-039 (DEC-221); CPF e nome (texto curto) sempre vão à conferência (FL-002,
+regras 5 e 6), e o CPF só aparece inteiro depois do `openReview` (DEC-126).
+
 ## Cobertura
 
 | Arquivo | Rastreio |
