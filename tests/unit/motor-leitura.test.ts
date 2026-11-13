@@ -43,6 +43,25 @@ const SCHEMA: CampoSchema = {
   ],
 };
 
+// Tipos locais da leitura da página inteira (DEC-220 (4)), para o typecheck não depender do código ainda por escrever.
+type GabaritoPagina = CampoSchema & { pagina: number; procurar_assinatura: boolean };
+interface RespostaPagina {
+  leituras: { chave: string; valor: string | null; confianca: number; regiao: unknown; complementos?: unknown }[];
+  regiao_assinatura: unknown;
+  custoUsd: number;
+}
+interface IdentificacaoPagina {
+  pagina: number | null;
+  confianca: number;
+  custoUsd: number;
+}
+const pg = (s: CampoSchema, procurar = false, pagina = 1): GabaritoPagina => ({ ...s, pagina, procurar_assinatura: procurar });
+const lerPagina = (a: AdaptadorClaude, img: Buffer, g: GabaritoPagina): Promise<RespostaPagina> =>
+  (a as unknown as { lerPagina(i: Buffer, g: GabaritoPagina): Promise<RespostaPagina> }).lerPagina(img, g);
+const identificarPagina = (a: AdaptadorClaude, img: Buffer, perguntasPorPagina: Record<number, string[]>): Promise<IdentificacaoPagina> =>
+  (a as unknown as { identificarPagina(i: Buffer, p: Record<number, string[]>): Promise<IdentificacaoPagina> }).identificarPagina(img, perguntasPorPagina);
+
+/** Página inteira sintética (A4 a 150 dpi, como as digitalizações dos testes), com algo escrito. */
 function recorte(): Buffer {
   const c = createCanvas(120, 40);
   const ctx = c.getContext('2d');
@@ -103,7 +122,7 @@ describe('AdaptadorClaude — requisição (DEC-122, RN-038, RN-045)', () => {
   it('uma chamada à Messages API com o modelo configurado, o recorte em base64 e a saída estruturada por JSON schema', async () => {
     const t = transporte(() => mensagem(OK));
     const img = recorte();
-    await adaptador(t.fetch).lerRecorte(img, SCHEMA);
+    await lerPagina(adaptador(t.fetch), img, pg(SCHEMA));
     expect(t.pedidos).toHaveLength(1);
     const [p] = t.pedidos;
     expect(p.metodo).toBe('POST');
@@ -119,23 +138,36 @@ describe('AdaptadorClaude — requisição (DEC-122, RN-038, RN-045)', () => {
     for (const c of SCHEMA.campos) expect(corpo).toContain(c.chave);
   });
 
-  // @trace DEC-131, RN-045
-  it('as instruções ligam cada campo ao seu recorte, de cima para baixo, separados por faixa preta', async () => {
+  // @trace DEC-216, DEC-220, RN-045
+  it('as instruções trazem a página e o gabarito dos campos, sem recorte nem faixa preta; a assinatura só se pedida', async () => {
     const t = transporte(() => mensagem(OK));
-    const comRecorte = { campos: SCHEMA.campos.map((c, i) => ({ ...c, recorte: i + 1 })) };
-    await adaptador(t.fetch).lerRecorte(recorte(), comRecorte);
+    await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA, true, 3));
     const blocos = t.pedidos[0].corpo.messages.flatMap((m: { content: unknown }) => (Array.isArray(m.content) ? m.content : []));
     const texto = blocos.filter((b: { type: string }) => b.type === 'text').map((b: { text: string }) => b.text).join('\n');
-    expect(texto).toContain('"recorte":1');
-    expect(texto).toContain('"recorte":2');
-    expect(JSON.stringify(t.pedidos[0].corpo.system)).toMatch(/faixa preta/);
-    expect(JSON.stringify(t.pedidos[0].corpo.system)).toMatch(/de cima para baixo/);
+    expect(texto).toContain('"pagina":3');
+    expect(texto).toContain('"procurar_assinatura":true');
+    expect(texto).not.toContain('"recorte"');
+    expect(JSON.stringify(t.pedidos[0].corpo.system)).not.toMatch(/faixa preta/);
+    expect(JSON.stringify(t.pedidos[0].corpo.output_config)).toContain('regiao_assinatura');
+
+    const sem = transporte(() => mensagem(OK));
+    await lerPagina(adaptador(sem.fetch), recorte(), pg(SCHEMA, false));
+    expect(JSON.stringify(sem.pedidos[0].corpo.output_config)).not.toContain('regiao_assinatura');
+  });
+
+  // @trace DEC-220, RN-037
+  it('o schema da leitura é fechado: `additionalProperties: false` na raiz e em cada campo', async () => {
+    const t = transporte(() => mensagem(OK));
+    await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA));
+    const schema = t.pedidos[0].corpo.output_config.format.schema;
+    expect(schema.additionalProperties).toBe(false);
+    expect(JSON.stringify(schema)).not.toMatch(/"additionalProperties":true/);
   });
 
   // @trace RN-037, RN-045
   it('o modelo não recebe ferramentas: a IA nunca executa ações', async () => {
     const t = transporte(() => mensagem(OK));
-    await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA);
+    await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA));
     expect(t.pedidos[0].corpo.tools ?? []).toEqual([]);
   });
 });
@@ -144,7 +176,7 @@ describe('AdaptadorClaude — resposta (RN-045, DEC-047, DEC-051)', () => {
   // @trace RN-045, DEC-047
   it('devolve, por campo, o valor, a confiança bruta e a região; e o custo real pelos tokens usados', async () => {
     const t = transporte(() => mensagem(OK));
-    const r = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA);
+    const r = await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA));
     expect(r.leituras).toEqual([
       { chave: 'c1', valor: 'sim', confianca: 0.93, regiao: REGIAO },
       { chave: 'c2', valor: null, confianca: 0.8, regiao: null },
@@ -156,9 +188,9 @@ describe('AdaptadorClaude — resposta (RN-045, DEC-047, DEC-051)', () => {
   it('estima o custo antes da chamada, sem chamar a API', () => {
     const t = transporte(() => mensagem(OK));
     const a = adaptador(t.fetch);
-    const e = a.estimarCustoUsd(recorte(), SCHEMA);
+    const e = a.estimarCustoUsd(recorte(), pg(SCHEMA));
     expect(e).toBeGreaterThan(0);
-    expect(a.estimarCustoUsd(recorte(), SCHEMA)).toBe(e);
+    expect(a.estimarCustoUsd(recorte(), pg(SCHEMA))).toBe(e);
     expect(t.pedidos).toHaveLength(0);
   });
 
@@ -173,7 +205,7 @@ describe('AdaptadorClaude — resposta (RN-045, DEC-047, DEC-051)', () => {
     ['região fora de 0 a 1', JSON.stringify({ campos: [{ ...JSON.parse(OK).campos[0], regiao: { ...REGIAO, x: 1.5 } }, JSON.parse(OK).campos[1]] })],
   ])('saída malformada (%s) → ErroLeitura "malformada"', async (_n, texto) => {
     const t = transporte(() => mensagem(texto));
-    const erro = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA).catch((e: unknown) => e);
+    const erro = await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA)).catch((e: unknown) => e);
     expect(erro).toBeInstanceOf(ErroLeitura);
     expect((erro as ErroLeitura).tipo).toBe('malformada');
   });
@@ -186,7 +218,7 @@ describe('AdaptadorClaude — resposta (RN-045, DEC-047, DEC-051)', () => {
     ['resposta cortada por max_tokens', () => mensagem('{"campos": [', { stop_reason: 'max_tokens' })],
   ])('%s → ErroLeitura, numa só tentativa (as retentativas de 1 e 2 s são do worker)', async (_n, responder) => {
     const t = transporte(responder);
-    const erro = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA).catch((e: unknown) => e);
+    const erro = await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA)).catch((e: unknown) => e);
     expect(erro).toBeInstanceOf(ErroLeitura);
     expect(['erro', 'malformada']).toContain((erro as ErroLeitura).tipo);
     expect(t.pedidos).toHaveLength(1);
@@ -198,7 +230,7 @@ describe('AdaptadorClaude — resposta (RN-045, DEC-047, DEC-051)', () => {
       new Promise<Response>((_ok, falhar) => {
         init?.signal?.addEventListener('abort', () => falhar(new DOMException('abortado', 'AbortError')));
       })) as typeof fetch;
-    const erro = await adaptador(fetchLento, 50).lerRecorte(recorte(), SCHEMA).catch((e: unknown) => e);
+    const erro = await lerPagina(adaptador(fetchLento, 50), recorte(), pg(SCHEMA)).catch((e: unknown) => e);
     expect(erro).toBeInstanceOf(ErroLeitura);
     expect((erro as ErroLeitura).tipo).toBe('tempo_esgotado');
   });
@@ -240,7 +272,7 @@ describe('AdaptadorClaude — complemento da opção (DEC-197, DEC-203 (3))', ()
   // @trace DEC-203, DEC-197, RN-037, RN-045
   it('o schema de saída pede o complemento só das opções com complemento, com no máximo 2000 caracteres', async () => {
     const t = transporte(() => mensagem(OK_COMPLEMENTO));
-    await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA_COMPLEMENTO));
     const schema = JSON.stringify(t.pedidos[0].corpo.output_config.format.schema);
     expect(schema).toContain('complementos');
     expect(schema).toContain('"maxLength":2000');
@@ -251,7 +283,7 @@ describe('AdaptadorClaude — complemento da opção (DEC-197, DEC-203 (3))', ()
   // @trace DEC-203, DEC-197, RN-045
   it('devolve o complemento por opção, com o texto e a confiança bruta, ao lado do valor do campo', async () => {
     const t = transporte(() => mensagem(OK_COMPLEMENTO));
-    const r = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    const r = await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA_COMPLEMENTO));
     expect(r.leituras).toEqual([
       { chave: 'c1', valor: 'outros', confianca: 0.95, regiao: null, complementos: { outros: { valor: 'Maternidade', confianca: 0.9 } } },
       { chave: 'c2', valor: 'diabetes;outra', confianca: 0.95, regiao: null, complementos: { outra: { valor: 'Asma', confianca: 0.85 } } },
@@ -268,7 +300,7 @@ describe('AdaptadorClaude — complemento da opção (DEC-197, DEC-203 (3))', ()
         ]),
       ),
     );
-    const r = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    const r = await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA_COMPLEMENTO));
     for (const l of r.leituras as LeituraComComplemento[]) expect(l.complementos?.outros ?? l.complementos?.outra).toBeUndefined();
   });
 
@@ -282,7 +314,7 @@ describe('AdaptadorClaude — complemento da opção (DEC-197, DEC-203 (3))', ()
         ]),
       ),
     );
-    const r = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    const r = await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA_COMPLEMENTO));
     expect((r.leituras[0] as LeituraComComplemento).complementos).toEqual({ outros: { valor: null, confianca: 0.99 } });
   });
 
@@ -302,7 +334,7 @@ describe('AdaptadorClaude — complemento da opção (DEC-197, DEC-203 (3))', ()
         ]),
       ),
     );
-    const erro = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA_COMPLEMENTO).catch((e: unknown) => e);
+    const erro = await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA_COMPLEMENTO)).catch((e: unknown) => e);
     expect(erro).toBeInstanceOf(ErroLeitura);
     expect((erro as ErroLeitura).tipo).toBe('malformada');
   });
@@ -312,7 +344,7 @@ describe('AdaptadorClaude — complemento da opção (DEC-197, DEC-203 (3))', ()
     const t = transporte(() =>
       mensagem(complemento([{ ...JSON.parse(OK).campos[0], complementos: [{ opcao: 'sim', valor: 'x', confianca: 0.9 }] }, JSON.parse(OK).campos[1]])),
     );
-    const erro = await adaptador(t.fetch).lerRecorte(recorte(), SCHEMA).catch((e: unknown) => e);
+    const erro = await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA)).catch((e: unknown) => e);
     expect(erro).toBeInstanceOf(ErroLeitura);
     expect((erro as ErroLeitura).tipo).toBe('malformada');
   });
@@ -320,15 +352,15 @@ describe('AdaptadorClaude — complemento da opção (DEC-197, DEC-203 (3))', ()
   // @trace DEC-203, DEC-051
   it('max_tokens cresce 1.000 por opção com complemento, limitado ao máximo de saída do modelo', async () => {
     const sem = transporte(() => mensagem(OK));
-    await adaptadorTeto(sem.fetch, 4096, 64000).lerRecorte(recorte(), SCHEMA);
+    await lerPagina(adaptadorTeto(sem.fetch, 4096, 64000), recorte(), pg(SCHEMA));
     expect(sem.pedidos[0].corpo.max_tokens).toBe(4096);
 
     const com = transporte(() => mensagem(OK_COMPLEMENTO));
-    await adaptadorTeto(com.fetch, 4096, 64000).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    await lerPagina(adaptadorTeto(com.fetch, 4096, 64000), recorte(), pg(SCHEMA_COMPLEMENTO));
     expect(com.pedidos[0].corpo.max_tokens).toBe(4096 + 2 * 1000);
 
     const limitado = transporte(() => mensagem(OK_COMPLEMENTO));
-    await adaptadorTeto(limitado.fetch, 4096, 5000).lerRecorte(recorte(), SCHEMA_COMPLEMENTO);
+    await lerPagina(adaptadorTeto(limitado.fetch, 4096, 5000), recorte(), pg(SCHEMA_COMPLEMENTO));
     expect(limitado.pedidos[0].corpo.max_tokens).toBe(5000);
   });
 
@@ -337,11 +369,83 @@ describe('AdaptadorClaude — complemento da opção (DEC-197, DEC-203 (3))', ()
     const t = transporte(() => mensagem(OK));
     const a = adaptadorTeto(t.fetch, 4096, 64000);
     const semComplemento: CampoSchema = { campos: SCHEMA_COMPLEMENTO.campos.map(({ complementos: _c, ...c }) => c) };
-    const base = a.estimarCustoUsd(recorte(), semComplemento);
-    const com = a.estimarCustoUsd(recorte(), SCHEMA_COMPLEMENTO);
+    const base = a.estimarCustoUsd(recorte(), pg(semComplemento));
+    const com = a.estimarCustoUsd(recorte(), pg(SCHEMA_COMPLEMENTO));
     expect(com - base).toBeGreaterThanOrEqual((2 * 1000 * 20) / 1e6);
     const limitado = adaptadorTeto(t.fetch, 4096, 5000).estimarCustoUsd(recorte(), SCHEMA_COMPLEMENTO);
     expect(limitado).toBeLessThan(com);
     expect(t.pedidos).toHaveLength(0);
+  });
+});
+
+describe('AdaptadorClaude — leitura da página inteira (DEC-216, DEC-220 (4))', () => {
+  const COM_ASSINATURA = JSON.stringify({
+    campos: [
+      { chave: 'c1', valor: 'sim', confianca: 0.93, regiao: REGIAO },
+      { chave: 'c2', valor: '3', confianca: 0.8, regiao: REGIAO },
+    ],
+    regiao_assinatura: { x: 0.1, y: 0.8, largura: 0.5, altura: 0.08 },
+  });
+
+  // @trace DEC-220, RF-015
+  it('devolve a região da assinatura quando pedida (página 1) e nula quando não achada', async () => {
+    const achada = await lerPagina(adaptador(transporte(() => mensagem(COM_ASSINATURA)).fetch), recorte(), pg(SCHEMA, true));
+    expect(achada.regiao_assinatura).toEqual({ x: 0.1, y: 0.8, largura: 0.5, altura: 0.08 });
+    const nula = JSON.stringify({ campos: JSON.parse(COM_ASSINATURA).campos, regiao_assinatura: null });
+    expect((await lerPagina(adaptador(transporte(() => mensagem(nula)).fetch), recorte(), pg(SCHEMA, true))).regiao_assinatura).toBeNull();
+  });
+
+  // @trace DEC-220, RN-037, DEC-129
+  it.each([
+    ['chave fora do gabarito', { campos: [{ chave: 'c9', valor: 'x', confianca: 0.9, regiao: REGIAO }], regiao_assinatura: null }],
+    ['campo a mais na raiz', { campos: JSON.parse(OK).campos, PESO: '70' }],
+    ['região fora de 0..1', { campos: [{ chave: 'c1', valor: 'sim', confianca: 0.9, regiao: { x: 0.9, y: 0.2, largura: 0.3, altura: 0.1 } }, { chave: 'c2', valor: null, confianca: 0.8, regiao: null }] }],
+  ])('resposta com %s → ErroLeitura "malformada"', async (_nome, corpo) => {
+    const t = transporte(() => mensagem(JSON.stringify(corpo)));
+    const erro = await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA)).catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ErroLeitura);
+    expect((erro as ErroLeitura).tipo).toBe('malformada');
+  });
+
+  // @trace DEC-220 (4)
+  it('max_tokens = 300 por campo do gabarito (mais 1.000 por opção com complemento, DEC-203)', async () => {
+    const t = transporte(() => mensagem(OK));
+    await lerPagina(adaptador(t.fetch), recorte(), pg(SCHEMA));
+    expect(t.pedidos[0].corpo.max_tokens).toBe(300 * SCHEMA.campos.length);
+  });
+});
+
+describe('AdaptadorClaude — identificação da página (DEC-216, RN-037, RN-045)', () => {
+  const PERGUNTAS = { 1: ['NOME', 'PRESSAO'], 2: ['CPF'] };
+  const IDENT = JSON.stringify({ pagina: 2, confianca: 0.91 });
+
+  // @trace DEC-216, RN-045
+  it('uma chamada com a imagem e as perguntas por página, sem região nem valor lido na resposta', async () => {
+    const t = transporte(() => mensagem(IDENT));
+    const r = await identificarPagina(adaptador(t.fetch), recorte(), PERGUNTAS);
+    expect(r).toMatchObject({ pagina: 2, confianca: 0.91 });
+    expect(t.pedidos).toHaveLength(1);
+    const corpo = JSON.stringify(t.pedidos[0].corpo);
+    expect(corpo).toContain('NOME');
+    expect(JSON.stringify(t.pedidos[0].corpo.output_config)).not.toContain('regiao');
+    expect(t.pedidos[0].corpo.tools ?? []).toHaveLength(0);
+  });
+
+  // @trace DEC-178, DEC-216
+  it('página nula é válida (não indicada)', async () => {
+    const t = transporte(() => mensagem(JSON.stringify({ pagina: null, confianca: 0.2 })));
+    expect((await identificarPagina(adaptador(t.fetch), recorte(), PERGUNTAS)).pagina).toBeNull();
+  });
+
+  // @trace RN-037, DEC-216
+  it.each([
+    ['texto lido junto da página', { pagina: 1, confianca: 0.9, texto: 'Maria' }],
+    ['regiões na resposta', { pagina: 1, confianca: 0.9, regioes: {} }],
+    ['página inexistente', { pagina: 9, confianca: 0.9 }],
+  ])('resposta com %s → ErroLeitura "malformada"', async (_n, corpo) => {
+    const t = transporte(() => mensagem(JSON.stringify(corpo)));
+    const erro = await identificarPagina(adaptador(t.fetch), recorte(), PERGUNTAS).catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(ErroLeitura);
+    expect((erro as ErroLeitura).tipo).toBe('malformada');
   });
 });
