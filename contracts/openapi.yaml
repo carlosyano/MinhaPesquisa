@@ -2047,7 +2047,7 @@ components:
         versao_id:
           type: string
           format: uuid
-          description: Versão publicada do formulário escolhido, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180); a de papel antigo não vale se alguma folha tiver QR legível, válido ou não (DEC-184). Sem QR legível de versão válida em nenhuma folha, versão escolhida inexistente, não publicada, de outro tenant, de outro projeto ou de outro formulário → `aviso` ERR-039 e a versão não é gravada (DEC-232, DEC-233). 
+          description: Versão publicada do formulário escolhido, usada só quando nenhuma folha tem QR legível; com QR legível, a versão do QR prevalece em todas as folhas (DEC-169, DEC-180); a de papel antigo não vale se alguma folha tiver QR legível, válido ou não (DEC-184). Sem QR legível de versão válida em nenhuma folha, versão escolhida inexistente, não publicada, de outro tenant, de outro projeto ou de outro formulário, ou de papel antigo com folha de QR legível → `aviso` ERR-039 e a versão não é gravada (DEC-232, DEC-233, DEC-235). 
         data_aplicacao: { type: string, format: date, description: 'Papel antigo: data da aplicação da pergunta `nao_consta`; vira o padrão do projeto no próprio envio (DEC-179, DEC-192). Guardada até a localização confirmar a versão e as páginas (DEC-186) e só vale se a versão final for de papel antigo com essa pergunta `nao_consta`; senão é apagada (DEC-182, DEC-185). No addApplicationPages, substitui a gravada. Futura → 400 ERR-001' }
         local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: local da aplicação da pergunta `nao_consta`; vira o padrão do projeto no próprio envio (DEC-179, DEC-192). Mesmas regras de `data_aplicacao` (DEC-182, DEC-185)' }
 
@@ -2063,7 +2063,7 @@ components:
           maxItems: 50
           items: { type: string, format: binary }
           description: JPEG/PNG/PDF, até 20 MB e 50 páginas por arquivo; QR legível de outro projeto ou formulário → 409 ERR-045 (DEC-222)
-        versao_id: { type: string, format: uuid, description: 'Versão publicada do formulário da aplicação; substitui a escolhida no envio (DEC-169, DEC-180); de outro formulário do mesmo projeto → 400 ERR-039, nada gravado (DEC-221, DEC-225); inexistente, não publicada, de outro tenant ou projeto → 200 com aviso ERR-039 e a versão não é gravada (DEC-230, DEC-232, DEC-233)' }
+        versao_id: { type: string, format: uuid, description: 'Versão publicada do formulário da aplicação; substitui a escolhida no envio (DEC-169, DEC-180); de outro formulário do mesmo projeto → 400 ERR-039, nada gravado (DEC-221, DEC-225); inexistente, não publicada, de outro tenant ou projeto, ou de papel antigo com folha de QR legível → 200 com aviso ERR-039 e a versão não é gravada (DEC-230, DEC-232, DEC-233, DEC-235)' }
         data_aplicacao: { type: string, format: date, description: 'Papel antigo: substitui a gravada no envio (DEC-182, DEC-185); futura → 400 ERR-001' }
         local_aplicacao: { type: string, minLength: 1, maxLength: 200, description: 'Papel antigo: substitui o gravado no envio (DEC-182, DEC-185)' }
 
