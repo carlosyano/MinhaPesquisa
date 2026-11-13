@@ -711,7 +711,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Application' }
-        '400': { $ref: '#/components/responses/FileRejected' }
+        '400': { $ref: '#/components/responses/FileOrQrRejected' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -996,7 +996,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Application' }
-        '400': { $ref: '#/components/responses/FileRejected' }
+        '400': { $ref: '#/components/responses/FileOrQrRejected' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -1690,7 +1690,7 @@ components:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-036', title: Campos obrigatórios ausentes, status: 400, detail: 'Publicação recusada: faltam [lista dos campos].', errorCode: ERR-036, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, campos: [data_aplicacao] }
     FileRejected:
-      description: Arquivo recusado (ERR-029, com motivo; `posicao` só no envio de imagens — uploadImages, addApplicationPages e attachSignaturePage —, nunca na importação), projeto arquivado, data da aplicação futura no envio (DEC-182) ou, na importação, falta da declaração `sem_dados_reais` (ERR-001)
+      description: Arquivo recusado (ERR-029, com motivo; `posicao` só no envio de imagens — uploadImages, addApplicationPages e attachSignaturePage —, nunca na importação), projeto arquivado, data da aplicação futura no envio (DEC-182), `formulario_id` ausente ou de outro projeto no envio (ERR-001, DEC-215) ou, na importação, falta da declaração `sem_dados_reais` (ERR-001)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
       content:
         application/problem+json:
@@ -1698,6 +1698,15 @@ components:
             allOf:
               - $ref: '#/components/schemas/ProblemDetails'
               - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-029', title: Arquivo recusado, status: 400, detail: 'Arquivo recusado: [motivo].', errorCode: ERR-029, correlationId: 3f1c2b9e-0000-4000-8000-000000000001, motivo: excede o limite de 20 MB, posicao: 2 }
+    FileOrQrRejected:
+      description: Arquivo recusado (ERR-029, com motivo e `posicao`) ou identificação inválida da folha (ERR-039 no addApplicationPages, com versão de outro formulário, DEC-221; ERR-004 no attachSignaturePage, com a folha não reconhecida como a página 1). Nada é gravado e a aplicação não muda
+      headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - example: { type: 'https://api.minhapesquisa.example.com.br/errors/ERR-039', title: QR inválido, status: 400, detail: QR code inválido para o contexto atual. Informe manualmente., errorCode: ERR-039, correlationId: 3f1c2b9e-0000-4000-8000-000000000001 }
     QrInvalid:
       description: Identificação ainda inválida (ERR-004 ou ERR-039)
       headers: { X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' } }
@@ -1887,7 +1896,7 @@ components:
         campo_respondente: { type: string, enum: [nome, data_nascimento, cpf, endereco], nullable: true }
         campo_aplicacao: { type: string, enum: [data_aplicacao, local_aplicacao, aplicador], nullable: true, description: Marca as perguntas de data e local exigidas pela RN-017 }
         nao_consta: { type: boolean, default: false, description: 'Só em versão de papel antigo e nas perguntas de CPF, data de nascimento, data e local: o papel não tem a pergunta, que não é localizada nem lida (DEC-179); fora disso → ERR-001' }
-        sensibilidade: { type: string, enum: [identificacao, saude, outro], default: saude, description: 'Grupo de envio à IA (RN-039); forçado a identificacao quando há campo_respondente ou campo_aplicacao = aplicador (RN-047); nas demais perguntas só saude ou outro (DEC-097)' }
+        sensibilidade: { type: string, enum: [identificacao, saude, outro], default: saude, description: 'Classificação da pergunta, sem separar chamadas à IA (RN-047, DEC-216); forçado a identificacao quando há campo_respondente ou campo_aplicacao = aplicador (RN-047); nas demais perguntas só saude ou outro (DEC-097)' }
         linhas:
           type: array
           description: Obrigatório para tipo matriz (RN-047)
@@ -2107,7 +2116,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         projeto_id: { type: string, format: uuid }
-        formulario_id: { type: string, format: uuid, nullable: true, description: 'Formulário escolhido no envio, fixo na aplicação (DEC-215, DEC-221); nulo só em aplicação anterior à 0.9.0 sem versão' }
+        formulario_id: { type: string, format: uuid, nullable: true, description: 'Formulário escolhido no envio, fixo na aplicação (DEC-215, DEC-221); nulo só em aplicação anterior à 0.9.0 sem versão, até o identifyApplication gravar o formulário da versão informada (DEC-223)' }
         versao_id: { type: string, format: uuid, nullable: true }
         origem_qr: { type: boolean, description: 'true quando a versão veio do QR, inclusive quando a versão informada no identifyApplication é a do QR (DEC-180); false quando veio da escolha no envio ou de outra versão informada no identifyApplication (DEC-169)' }
         papel_antigo: { type: boolean, description: 'Herdado da versão, só leitura (DEC-173, DEC-175)' }
