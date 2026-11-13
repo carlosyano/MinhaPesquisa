@@ -28,6 +28,7 @@ import { gerarPdf, mapaLayout } from './pdf.js';
 
 interface LinhaFormulario {
   id: string;
+  codigo: number;
   projeto_id: string;
   nome: string;
   criado_em: Date;
@@ -89,7 +90,7 @@ export class FormulariosController {
 
   private async formulario(tx: Executor, s: SessaoAtiva, id: string): Promise<LinhaFormulario> {
     if (!ehUuid(id)) throw naoEncontrado('Formulario', null);
-    const f = await linha<LinhaFormulario>(tx, sql`SELECT id, projeto_id, nome, criado_em FROM formulario WHERE id = ${id}`);
+    const f = await linha<LinhaFormulario>(tx, sql`SELECT id, codigo, projeto_id, nome, criado_em FROM formulario WHERE id = ${id}`);
     if (!f) throw naoEncontrado('Formulario', id);
     try {
       await projetoNoEscopo(tx, f.projeto_id);
@@ -160,7 +161,7 @@ export class FormulariosController {
       sql`SELECT id, formulario_id, numero, status, publicada_em, criada_em, qr_codigo, versao, papel_antigo, total_paginas FROM versao
            WHERE formulario_id = ${f.id} ORDER BY numero`,
     );
-    return { id: f.id, nome: f.nome, projeto_id: f.projeto_id, criado_em: new Date(f.criado_em).toISOString(), versoes: vs.map((v) => this.resumo(v)) };
+    return { id: f.id, codigo: String(f.codigo).padStart(3, '0'), nome: f.nome, projeto_id: f.projeto_id, criado_em: new Date(f.criado_em).toISOString(), versoes: vs.map((v) => this.resumo(v)) };
   }
 
   // ───────────────────────────── formulários ─────────────────────────────
@@ -174,7 +175,7 @@ export class FormulariosController {
       const total = (await linha<{ n: number }>(tx, sql`SELECT count(*)::int AS n FROM formulario WHERE projeto_id = ${projetoId}`))!.n;
       const fs = await linhas<LinhaFormulario>(
         tx,
-        sql`SELECT id, projeto_id, nome, criado_em FROM formulario WHERE projeto_id = ${projetoId}
+        sql`SELECT id, codigo, projeto_id, nome, criado_em FROM formulario WHERE projeto_id = ${projetoId}
              ORDER BY criado_em DESC, id DESC LIMIT ${limite} OFFSET ${(pagina - 1) * limite}`, // mais recente primeiro (DEC-150)
       );
       const itens = [];
@@ -336,10 +337,13 @@ export class FormulariosController {
       const { f, v } = await this.versao(tx, s, formId, versaoId);
       if (v.status !== 'publicada' || !v.qr_codigo || v.papel_antigo) throw new ErroApi('ERR-018'); // papel antigo não tem PDF (DEC-175)
       const c = await this.conteudo(tx, versaoId);
+      const projeto = await projetoNoEscopo(tx, f.projeto_id);
       return {
+        nomeProjeto: projeto.nome,
         nomeFormulario: f.nome,
+        codigoProjeto: projeto.codigo,
+        codigoFormulario: f.codigo,
         numeroVersao: v.numero,
-        qrCodigo: v.qr_codigo,
         totalPaginas: totalPaginas(c.perguntas),
         perguntas: c.perguntas,
         regras: c.regras_salto,

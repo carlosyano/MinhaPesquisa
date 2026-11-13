@@ -39,6 +39,7 @@ export class ProjetosController {
   private corpo(p: LinhaProjeto) {
     return {
       id: p.id,
+      codigo: String(p.codigo).padStart(5, '0'),
       nome: p.nome,
       descricao: p.descricao,
       objetivo: p.objetivo,

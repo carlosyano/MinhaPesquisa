@@ -4,6 +4,8 @@ export interface AuditoriaDeErro {
   acao: string;
   entidade: string;
   registroId?: string | null;
+  /** Só referências e códigos, nunca valores pessoais nem nomes de arquivo (RN-027). */
+  detalhes?: Record<string, unknown>;
 }
 
 export interface ExtrasErro {
@@ -17,6 +19,9 @@ export interface ExtrasErro {
   motivo?: string;
   /** Posição do arquivo recusado no envio de imagens, a partir de 1 (ERR-029, DEC-198); nunca o nome. */
   posicao?: number;
+  /** Códigos de projeto e de formulário lidos no QR (ERR-045, DEC-215). */
+  projetoQr?: string;
+  formularioQr?: string;
   /** Evento gravado após o rollback da transação (ERR-002, ERR-023: tentativa auditada). */
   auditar?: AuditoriaDeErro;
 }

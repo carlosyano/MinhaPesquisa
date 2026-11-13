@@ -17,7 +17,7 @@
 import { ErroLeitura } from '@minhapesquisa/motor-leitura';
 import sharp from 'sharp';
 import { criarFormularioRascunho, gravarConteudo } from '../formularios/conteudo.js';
-import { bloco, fonteDeMedida, limiteInferior, A, TOPO } from '../formularios/layout.js';
+import { bloco, ESPACO_BLOCOS, fonteDeMedida, limiteInferior, A, TOPO } from '../formularios/layout.js';
 import { linha, linhas, sql, type Executor } from '../infra/banco.js';
 import { MINUTO, somar } from '../infra/relogio.js';
 import type { Nucleo } from '../nucleo.js';
@@ -216,6 +216,7 @@ export class WorkerImportacao {
       : montarVersao(lidas, {
           altura: (p: PerguntaEntrada) => bloco(fonte, normalizarConteudo([p], [])[0]).altura,
           topo: A - TOPO,
+          espaco: ESPACO_BLOCOS,
           limiteInferior,
         });
     if (v.lidas === 0) {

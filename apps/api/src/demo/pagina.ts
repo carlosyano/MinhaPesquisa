@@ -71,10 +71,10 @@ export const PAGINA_DEMO = `<!doctype html>
   <p class="cota" id="cota"></p>
 
   <h2>3. Enviar as respostas (uma pessoa por envio)</h2>
-  <p>O normal é um arquivo por pessoa, com todas as páginas (PDF de até 50 páginas); fotos de cada página também servem.</p>
+  <p>O envio vale para o formulário escolhido no item 2: se alguma folha trouxer o QR de outro projeto ou formulário, o envio é recusado. O normal é um arquivo por pessoa, com todas as páginas (PDF de até 50 páginas); fotos de cada página também servem.</p>
   <form id="f-upload">
     <input id="arquivos" type="file" multiple accept="image/jpeg,image/png,application/pdf" required>
-    <label><input id="com-versao" type="checkbox"> Folhas sem QR: enviar com o formulário atual (acima); a IA indica a página de cada folha</label>
+    <label><input id="com-versao" type="checkbox"> Folhas sem QR: enviar também com a versão atual (acima); a IA indica a página de cada folha</label>
     <label for="data-envio">Data da aplicação, se o papel não tem (opcional)</label><input id="data-envio" type="date">
     <label for="local-envio">Local da aplicação, se o papel não tem (opcional)</label><input id="local-envio" type="text" maxlength="200">
     <br><button type="submit">Enviar</button>
@@ -170,7 +170,7 @@ async function chamar(metodo, caminho, corpo, idempotente, extra) {
   const dados = texto ? JSON.parse(texto) : undefined;
   if (!r.ok) {
     const p = dados || {};
-    throw new Error((p.errorCode || r.status) + ': ' + (p.detail || p.title || 'falha') + (p.campos && p.campos.length ? ' (campo: ' + p.campos.join(', ') + ')' : ''));
+    throw new Error((p.errorCode || r.status) + ': ' + (p.detail || p.title || 'falha') + (p.campos && p.campos.length ? ' (campo: ' + p.campos.join(', ') + ')' : '') + (p.projeto_qr ? ' (QR lido: projeto ' + p.projeto_qr + ', formulário ' + p.formulario_qr + ')' : ''));
   }
   if (r.headers.get('etag')) etag = r.headers.get('etag');
   return dados;
@@ -453,7 +453,9 @@ $('tentar').addEventListener('click', async () => {
 $('f-upload').addEventListener('submit', async (e) => {
   e.preventDefault(); mensagem();
   const fd = new FormData();
-  // Campos de texto antes dos arquivos (DEC-169, DEC-179).
+  // Campos de texto antes dos arquivos (DEC-169, DEC-179). O formulário escolhido vai sempre (DEC-215).
+  if (!DADOS.formId) { mensagem('Escolha o formulário (item 2) antes de enviar.'); return; }
+  fd.append('formulario_id', DADOS.formId);
   if ($('com-versao').checked && DADOS.versaoId) fd.append('versao_id', DADOS.versaoId);
   if ($('data-envio').value) fd.append('data_aplicacao', $('data-envio').value);
   if ($('local-envio').value.trim()) fd.append('local_aplicacao', $('local-envio').value.trim());

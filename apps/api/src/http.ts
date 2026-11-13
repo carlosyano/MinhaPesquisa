@@ -105,6 +105,14 @@ export function limitarPublica(n: Nucleo, req: Req): void {
 
 // ───────────────────────── Filtro de erros (P.6) ─────────────────────────
 
+const LIMITES_DE_CODIGO = ['ck_projeto_codigo', 'ck_formulario_codigo', 'ck_versao_numero_qr'];
+
+/** CHECK de código violado: o driver traz a constraint no erro ou no `cause` (drizzle). */
+function violaLimiteDeCodigo(erro: unknown): boolean {
+  const e = erro as { constraint?: string; cause?: { constraint?: string } } | null;
+  return LIMITES_DE_CODIGO.includes(e?.constraint ?? e?.cause?.constraint ?? '');
+}
+
 @Catch()
 export class FiltroErros implements ExceptionFilter {
   constructor(private readonly n: Nucleo) {}
@@ -114,6 +122,7 @@ export class FiltroErros implements ExceptionFilter {
     const res = host.switchToHttp().getResponse<Res>();
     let api: ErroApi;
     if (erro instanceof ErroApi) api = erro;
+    else if (violaLimiteDeCodigo(erro)) api = new ErroApi('ERR-001'); // código de projeto, formulário ou versão além do limite (DEC-218)
     else if (erro instanceof HttpException) {
       const s = erro.getStatus();
       api = new ErroApi(s === 404 ? 'ERR-002' : s === 429 ? 'ERR-010' : s < 500 ? 'ERR-001' : 'ERR-020');
@@ -136,6 +145,8 @@ export class FiltroErros implements ExceptionFilter {
     if (api.extras.campos?.length) corpo.campos = api.extras.campos;
     if (api.extras.motivo) corpo.motivo = api.extras.motivo;
     if (api.extras.posicao) corpo.posicao = api.extras.posicao;
+    if (api.extras.projetoQr) corpo.projeto_qr = api.extras.projetoQr;
+    if (api.extras.formularioQr) corpo.formulario_qr = api.extras.formularioQr;
     if (api.extras.retryAfter !== undefined) res.header('Retry-After', String(api.extras.retryAfter));
     res.status(def.status).header('Content-Type', 'application/problem+json; charset=utf-8').send(JSON.stringify(corpo));
   }

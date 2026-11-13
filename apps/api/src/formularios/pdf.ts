@@ -31,8 +31,9 @@ import {
 const MARCADOR = 20;
 const BORDA_MARCADOR = 17;
 const QR_LADO = 72;
-const QR_X = 440;
-const QR_Y_TOPO = 30;
+// Canto inferior direito, 10 pt dentro da margem para não encostar no marcador do canto (DEC-219).
+const QR_X = L - MARGEM_X - 10 - QR_LADO;
+const QR_Y_BASE = 40;
 
 export interface Regiao {
   x: number;
@@ -48,9 +49,11 @@ export interface MapaLayout {
 }
 
 export interface DadosPdf {
+  nomeProjeto: string;
   nomeFormulario: string;
+  codigoProjeto: number;
+  codigoFormulario: number;
   numeroVersao: number;
-  qrCodigo: string;
   totalPaginas: number;
   perguntas: Pergunta[];
   regras: RegraEntrada[];
@@ -88,7 +91,7 @@ function caixasCpf(area: Regiao): Regiao[] {
 const REGIAO_ASSINATURA: Regiao = { x: MARGEM_X, y: RODAPE, largura: 300, altura: 40 };
 
 /** Mapa de layout gravado na publicação (DEC-048), com coordenadas normalizadas de 0 a 1. */
-export async function mapaLayout(d: Omit<DadosPdf, 'termo' | 'qrCodigo' | 'nomeFormulario' | 'numeroVersao'>): Promise<MapaLayout> {
+export async function mapaLayout(d: Pick<DadosPdf, 'totalPaginas' | 'perguntas' | 'regras'>): Promise<MapaLayout> {
   const doc = await PDFDocument.create();
   const fonte = await doc.embedFont(StandardFonts.Helvetica);
   const pos = posicionar(fonte, d.perguntas, d.regras, d.totalPaginas);
@@ -131,11 +134,18 @@ export async function gerarPdf(d: DadosPdf): Promise<Buffer> {
     const p = doc.addPage([L, A]);
     marcadores(p);
     const qr = await doc.embedPng(
-      await QRCode.toBuffer(conteudoQr(d.qrCodigo, n), { errorCorrectionLevel: 'M', margin: 2, width: 300 }),
+      await QRCode.toBuffer(conteudoQr({ projeto: d.codigoProjeto, formulario: d.codigoFormulario, versao: d.numeroVersao, pagina: n, total: d.totalPaginas }), {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 300,
+      }),
     );
-    p.drawImage(qr, { x: QR_X, y: A - QR_Y_TOPO - QR_LADO, width: QR_LADO, height: QR_LADO });
-    p.drawText(seguro(negrito, d.nomeFormulario).slice(0, 60), { x: MARGEM_X, y: A - 60, size: 14, font: negrito });
-    p.drawText(`Versão ${d.numeroVersao} - Página ${n} de ${d.totalPaginas}`, { x: MARGEM_X, y: A - 80, size: 9, font: fonte });
+    p.drawImage(qr, { x: QR_X, y: QR_Y_BASE, width: QR_LADO, height: QR_LADO });
+    // Cabeçalho: projeto em negrito a 14 pt e, logo abaixo, o formulário a 11 pt (DEC-219).
+    p.drawText(seguro(negrito, d.nomeProjeto).slice(0, 60), { x: MARGEM_X, y: A - 50, size: 14, font: negrito });
+    p.drawText(seguro(fonte, d.nomeFormulario).slice(0, 80), { x: MARGEM_X, y: A - 68, size: 11, font: fonte });
+    const rodape = `Projeto: ${String(d.codigoProjeto).padStart(5, '0')} · Formulário: ${String(d.codigoFormulario).padStart(3, '0')} · Versão: ${String(d.numeroVersao).padStart(2, '0')} · Página ${n}/${d.totalPaginas}`;
+    p.drawText(seguro(fonte, rodape), { x: MARGEM_X, y: 48, size: 8, font: fonte });
 
     for (const { bloco, topo } of pos.get(n) ?? []) {
       let y = topo - TAM_ENUNCIADO;

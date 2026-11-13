@@ -68,7 +68,7 @@ export function conferirPaginas(folhas: readonly FolhaLocalizada[], c: Conferenc
 
 // ───────────────────────────── regiões ─────────────────────────────
 
-/** Folga do recorte, de cada lado, em fração da imagem (DEC-174 (5)). */
+/** Folga do recorte da tela de revisão, de cada lado, em fração da imagem. */
 export const FOLGA = 0.02;
 
 /** Região com a folga, limitada à imagem. */
@@ -78,34 +78,11 @@ export function comFolga(r: Regiao): Regiao {
   return { x, y, largura: Math.min(1, r.x + r.largura + FOLGA) - x, altura: Math.min(1, r.y + r.altura + FOLGA) - y };
 }
 
-export function sobrepoem(a: Regiao, b: Regiao): boolean {
-  return a.x < b.x + b.largura && b.x < a.x + a.largura && a.y < b.y + b.altura && b.y < a.y + a.altura;
-}
-
 /** Menor região que contém as dadas (as linhas de uma matriz saem num só recorte). */
 export function envoltoria(rs: readonly Regiao[]): Regiao {
   const x = Math.min(...rs.map((r) => r.x));
   const y = Math.min(...rs.map((r) => r.y));
   return { x, y, largura: Math.max(...rs.map((r) => r.x + r.largura)) - x, altura: Math.max(...rs.map((r) => r.y + r.altura)) - y };
-}
-
-/**
- * Chaves das regiões que vão a `a_revisar` sem leitura (RN-052, item 5): a de identificação que,
- * já com a folga, se sobrepõe à de uma pergunta de saúde ou outra, e essa outra.
- */
-export function sobrepostas(regioes: readonly { chave: string; identificacao: boolean; regiao: Regiao }[]): Set<string> {
-  const fora = new Set<string>();
-  const ids = regioes.filter((r) => r.identificacao);
-  const demais = regioes.filter((r) => !r.identificacao);
-  for (const a of ids) {
-    for (const b of demais) {
-      if (sobrepoem(comFolga(a.regiao), comFolga(b.regiao))) {
-        fora.add(a.chave);
-        fora.add(b.chave);
-      }
-    }
-  }
-  return fora;
 }
 
 // ───────────────────────────── perguntas que não constam ─────────────────────────────

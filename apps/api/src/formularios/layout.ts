@@ -4,7 +4,9 @@
 //
 // Página A4 em pontos. Áreas reservadas:
 // - marcadores fiduciais: quadrados de 20 pt a 17 pt das bordas, nos 4 cantos;
-// - QR: 72 pt no alto à direita, fora das colunas dos cantos;
+// - cabeçalho: nome do projeto (14 pt, negrito) e, abaixo, o do formulário (11 pt);
+// - rodapé: texto com os códigos e a página à esquerda e o QR (72 pt) no canto inferior direito,
+//   dentro da margem e sem encostar no marcador do canto (DEC-218, DEC-219);
 // - termo de consentimento e assinatura: caixa fixa no pé da página 1, para que o tamanho do
 //   termo do tenant não mude a posição das perguntas.
 
@@ -14,9 +16,13 @@ import type { Pergunta, RegraEntrada } from '../regras/formularios.js';
 export const L = 595.28;
 export const A = 841.89;
 export const MARGEM_X = 57; // 20 mm
-export const TOPO = 120; // abaixo do cabeçalho e do QR
+export const TOPO = 100; // abaixo do cabeçalho
 export const CAIXA_TERMO_TOPO = 260; // pé da página 1: termo + assinatura (distância da base)
 export const RODAPE = 80;
+/** Base da área das perguntas nas páginas sem o termo: acima do QR do rodapé (DEC-219). */
+export const BASE_PERGUNTAS = 120;
+/** Espaço vertical entre blocos: o termo, a identificação, a data da aplicação e as seções (DEC-219). */
+export const ESPACO_BLOCOS = 19; // 18 pt mais 1 pt para o arredondamento do mapa (4 casas)
 
 export const TAM_ENUNCIADO = 11;
 export const TAM_OPCAO = 10;
@@ -29,7 +35,7 @@ export const ALTURA_RESPOSTA: Record<string, number> = {
 };
 
 /** Base da área das perguntas: acima do termo na página 1, acima do rodapé nas demais. */
-export const limiteInferior = (pagina: number) => (pagina === 1 ? CAIXA_TERMO_TOPO : RODAPE);
+export const limiteInferior = (pagina: number) => (pagina === 1 ? CAIXA_TERMO_TOPO : BASE_PERGUNTAS);
 
 /** Altura disponível para perguntas numa página inteira. */
 export const areaUtil = (pagina: number) => A - TOPO - limiteInferior(pagina);
@@ -124,7 +130,7 @@ export function posicionar(fonte: PDFFont, perguntas: readonly Pergunta[], regra
     for (const p of perguntas.filter((x) => x.pagina === n).sort((a, b) => a.ordem - b.ordem)) {
       const b = bloco(fonte, p, regras, perguntas);
       lista.push({ bloco: b, topo: y });
-      y -= b.altura;
+      y -= b.altura + ESPACO_BLOCOS;
     }
     porPagina.set(n, lista);
   }

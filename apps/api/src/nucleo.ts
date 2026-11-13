@@ -58,7 +58,7 @@ export class Nucleo {
 
   private async auditarErro(ator: Ator, a: AuditoriaDeErro): Promise<void> {
     await this.banco.noTenant(ator.tenantId, (tx) =>
-      this.auditar(tx, ator, a.acao, a.entidade, ehUuid(a.registroId) ? a.registroId : null),
+      this.auditar(tx, ator, a.acao, a.entidade, ehUuid(a.registroId) ? a.registroId : null, a.detalhes),
     );
   }
 
